@@ -1,0 +1,3 @@
+[submodule "suntime"]
+	path = suntime
+	url = git@github.com:zwim/suntime.git
