@@ -5,7 +5,12 @@ local util = {
     log = nil,
     log_file_name = nil,
     log_file = nil,
+    nl = "\n",
 }
+
+function util:setLogNewLine(nl)
+    self.nl = nl and "\n" or ""
+end
 
 function util:setLog(log_file_name)
     if self.log_file and self.log_file_name ~= log_file_name then
@@ -25,14 +30,14 @@ end
 
 function util:logToFile(...)
     local message = table.concat({...}, "\t")
---    message = message:sub(1, #message - 1) -- remove trailling \t
-    self.log_file:write(message, "\n")
+    self.log_file:write(message, self.nl)
     self.log_file:flush()
 end
 
 function util:logToScreen(...)
     local message = table.concat({...}, "\t")
-    print(message)
+    io.write(message, self.nl)
+    io.flush()
 end
 
 util.log = util.logToScreen

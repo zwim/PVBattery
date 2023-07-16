@@ -40,22 +40,25 @@ local function getInt32(ans, pos)
     return ((ans[pos + 1]*256 + ans[pos + 2])*256 + ans[pos + 3])*256 + ans[pos + 4]
 end
 
+----------------------------------------------------------------
 
-
-local AntBms = {
+local AntBMS = {
     timeOfLastRequiredData = 0, -- no data yet
     answer = {},
     v = {},
 }
 
-function AntBms:init()
-    local retval = os.execute("sh init_ant_bms.sh")
+-- Todo honor self.validStatus
+function AntBMS:init()
+    local retval = os.execute("sh init_Ant_BMS.sh")
     if retval ~= 0 then
+        self.validStatus = false
         util:log("XXXXXXXXXXXXXXXXXX initialization error")
     end
+    self.validStatus = true
 end
 
-function AntBms:readData()
+function AntBMS:_readData()
     local serial_out
     local request_hex = "DBDB00000000"
 
@@ -100,7 +103,7 @@ function AntBms:readData()
     return true
 end
 
-function AntBms:isChecksumOk()
+function AntBMS:isChecksumOk()
     if #self.answer < 140 then
         return false
     end
@@ -139,9 +142,9 @@ function AntBms:isChecksumOk()
 end
 
 -- This is the usual way of reading new parameters
-function AntBms:evaluateParameters()
+function AntBMS:evaluateParameters()
     -- Require Data only, if the last require was at least a second ago
-    if self:getDataAge() < 1 then
+    if self:getDataAge() < 1 then -- todo make this configurable
         return true
     end
 
@@ -151,7 +154,7 @@ function AntBms:evaluateParameters()
     local checksum = false
     local retries = 10
     while #self.answer < 140 and retries > 0 do
-        self:readData()
+        self:_readData()
         checksum = self:isChecksumOk()
         if checksum then
             break
@@ -238,29 +241,34 @@ function AntBms:evaluateParameters()
     return true
 end
 
-function AntBms:getSoc()
+function AntBMS:getSOC()
     -- Require SOC at mostly 1 time per minute
-    if self:getDataAge() > 60 then
+    if self:getDataAge() > 60 or not self.v.SOC then
         self:evaluateParameters()
     end
     return self.v.SOC or 50
 end
 
-function AntBms:getDataAge()
+function AntBMS:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
-function AntBms:printValues()
-    --AntBms:init()
+function AntBMS:printValues()
+    local success, err = pcall(self._printValuesNotProtected, self)
+    if not success then
+        util:log("BMS reported no values; Error: ", tostring(err))
+    end
+end
 
+function AntBMS:_printValuesNotProtected()
     self:evaluateParameters()
 
     if self.v == {} then
         util:log("No values decoded yet!")
-        return -1
+        return false
     end
 
-    util:log(string.format("SOC = %3d%%", self.v.SOC))
+    util:log(string.format("SOC = %3d%%", self:getSOC()))
     util:log(string.format("Current Power = %d W", self.v.CurrentPower))
     util:log(string.format("Current = %3.1f A", self.v.Current))
 
@@ -269,8 +277,7 @@ function AntBms:printValues()
 
     util:log(string.format("Number of Batteries = %2d ", self.v.NumberOfBatteries))
 
-
-    local bits, bitString = util.numToBits(self.v.BalancerFlags, self.v.NumberOfBatteries)
+    local _, bitString = util.numToBits(self.v.BalancerFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
 
     util:log(string.format("balancer = %s", bitString))
 
@@ -284,33 +291,31 @@ function AntBms:printValues()
     util:log(string.format("average voltage = %1.3f V", self.v.AverageVoltage))
     util:log(string.format("Cell difference = %1.3f V", self.v.HighestVoltage - self.v.LowestVoltage))
 
-    util:log(string.format("lowest monomer  = %d ", self.v.LowestMonomer ))
-    util:log(string.format("lowest voltage  = %1.3f V", self.v.LowestVoltage))
+    util:log(string.format("lowest monomer  = %d ", self.v.LowestMonomer), "", string.format("highest monomer = %d ", self.v.HighestMonomer ))
+    util:log(string.format("lowest voltage  = %1.3f V", self.v.LowestVoltage), string.format("highest voltage = %1.3f V", self.v.HighestVoltage))
 
-    util:log(string.format("highest monomer = %d ", self.v.HighestMonomer ))
-    util:log(string.format("highest voltage = %1.3f V", self.v.HighestVoltage))
 
     util:log("")
     util:log(string.format("DischargeTubeVoltageDrop    = % 3.1f V", self.v.DischargeTubeVoltageDrop))
     util:log(string.format("DischargeTubeDriveVoltage   = % 3.1f V", self.v.DischargeTubeDriveVoltage))
     util:log(string.format("ChargeTubeDriveVoltage      = % 3.1f V", self.v.ChargeTubeDriveVoltage))
 
-    for i = 1, 6 do
-        util:log(string.format("Temperature %d = %3d°C", i, self.v.Temperature[i]))
+    util:log("Temperatures:")
+    for i = 1,6,2 do
+        util:log(string.format("%d = %3d°C", i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
     end
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
-
     return true
 end
 
-AntBms:init()
+AntBMS:init()
 
-AntBms:evaluateParameters()
+AntBMS:evaluateParameters()
 
 -- Show initial values
 if arg[1] and string.lower(arg[1]) == "show" then
-    AntBms:printValues()
+    AntBMS:printValues()
 end
 
-return AntBms
+return AntBMS

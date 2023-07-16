@@ -1,5 +1,5 @@
 
-local AntBms = require("antbms")
+local AntBMS = require("antbms")
 local Fronius = require("fronius")
 local SunTime = require("suntime/suntime")
 local Switch = require("switch")
@@ -21,7 +21,6 @@ local DischargeSwitch = Switch:new()
 DischargeSwitch:init("battery-inverter.lan")
 --util:log("toggle", DischargeSwitch:toggle("off"))
 
-
 local PVBattery = {
     state = "", -- idle, charge, discharge, error
 }
@@ -39,23 +38,23 @@ local config = {
         timezone = nil,
     },
 
-    bat_max_feed_in = -320, -- Watt
+    bat_max_feed_in = -350, -- Watt
     bat_max_take_out = 160, -- Watt
-    exceed_factor = 0.1, -- 10%
+    exceed_factor = -0.1, -- Shift the bat_max_xxx values by -10%
 
-    bat_soc_min = 20, -- Percent
-    bat_soc_max = 80, -- Percent
+    bat_SOC_min = 20, -- Percent
+    bat_SOC_max = 80, -- Percent
 
     load_full_time = 1, -- hour before sun set
 
     sleep_time = 30, -- seconds to sleep per iteration
 
+    guard_time = 5 * 60 -- 5 minutes
     -- add defaults here!
     -- todo
 }
 
-
-
+-- Todo honor self.validConfig
 function PVBattery:readConfig()
     local file = config.config_file_name or "config.lua"
 
@@ -78,9 +77,11 @@ function PVBattery:readConfig()
         -- save new config values
         chunk()
         config.config_file_date = config_time
+        self.validConfig = true
         return true
     else
         util:log("Error loading config file: " .. config.config_file_name, "Err:" .. err)
+        self.validConfig = false
     end
     return false
 end
@@ -207,68 +208,66 @@ while true do
 
     local current_time = date.hour + date.min / 60 + date.sec / 3600
 
-    util:log("----------------------------------------------")
+    util:log("\n#############################################")
     util:log(os.date())
 
-    util:log("Current state: ", PVBattery.state)
-    Fronius:GetPowerFlowRealtimeData()
+    -- Update BMS, Inverter, Fronius ...
+    Fronius:getPowerFlowRealtimeData()
+    -- no need to call AntBMS:evaluateParameters() here, as it gets updated on every getter function if neccessary
+--    AntBMS:evaluateParameters()
 
-    local P_Grid
-    if Fronius and Fronius.Data and Fronius.Data.GetPowerFlowRealtimeData and Fronius.Data.GetPowerFlowRealtimeData.Body
-        and Fronius.Data.GetPowerFlowRealtimeData.Body.Data and Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site
-        then
+    local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+    util:log(P_Grid and string.format("P_Grid = % 8.2f W", P_Grid) or "P_Grid: no valid data")
+    util:log(P_Load and string.format("P_Load = % 8.2f W", P_Load) or "P_Load: no valid data")
+    util:log(P_PV   and string.format("P_PV   = % 8.2f W", P_PV)   or "P_PV: no valid data")
 
-        P_Grid = Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid
+    util:log("Old state:", PVBattery.state)
 
-        util:log(string.format("P_Grid = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid))
-        util:log(string.format("P_Load = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load))
-        util:log(string.format("P_PV   = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_PV))
+    local BMS_SOC = AntBMS:getSOC()
+    util:log(BMS_SOC and string.format("Battery SOC = %3d %%", BMS_SOC) or "SOC: no valid datea")
 
-    else
-        util:log("ERROR P_GRID")
-        P_Grid = nil
-    end
-
-    AntBms:evaluateParameters()
-    AntBms:printValues()
-
-    local Bms_Soc = AntBms:getSoc()
+    util:setLogNewLine(false)
+    util:log("New state:\t")
+    util:setLogNewLine(true)
 
     if P_Grid then
-        if P_Grid < config.bat_max_feed_in  then
-            if Bms_Soc <= config.bat_soc_max then
+        if P_Grid < config.bat_max_feed_in * (1.00 + config.exceed_factor) then
+            if BMS_SOC <= config.bat_SOC_max then
                 util:log("charge")
                 PVBattery:charge()
-            elseif Bms_Soc <= 100 and current_time > SunTime.set - config.load_full_time then
-                -- Don't obey the max soc one hour before sun set.
+            elseif BMS_SOC <= 100 and current_time > SunTime.set - config.load_full_time then
+                -- Don't obey the max SOC before sun set (Balancing!).
                 util:log("charge full")
                 PVBattery:charge()
             elseif current_time > SunTime.set_civil then
                 util:log("no charge after civil dusk")
                 PVBattery:idle()
             else
-                util:log("charge stopped as battery SOC=" .. Bms_Soc .. "%")
+                util:log("charge stopped as battery SOC=" .. BMS_SOC .. "% >" .. config.batt_SOC_max .. " %")
                 PVBattery:idle()
             end
-        elseif PVBattery.state == "charge" and P_Grid >  0 then
+        elseif PVBattery.state == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
             util:log("charge stopped")
             PVBattery:idle()
-        elseif P_Grid > config.bat_max_take_out  then
-            if Bms_Soc >= config.bat_soc_min then
+        elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
+            if BMS_SOC >= config.bat_SOC_min then
                 util:log("discharge")
                 PVBattery:discharge()
             else
-                util:log("discharge stopped as battery SOC=" .. Bms_Soc .. "%")
+                util:log("discharge stopped as battery SOC=" .. BMS_SOC .. "% <" .. config.bat_SOC_min .. " %")
                 PVBattery:idle()
             end
-        elseif PVBattery.state == "discharge" and P_Grid < 0 then
+        elseif PVBattery.state == "discharge" and P_Grid < config.bat_max_take_out * config.exceed_factor then
             util:log("discharge stopped")
             PVBattery:idle()
         else
             -- keep old state
-            util:log("stay")
+            util:log("keep " .. PVBattery.state)
         end
     end
+
+    util:log("\n-------- Battery Status:")
+    AntBMS:printValues()
 
     util.sleep_time(config.sleep_time)
 end
