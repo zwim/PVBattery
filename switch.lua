@@ -12,6 +12,8 @@ function json.decode(data)
     end
 end
 
+local util = require("util")
+
 local host = "192.168.0.149"
 
 local Switch = {
@@ -57,7 +59,7 @@ function Switch:toggle(on)
     if not on then
         on = "2"
     end
-    print(self.host)
+    util:log(self.host)
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
     self.body, self.code, self.headers, self.status = http.request(url)
     local decoded = json.decode(self.body)
@@ -70,7 +72,7 @@ function Switch:getPowerState()
     self.body, self.code, self.headers, self.status = http.request(url)
     local decoded = json.decode(self.body)
     self.Result = decoded.POWER
-    print(self.host, self.Result)
+    util:log(self.host, self.Result)
     return self.Result or ""
 end
 

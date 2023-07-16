@@ -51,7 +51,7 @@ local AntBms = {
 function AntBms:init()
     local retval = os.execute("sh init_ant_bms.sh")
     if retval ~= 0 then
-        print("XXXXXXXXXXXXXXXXXX initialization error")
+        util:log("XXXXXXXXXXXXXXXXXX initialization error")
     end
 end
 
@@ -61,7 +61,7 @@ function AntBms:readData()
 
     local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
     if fd <= 0 then
-        print("ERROR opening serial_in")
+        util:log("ERROR opening serial_in")
         return -1
     end
 
@@ -71,7 +71,7 @@ function AntBms:readData()
 
     serial_out = io.open(SERIAL_PORT,"wb")
     if not serial_out then
-        print("ERROR opening serial_out")
+        util:log("ERROR opening serial_out")
         ffi.C.close(fd)
         return
     end
@@ -115,7 +115,7 @@ function AntBms:isChecksumOk()
 
         -- bail out if to less data left, after cleaning
         if #self.answer < 140 then
-            print("to less data")
+            util:log("to less data")
             break
         end
 
@@ -134,7 +134,7 @@ function AntBms:isChecksumOk()
         end
     end
 
-    print("xxx checksum error", checksum, expected)
+    util:log("xxx checksum error", checksum, expected)
     return false
 end
 
@@ -256,51 +256,50 @@ function AntBms:printValues()
     self:evaluateParameters()
 
     if self.v == {} then
-        print("No values decoded yet!")
+        util:log("No values decoded yet!")
         return -1
     end
 
-    print(string.format("SOC = %3d%%", self.v.SOC))
-    print(string.format("Current Power = %d W", self.v.CurrentPower))
-    print(string.format("Current = %3.1f A", self.v.Current))
+    util:log(string.format("SOC = %3d%%", self.v.SOC))
+    util:log(string.format("Current Power = %d W", self.v.CurrentPower))
+    util:log(string.format("Current = %3.1f A", self.v.Current))
 
-    print(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity))
-    print(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity))
+    util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity))
+    util:log(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity))
 
-    print(string.format("Number of Batteries = %2d ", self.v.NumberOfBatteries))
+    util:log(string.format("Number of Batteries = %2d ", self.v.NumberOfBatteries))
 
 
     local bits, bitString = util.numToBits(self.v.BalancerFlags, self.v.NumberOfBatteries)
 
-    print(string.format("balancer = %s", bitString))
+    util:log(string.format("balancer = %s", bitString))
 
     for i = 1, self.v.NumberOfBatteries, 2 do
-        print(string.format("Voltage[%2d] = %2.3f V", i, self.v.Voltage[i]),
+        util:log(string.format("Voltage[%2d] = %2.3f V", i, self.v.Voltage[i]),
             i+1 <= self.v.NumberOfBatteries and string.format("Voltage[%2d] = %2.3f V", i+1, self.v.Voltage[i+1]) or "")
     end
-    print(string.format("TotalVoltage    = %3.1f V", self.v.TotalVoltage))
-    print(string.format("Voltage sum     = %3.3f V", self.v.VoltageSum))
+    util:log(string.format("TotalVoltage    = %3.1f V", self.v.TotalVoltage))
+    util:log(string.format("Voltage sum     = %3.3f V", self.v.VoltageSum))
 
-    print(string.format("average voltage = %1.3f V", self.v.AverageVoltage))
-    print(string.format("Cell difference = %1.3f V", self.v.HighestVoltage - self.v.LowestVoltage))
+    util:log(string.format("average voltage = %1.3f V", self.v.AverageVoltage))
+    util:log(string.format("Cell difference = %1.3f V", self.v.HighestVoltage - self.v.LowestVoltage))
 
-    print(string.format("lowest monomer  = %d ", self.v.LowestMonomer ))
-    print(string.format("lowest voltage  = %1.3f V", self.v.LowestVoltage))
+    util:log(string.format("lowest monomer  = %d ", self.v.LowestMonomer ))
+    util:log(string.format("lowest voltage  = %1.3f V", self.v.LowestVoltage))
 
-    print(string.format("highest monomer = %d ", self.v.HighestMonomer ))
-    print(string.format("highest voltage = %1.3f V", self.v.HighestVoltage))
+    util:log(string.format("highest monomer = %d ", self.v.HighestMonomer ))
+    util:log(string.format("highest voltage = %1.3f V", self.v.HighestVoltage))
 
-    print("")
-    print(string.format("DischargeTubeVoltageDrop    = % 3.1f V", self.v.DischargeTubeVoltageDrop))
-    print(string.format("DischargeTubeDriveVoltage   = % 3.1f V", self.v.DischargeTubeDriveVoltage))
-    print(string.format("ChargeTubeDriveVoltage      = % 3.1f V", self.v.ChargeTubeDriveVoltage))
+    util:log("")
+    util:log(string.format("DischargeTubeVoltageDrop    = % 3.1f V", self.v.DischargeTubeVoltageDrop))
+    util:log(string.format("DischargeTubeDriveVoltage   = % 3.1f V", self.v.DischargeTubeDriveVoltage))
+    util:log(string.format("ChargeTubeDriveVoltage      = % 3.1f V", self.v.ChargeTubeDriveVoltage))
 
     for i = 1, 6 do
-        print(string.format("Temperature %d = %3d°C", i, self.v.Temperature[i]))
+        util:log(string.format("Temperature %d = %3d°C", i, self.v.Temperature[i]))
     end
 
-    print(string.format("Age of data = %6.3f s", self:getDataAge()))
-
+    util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
 
     return true
 end

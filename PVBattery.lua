@@ -4,20 +4,22 @@ local Fronius = require("fronius")
 local SunTime = require("suntime/suntime")
 local Switch = require("switch")
 
-local lfs = require('lfs')
+local lfs = require("lfs")
 local util = require("util")
+
+util:setLog("PVBattery.log")
 
 local ChargeSwitch = Switch:new()
 ChargeSwitch:init("battery-charger.lan")
 
 ChargeSwitch:getEnergy()
-print(ChargeSwitch.Energy.Today)
-print(ChargeSwitch:getPower())
---print("toggle", ChargeSwitch:toggle("off"))
+util:log(ChargeSwitch.Energy.Today)
+util:log(ChargeSwitch:getPower())
+--util:log("toggle", ChargeSwitch:toggle("off"))
 
 local DischargeSwitch = Switch:new()
 DischargeSwitch:init("battery-inverter.lan")
---print("toggle", DischargeSwitch:toggle("off"))
+--util:log("toggle", DischargeSwitch:toggle("off"))
 
 
 local PVBattery = {
@@ -55,13 +57,13 @@ local config = {
 
 
 function PVBattery:readConfig()
-    local file= config.config_file_name or "config.lua"
+    local file = config.config_file_name or "config.lua"
 
     local chunk, config_time, err
     config_time, err = lfs.attributes(file, 'modification')
 
     if err then
-        print("Error opening config file: " .. config.config_file_name, "Err: " .. err)
+        util:log("Error opening config file: " .. config.config_file_name, "Err: " .. err)
         return false
     end
 
@@ -78,13 +80,13 @@ function PVBattery:readConfig()
         config.config_file_date = config_time
         return true
     else
-        print("Error loading config file: " .. config.config_file_name, "Err:" .. err)
+        util:log("Error loading config file: " .. config.config_file_name, "Err:" .. err)
     end
     return false
 end
 
 function PVBattery:init()
-    PVBattery:readConfig()
+    self:readConfig()
 
     local position = config.position
     SunTime:setPosition(position.name, position.latitude, position.longitude, position.timezone, position.height, true)
@@ -92,20 +94,20 @@ function PVBattery:init()
     SunTime:setDate()
     SunTime:calculateTimes()
 
-    print("Sun set at " .. SunTime.set)
+    util:log("Sun set at " .. SunTime.set)
 end
 
 function PVBattery:idle(force)
     if not force and self.state == "idle" then return end
     local ret = DischargeSwitch:toggle("off")
-    print("discharge", ret)
+    util:log("discharge", ret)
     util.sleep_time(1)
     if string.lower(ret) ~= "off" then
         DischargeSwitch:toggle("off")
         self.state = "error"
     end
     ret = ChargeSwitch:toggle("off")
-    print("charge", ret)
+    util:log("charge", ret)
     if string.lower(ret) ~= "off" then
         util.sleep_time(1)
         ChargeSwitch:toggle("off")
@@ -120,7 +122,7 @@ end
 function PVBattery:charge(force)
     if not force and self.state == "charge" then return end
     local ret = DischargeSwitch:toggle("off")
-    print("discharge", ret)
+    util:log("discharge", ret)
     if string.lower(ret) ~= "off" then
         self:idle()
         self.state = "error"
@@ -128,7 +130,7 @@ function PVBattery:charge(force)
     end
     util.sleep_time(0.5)
     ret = ChargeSwitch:toggle("on")
-    print("charger", ret)
+    util:log("charger", ret)
     if string.lower(ret) ~= "on" then
         self:idle()
         self.state = "error"
@@ -142,14 +144,14 @@ end
 function PVBattery:discharge(force)
     if not force and self.state == "discharge" then return end
     local ret = ChargeSwitch:toggle("off")
-    print("charger", ret)
+    util:log("charger", ret)
     if string.lower(ret) ~= "off" then
         self:idle()
         return "error"
     end
     util.sleep_time(0.5)
     ret = DischargeSwitch:toggle("on")
-    print("discharge", ret)
+    util:log("discharge", ret)
     if string.lower(ret) ~= "on" then
         self:idle()
         return "error"
@@ -173,7 +175,7 @@ function PVBattery:getStateFromSwitch()
         self.state = "error"
     end
 
-    print ("charge state", charge_state, "inverter_state", discharge_state)
+    util:log ("charge state", charge_state, "inverter_state", discharge_state)
     return self.state
 end
 
@@ -182,10 +184,10 @@ PVBattery:init()
 
 PVBattery:getStateFromSwitch()
 
-print("Initial state: ", PVBattery.state)
+util:log("Initial state: ", PVBattery.state)
 
 if PVBattery.state == "error" then
-    print("ERROR: all switches were on. I have turned all switches off!")
+    util:log("ERROR: all switches were on. I have turned all switches off!")
     PVBattery:idle()
 end
 
@@ -205,10 +207,10 @@ while true do
 
     local current_time = date.hour + date.min / 60 + date.sec / 3600
 
-    print("----------------------------------------------")
-    os.execute("date")
+    util:log("----------------------------------------------")
+    util:log(os.date())
 
-    print("Current state: ", PVBattery.state)
+    util:log("Current state: ", PVBattery.state)
     Fronius:GetPowerFlowRealtimeData()
 
     local P_Grid
@@ -218,12 +220,12 @@ while true do
 
         P_Grid = Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid
 
-        print(string.format("P_Grid = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid))
-        print(string.format("P_Load = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load))
-        print(string.format("P_PV   = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_PV))
+        util:log(string.format("P_Grid = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid))
+        util:log(string.format("P_Load = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load))
+        util:log(string.format("P_PV   = % 8.2f W", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_PV))
 
     else
-        print("ERROR P_GRID")
+        util:log("ERROR P_GRID")
         P_Grid = nil
     end
 
@@ -235,36 +237,36 @@ while true do
     if P_Grid then
         if P_Grid < config.bat_max_feed_in  then
             if Bms_Soc <= config.bat_soc_max then
-                print("charge")
+                util:log("charge")
                 PVBattery:charge()
             elseif Bms_Soc <= 100 and current_time > SunTime.set - config.load_full_time then
                 -- Don't obey the max soc one hour before sun set.
-                print("charge full")
+                util:log("charge full")
                 PVBattery:charge()
             elseif current_time > SunTime.set_civil then
-                print("no charge after civil dusk")
+                util:log("no charge after civil dusk")
                 PVBattery:idle()
             else
-                print("charge stopped as battery SOC=" .. Bms_Soc .. "%")
+                util:log("charge stopped as battery SOC=" .. Bms_Soc .. "%")
                 PVBattery:idle()
             end
         elseif PVBattery.state == "charge" and P_Grid >  0 then
-            print("charge stopped")
+            util:log("charge stopped")
             PVBattery:idle()
         elseif P_Grid > config.bat_max_take_out  then
             if Bms_Soc >= config.bat_soc_min then
-                print("discharge")
+                util:log("discharge")
                 PVBattery:discharge()
             else
-                print("discharge stopped as battery SOC=" .. Bms_Soc .. "%")
+                util:log("discharge stopped as battery SOC=" .. Bms_Soc .. "%")
                 PVBattery:idle()
             end
         elseif PVBattery.state == "discharge" and P_Grid < 0 then
-            print("discharge stopped")
+            util:log("discharge stopped")
             PVBattery:idle()
         else
             -- keep old state
-            print("stay")
+            util:log("stay")
         end
     end
 

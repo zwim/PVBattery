@@ -1,8 +1,41 @@
 
 local posix = require("posix")
 
-local util = {}
+local util = {
+    log = nil,
+    log_file_name = nil,
+    log_file = nil,
+}
 
+function util:setLog(log_file_name)
+    if self.log_file and self.log_file_name ~= log_file_name then
+        self.log_file:close()
+    end
+    if log_file_name then
+        self.log_file = io.open (log_file_name , "a")
+        if not self.log_file then
+            print("ERROR opening log file:", log_file_name, self.log_file_name)
+        end
+        util.log = util.logToFile
+        self.log_file_name = log_file_name
+    else
+        util.log = util.logToScreen
+    end
+end
+
+function util:logToFile(...)
+    local message = table.concat({...}, "\t")
+--    message = message:sub(1, #message - 1) -- remove trailling \t
+    self.log_file:write(message, "\n")
+    self.log_file:flush()
+end
+
+function util:logToScreen(...)
+    local message = table.concat({...}, "\t")
+    print(message)
+end
+
+util.log = util.logToScreen
 
 function util.fromhex(str)
   if str ~= nil then
@@ -24,7 +57,6 @@ end
 function util.numToBits(num, nb)
     -- returns a table of bits, least significant first.
     nb = nb or math.floor(math.log(num)/math.log(2) + 1)
-    print("nb=",nb)
     local bits= {} -- will contain the bits
     while num > 0 do
         local rest = math.fmod(num, 2)
@@ -48,8 +80,6 @@ function util.getCurrentTime()
     local sec, nsec = posix.clock_gettime(0)
     return sec + nsec * 1e-9
 end
-
-
 
 
 return util
