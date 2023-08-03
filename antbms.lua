@@ -503,8 +503,8 @@ function AntBMS:_printValuesNotProtected()
 
     util:log(string.format("Number of Batteries = %2d", self.v.NumberOfBatteries))
 
-    util:log(string.format("Charge MOSFET status: %s", self.v.ChargeMosText))
-    util:log(string.format("Charge MOSFET status: %s", self.v.DischargeMosText))
+    util:log(string.format("Charge MOSFET status:    %s", self.v.ChargeMosText))
+    util:log(string.format("Discharge MOSFET status: %s", self.v.DischargeMosText))
     util:log(string.format("Balanced status: %s", self.v.BalancedStatusText))
 
     local _, bitString
