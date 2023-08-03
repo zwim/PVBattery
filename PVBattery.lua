@@ -11,15 +11,24 @@ util:setLog("PVBattery.log")
 
 local ChargeSwitch = Switch:new()
 ChargeSwitch:init("battery-charger.lan")
-
 ChargeSwitch:getEnergy()
-util:log(ChargeSwitch.Energy.Today)
-util:log(ChargeSwitch:getPower())
+util:log("Charger", ChargeSwitch.Energy.Today)
+util:log("Charger", ChargeSwitch:getPower())
+
+local ChargeSwitch2 = Switch:new()
+ChargeSwitch2:init("battery-charger2.lan")
+ChargeSwitch2:getEnergy()
+util:log("Charger2", ChargeSwitch2.Energy.Today)
+util:log("Charger2", ChargeSwitch2:getPower())
+
 --util:log("toggle", ChargeSwitch:toggle("off"))
 
-local DischargeSwitch = Switch:new()
-DischargeSwitch:init("battery-inverter.lan")
---util:log("toggle", DischargeSwitch:toggle("off"))
+local DischargerSwitch = Switch:new()
+DischargerSwitch:init("battery-inverter.lan")
+--util:log("toggle", DischargerSwitch:toggle("off"))
+DischargerSwitch:getEnergy()
+util:log("Discharger", DischargerSwitch.Energy.Today)
+util:log("Discharger", DischargerSwitch:getPower())
 
 local PVBattery = {
     state = "", -- idle, charge, discharge, error
@@ -39,6 +48,7 @@ local config = {
     },
 
     bat_max_feed_in = -350, -- Watt
+    bat_max_feed_in2 = -350, -- Watt
     bat_max_take_out = 160, -- Watt
     exceed_factor = -0.1, -- Shift the bat_max_xxx values by -10%
 
@@ -100,11 +110,11 @@ end
 
 function PVBattery:idle(force)
     if not force and self.state == "idle" then return end
-    local ret = DischargeSwitch:toggle("off")
+    local ret = DischargerSwitch:toggle("off")
     util:log("discharge", ret)
     util.sleep_time(1)
     if string.lower(ret) ~= "off" then
-        DischargeSwitch:toggle("off")
+        DischargerSwitch:toggle("off")
         self.state = "error"
     end
     ret = ChargeSwitch:toggle("off")
@@ -122,7 +132,7 @@ end
 
 function PVBattery:charge(force)
     if not force and self.state == "charge" then return end
-    local ret = DischargeSwitch:toggle("off")
+    local ret = DischargerSwitch:toggle("off")
     util:log("discharge", ret)
     if string.lower(ret) ~= "off" then
         self:idle()
@@ -151,7 +161,7 @@ function PVBattery:discharge(force)
         return "error"
     end
     util.sleep_time(0.5)
-    ret = DischargeSwitch:toggle("on")
+    ret = DischargerSwitch:toggle("on")
     util:log("discharge", ret)
     if string.lower(ret) ~= "on" then
         self:idle()
@@ -164,7 +174,7 @@ end
 
 function PVBattery:getStateFromSwitch()
     local charge_state = ChargeSwitch:getPowerState():lower()
-    local discharge_state = DischargeSwitch:getPowerState():lower()
+    local discharge_state = DischargerSwitch:getPowerState():lower()
 
     if charge_state == "off" and discharge_state == "off" then
         self.state = "idle"

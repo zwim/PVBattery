@@ -9,6 +9,7 @@ position = {
 }
 
 bat_max_feed_in = -350 -- Watt
+bat_max_feed_in2 = -350 -- Watt
 bat_max_take_out = 158 -- Watt
 exceed_factor = -0.1 -- shift the above values 10% down
 
