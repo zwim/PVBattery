@@ -17,7 +17,7 @@ function util:setLog(log_file_name)
         self.log_file:close()
     end
     if log_file_name then
-        self.log_file = io.open (log_file_name , "a")
+        self.log_file = io.open(log_file_name , "a")
         if not self.log_file then
             print("ERROR opening log file:", log_file_name, self.log_file_name)
         end

@@ -180,8 +180,13 @@ function PVBattery:getStateFromSwitch()
     return self.state
 end
 
+function PVBattery:cleanLogs()
+    -- compress log file
+    os.execute("btrfs filesystem defragment -r -v -czstd " .. util.log_file_name)
+end
 
 PVBattery:init()
+PVBattery:cleanLogs()
 
 PVBattery:getStateFromSwitch()
 
@@ -208,6 +213,7 @@ while true do
     if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
         SunTime:setDate()
         SunTime:calculateTimes()
+        PVBattery:cleanLogs()
     end
 
     local current_time = date.hour + date.min / 60 + date.sec / 3600
@@ -228,7 +234,7 @@ while true do
     util:log("Old state:", PVBattery.state)
 
     local BMS_SOC = AntBMS:getSOC()
-    util:log(BMS_SOC and string.format("Battery SOC = %3d %%", BMS_SOC) or "SOC: no valid datea")
+    util:log(BMS_SOC and string.format("Battery SOC = %3d %%", BMS_SOC) or "SOC: no valid data")
 
     util:setLogNewLine(false)
     util:log("New state:\t")
