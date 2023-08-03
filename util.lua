@@ -42,21 +42,23 @@ end
 
 util.log = util.logToScreen
 
-function util.fromhex(str)
+function util.HexToNum(str)
   if str ~= nil then
     return (str:gsub('..', function (cc)
         return string.char(tonumber(cc, 16))
     end))
   end
+  return 0
 end
 
-function util.tohex(str)
+function util.StringToHex(str)
   if str ~= nil then
     return (str:gsub('.', function (c)
         if c == 0 then return "00" end
         return string.format('%02X', string.byte(c))
     end))
   end
+  return ""
 end
 
 function util.numToBits(num, nb)

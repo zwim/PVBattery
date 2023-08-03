@@ -198,6 +198,10 @@ while true do
     -- if config has changed, reload it
     PVBattery:readConfig()
 
+--    AntBMS:readAutoBalance(true)
+--    AntBMS:setAutoBalance(true)
+--    AntBMS:readAutoBalance(true)
+
     -- do the sun set and rise calculations if necessary
     last_date = date
     date = os.date("*t")
@@ -243,7 +247,7 @@ while true do
                 util:log("no charge after civil dusk")
                 PVBattery:idle()
             else
-                util:log("charge stopped as battery SOC=" .. BMS_SOC .. "% >" .. config.batt_SOC_max .. " %")
+                util:log("charge stopped as battery SOC=" .. BMS_SOC .. "% >" .. config.bat_SOC_max .. " %")
                 PVBattery:idle()
             end
         elseif PVBattery.state == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then

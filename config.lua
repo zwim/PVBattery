@@ -12,8 +12,8 @@ bat_max_feed_in = -350 -- Watt
 bat_max_take_out = 158 -- Watt
 exceed_factor = -0.1 -- shift the above values 10% down
 
-bat_soc_min = 20 -- Percent
-bat_soc_max = 90 -- Percent
+bat_SOC_min = 20 -- Percent
+bat_SOC_max = 90 -- Percent
 
 load_full_time = 1 -- hour before sun set
 

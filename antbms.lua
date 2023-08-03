@@ -56,6 +56,238 @@ function AntBMS:init()
         util:log("XXXXXXXXXXXXXXXXXX initialization error")
     end
     self.validStatus = true
+    self.MOSFETChargeStatusFlag = {
+        "Open",
+        "Overvoltage protection",
+        "Over current protection",
+        "Battery full",
+        "Total overpressure",
+        "Battery over temperature",
+        "Power over temperature",
+        "Abnormal current",
+        "Balanced line dropped string",
+        "Motherboard over temperature",
+        "11", -- 11
+        "12", -- 12
+        "Discharge tube abnormality",
+        "14", -- 14
+        "Manually closed",
+    }
+    self.MOSFETChargeStatusFlag[0] = "Off"
+
+    self.MOSFETDischargeStatusFlag = {
+        "Open",
+        "Over discharge protection",
+        "Over current protection",
+        "4", -- 4
+        "Total overpressure",
+        "Battery over temperature",
+        "Power over temperature",
+        "Abnormal current",
+        "Balanced line dropped string",
+        "Motherboard over temperature",
+        "Charge on",
+        "Short circuit protection",
+        "Discharge tube abnormality",
+        "Start exception",
+        "Manually closed",
+    }
+    self.MOSFETDischargeStatusFlag[0] = "Off"
+
+    self.BalancedStatusText = {
+        "Exceeds the limit equilibrium",
+        "Charge differential pressure balance",
+        "Balanced over temperature",
+        "Automatic equalization (on)",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "Motherboard over temperature",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+    }
+    self.BalancedStatusText[0] = "Off"
+end
+
+function AntBMS:setAutoBalance(on)
+    if on == nil then
+        on = true
+    end
+
+    self:evaluateParameters()
+
+    util:log("Balancer status was", string.lower(self.v.BalancedStatusText))
+    print(string.find(string.lower(self.v.BalancedStatusText),"on"))
+    if on then
+        if string.find(string.lower(self.v.BalancedStatusText), "on") then
+            return -- already on
+        else
+            self:toggleAutoBalance()
+        end
+    else
+        if string.find(string.lower(self.v.BalancedStatusText), "off") then
+            return -- already off
+        else
+            self:toggleAutoBalance()
+        end
+    end
+end
+
+function AntBMS:toggleAutoBalance()
+    local serial_out
+    local auto_balance = 252 -- adress of auto balance
+    local write_data_hex = "A5A5".. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
+
+    self.answer = {}
+
+    print("xxx setAutoBalance", write_data_hex)
+
+    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
+    if fd <= 0 then
+        util:log("ERROR opening serial_in")
+        return -1
+    end
+
+    -- wait and read some existing(?) crap
+    util.sleep_time(0.1)
+    ffi.C.read(fd, buffer, chunk_size)
+
+    serial_out = io.open(SERIAL_PORT, "wb")
+    if not serial_out then
+        util:log("ERROR opening serial_out")
+        ffi.C.close(fd)
+        return
+    end
+    serial_out:write(util.HexToNum(write_data_hex))
+    serial_out:flush()
+
+    while true do
+        util.sleep_time(0.25)
+        local nbytes = ffi.C.read(fd, buffer, chunk_size)
+
+        print("nbytes=", nbytes)
+        if nbytes <= 0 then
+            break
+        end
+
+        for i = 0, nbytes-1 do
+            table.insert(self.answer, buffer[i])
+        end
+    end
+
+    serial_out:close()
+    ffi.C.close(fd)
+
+    for i = 1, #self.answer do
+        print("xxx", string.format("x%02x", self.answer[i]))
+    end
+end
+
+function AntBMS:reboot()
+    local serial_out
+    local reboot = 254 -- adress of auto balance
+    local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
+
+    self.answer = {}
+
+    print("xxx setAutoBalance", write_data_hex)
+
+    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
+    if fd <= 0 then
+        util:log("ERROR opening serial_in")
+        return -1
+    end
+
+    -- wait and read some existing(?) crap
+    util.sleep_time(0.1)
+    ffi.C.read(fd, buffer, chunk_size)
+
+    serial_out = io.open(SERIAL_PORT, "wb")
+    if not serial_out then
+        util:log("ERROR opening serial_out")
+        ffi.C.close(fd)
+        return
+    end
+    serial_out:write(util.HexToNum(write_data_hex))
+    serial_out:flush()
+
+    while true do
+        util.sleep_time(0.25)
+        local nbytes = ffi.C.read(fd, buffer, chunk_size)
+
+        print("nbytes=", nbytes)
+        if nbytes <= 0 then
+            break
+        end
+
+        for i = 0, nbytes-1 do
+            table.insert(self.answer, buffer[i])
+        end
+    end
+
+    serial_out:close()
+    ffi.C.close(fd)
+
+    for i = 1, #self.answer do
+        print("xxx", string.format("x%02x", self.answer[i]))
+    end
+end
+
+function AntBMS:readAutoBalance()
+    local serial_out
+    local auto_balance = 252 -- adress of auto balance
+
+    local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
+
+    self.answer = {}
+
+    print("xxx ReadAutoBalance", read_data_hex)
+
+    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
+    if fd <= 0 then
+        util:log("ERROR opening serial_in")
+        return -1
+    end
+
+    -- wait and read some existing(?) crap
+    util.sleep_time(0.1)
+    ffi.C.read(fd, buffer, chunk_size)
+
+    serial_out = io.open(SERIAL_PORT, "wb")
+    if not serial_out then
+        util:log("ERROR opening serial_out")
+        ffi.C.close(fd)
+        return
+    end
+    serial_out:write(util.HexToNum(read_data_hex))
+    serial_out:flush()
+
+    while true do
+        util.sleep_time(0.25)
+        local nbytes = ffi.C.read(fd, buffer, chunk_size)
+
+        print("nbytes=", nbytes)
+        if nbytes <= 0 then
+            break
+        end
+
+        for i = 0, nbytes-1 do
+            table.insert(self.answer, buffer[i])
+        end
+    end
+
+    serial_out:close()
+    ffi.C.close(fd)
+
+    for i = 1, #self.answer do
+        print("xxx", string.format("x%02x", self.answer[i]))
+    end
+
 end
 
 function AntBMS:_readData()
@@ -72,17 +304,16 @@ function AntBMS:_readData()
     util.sleep_time(0.1)
     ffi.C.read(fd, buffer, chunk_size)
 
-    serial_out = io.open(SERIAL_PORT,"wb")
+    serial_out = io.open(SERIAL_PORT, "wb")
     if not serial_out then
         util:log("ERROR opening serial_out")
         ffi.C.close(fd)
         return
     end
-    serial_out:write(util.fromhex(request_hex))
+    serial_out:write(util.HexToNum(request_hex))
     serial_out:flush()
 
-    local answer = {}
-    while #answer < 140 do
+    while true do
         util.sleep_time(0.25)
         local nbytes = ffi.C.read(fd, buffer, chunk_size)
 
@@ -96,11 +327,6 @@ function AntBMS:_readData()
             table.insert(self.answer, buffer[i])
         end
     end
-
-    serial_out:close()
-    ffi.C.close(fd)
-
-    return true
 end
 
 function AntBMS:isChecksumOk()
@@ -189,12 +415,12 @@ function AntBMS:evaluateParameters()
     self.v.RemainingCapacity = getInt32(self.answer, 79) * 1e-6
     self.v.CycleCapacity = getInt32(self.answer, 83) * 1e-6
 
-    self.v.uptime = getInt32(self.answer, 87) * .1
+    self.v.uptime = getInt32(self.answer, 87)
 
     self.v.Temperature = {}
     for i = 1, 6 do
         local start = 2*(i-1) + 91
-        self.v.Temperature[i] = getInt16(self.answer, start)
+        self.v.Temperature[i] = getInt16(self.answer, start) --todo getInt might return neg. values
         if math.abs(self.v.Temperature[i]) > 300 then -- not connected
             self.v.Temperature[i] = 0
         end
@@ -202,9 +428,14 @@ function AntBMS:evaluateParameters()
 
     self.v.ChargeMos = getInt8(self.answer, 103)
     self.v.DischargeMos = getInt8(self.answer, 104)
+    self.v.BalancedStatusFlag = getInt8(self.answer, 105)
 
-    self.v.BalancedStatus = getInt8(self.answer, 105)
+    self.v.ChargeMosText = self.MOSFETChargeStatusFlag[self.v.ChargeMos]
+    self.v.DischargeMosText = self.MOSFETChargeStatusFlag[self.v.DischargeMos]
+    self.v.BalancedStatusText = self.BalancedStatusText[self.v.BalancedStatusFlag]
 
+    self.v.TireLength = getInt16(self.answer, 106)
+    self.v.PulsesPerWeek = getInt16(self.answer, 108)
 
     self.v.RelaySwitch = getInt8(self.answer, 110)
 
@@ -227,13 +458,8 @@ function AntBMS:evaluateParameters()
     self.v.DischargeTubeDriveVoltage = getInt16(self.answer, 126) * 0.1
     self.v.ChargeTubeDriveVoltage = getInt16(self.answer, 128) * 0.1
 
-    self.v.StatusFlag = {"Off", "Open", "Overvoltage protection", "Over current protection",
-        "Battery full", "Total overpressure", "Battery over temperature", "Power over temperature",
-        "Abnormal current", "Balanced line dropped string", "Motherboard over temperature",
-        "Charge on", "Short circuit protection", "Discharge tube abnormality",
-        "Start exception", "Manually closed"}
 
-    self.v.BalancerFlags = getInt32(self.answer, 132)
+    self.v.BalancingFlags = getInt32(self.answer, 132)
 
     self.answer = {} -- clear old received bytes
     self.timeOfLastRequiredData = util.getCurrentTime()
@@ -275,11 +501,16 @@ function AntBMS:_printValuesNotProtected()
     util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity))
     util:log(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity))
 
-    util:log(string.format("Number of Batteries = %2d ", self.v.NumberOfBatteries))
+    util:log(string.format("Number of Batteries = %2d", self.v.NumberOfBatteries))
 
-    local _, bitString = util.numToBits(self.v.BalancerFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
+    util:log(string.format("Charge MOSFET status: %s", self.v.ChargeMosText))
+    util:log(string.format("Charge MOSFET status: %s", self.v.DischargeMosText))
+    util:log(string.format("Balanced status: %s", self.v.BalancedStatusText))
 
-    util:log(string.format("balancer = %s", bitString))
+    local _, bitString
+    _, bitString = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
+
+    util:log(string.format("Active Balancers : %s", bitString))
 
     for i = 1, self.v.NumberOfBatteries, 2 do
         util:log(string.format("Voltage[%2d] = %2.3f V", i, self.v.Voltage[i]),
@@ -313,9 +544,37 @@ AntBMS:init()
 
 AntBMS:evaluateParameters()
 
+local help_string = [[
+This module provides methods to control an ANT-BMS (version before 2021; the "old one").
+
+When this module is called with parameters, certain functions of the ANT-BMS can be executed.
+
+usage: lua antbms.lua [command]
+    command can be:
+        show      ... shows current BMS values
+        balon     ... turns auto balance on
+        baloff    ... turns auto balance off
+        baltoggle ... toggles auto balance
+        reboot    ... reboot bms
+]]
+
 -- Show initial values
-if arg[1] and string.lower(arg[1]) == "show" then
+arg[1] = arg[1] and string.lower(arg[1])
+if arg[1] and string.find(arg[1], "help") then
+    print(help_string)
+elseif arg[1] and string.find(arg[1], "show") then
     AntBMS:printValues()
+elseif arg[1] and string.find(arg[1], "balon") then
+    AntBMS:setAutoBalance(true)
+elseif arg[1] and string.find(arg[1], "baloff") then
+    AntBMS:setAutoBalance(false)
+elseif arg[1] and string.find(arg[1], "baltog") then
+    AntBMS:toggleAutoBalance()
+elseif arg[1] and string.find(arg[1], "reboot") then
+    AntBMS:reboot()
+elseif arg[1] then
+    print(help_string)
+    print("Wrong argument: " .. arg[1])
 end
 
 return AntBMS
