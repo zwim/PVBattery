@@ -268,6 +268,13 @@ while true do
             -- keep old state
             util:log("keep " .. PVBattery.state)
         end
+
+        if PVBattery.state == "charge"  and BMS_SOC > 90 then
+            if AntBMS.v.Current < 0 and AntBMS.v.Current > -1.0 then
+                util:log("turn auto balance on")
+                AntBMS:setAutoBalance(true)
+            end
+        end
     end
 
     util:log("\n-------- Battery Status:")
