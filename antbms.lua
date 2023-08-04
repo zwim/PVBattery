@@ -413,6 +413,8 @@ function AntBMS:evaluateParameters()
 
     self.v.PhysicalCapacity = getInt32(self.answer, 75) * 1e-6
     self.v.RemainingCapacity = getInt32(self.answer, 79) * 1e-6
+    self.v.CalculatedSOC = self.v.RemainingCapacity / self.v.PhysicalCapacity * 100
+
     self.v.CycleCapacity = getInt32(self.answer, 83) * 1e-6
 
     self.v.uptime = getInt32(self.answer, 87)
@@ -455,6 +457,11 @@ function AntBMS:evaluateParameters()
     self.v.NumberOfBatteries = getInt8(self.answer, 123)
 
     self.v.DischargeTubeVoltageDrop = getInt16(self.answer, 124) * 0.1
+    if self.v.DischargeTubeVoltageDrop > 2^15 then
+        self.v.DischargeTubeVoltageDrop = self.v.DischargeTubeVoltageDrop - 2^15
+    end
+    self.v.DischargeTubeVoltageDrop = self.v.DischargeTubeVoltageDrop * 0.1
+
     self.v.DischargeTubeDriveVoltage = getInt16(self.answer, 126) * 0.1
     self.v.ChargeTubeDriveVoltage = getInt16(self.answer, 128) * 0.1
 
@@ -495,11 +502,13 @@ function AntBMS:_printValuesNotProtected()
     end
 
     util:log(string.format("SOC = %3d%%", self:getSOC()))
+    util:log(string.format("calc.SOC = %3.2f Ah", self.v.CalculatedSOC))
     util:log(string.format("Current Power = %d W", self.v.CurrentPower))
     util:log(string.format("Current = %3.1f A", self.v.Current))
 
     util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity))
     util:log(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity))
+    util:log(string.format("cycle capacity = %3.3f Ah", self.v.CycleCapacity))
 
     util:log(string.format("Number of Batteries = %2d", self.v.NumberOfBatteries))
 
@@ -510,7 +519,7 @@ function AntBMS:_printValuesNotProtected()
     local _, bitString
     _, bitString = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
 
-    util:log(string.format("Active Balancers : %s", bitString))
+    util:log(string.format("Active Balancers: %s", bitString))
 
     for i = 1, self.v.NumberOfBatteries, 2 do
         util:log(string.format("Voltage[%2d] = %2.3f V", i, self.v.Voltage[i]),

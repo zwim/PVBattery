@@ -88,5 +88,17 @@ function util.getCurrentTime()
     return sec + nsec * 1e-9
 end
 
+function util:cleanLogs()
+    -- compress log file
+    local handle = io.popen("stat -f -c %T " .. self.log_file_name)
+    local result = handle:read("*a")
+    handle:close()
+    if result:find("btrfs") then
+        os.execute("btrfs filesystem defragment -r -v -czstd " .. self.log_file_name)
+    else
+        print("todo log file compression") -- todos
+    end
+
+end
 
 return util

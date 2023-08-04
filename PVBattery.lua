@@ -190,13 +190,8 @@ function PVBattery:getStateFromSwitch()
     return self.state
 end
 
-function PVBattery:cleanLogs()
-    -- compress log file
-    os.execute("btrfs filesystem defragment -r -v -czstd " .. util.log_file_name)
-end
-
 PVBattery:init()
-PVBattery:cleanLogs()
+util:cleanLogs()
 
 PVBattery:getStateFromSwitch()
 
@@ -269,13 +264,13 @@ while true do
         elseif PVBattery.state == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
             util:log("charge stopped")
             PVBattery:idle()
+        elseif BMS_SOC < config.bat_SOC_min then
+            util:log("discharge stopped as battery SOC=" .. BMS_SOC .. "% < " .. config.bat_SOC_min .. " %")
+            PVBattery:idle()
         elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
             if BMS_SOC >= config.bat_SOC_min then
                 util:log("discharge")
                 PVBattery:discharge()
-            else
-                util:log("discharge stopped as battery SOC=" .. BMS_SOC .. "% <" .. config.bat_SOC_min .. " %")
-                PVBattery:idle()
             end
         elseif PVBattery.state == "discharge" and P_Grid < config.bat_max_take_out * config.exceed_factor then
             util:log("discharge stopped")
