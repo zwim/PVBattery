@@ -232,6 +232,13 @@ while true do
 --    AntBMS:evaluateParameters()
 
     local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+    local repeat_request = math.min(20, config.sleep_time - 5)
+    while not P_Grid or not P_Load or not P_PV and repeat_request > 0 do
+        util:log("Communication error: repeat request:", repeat_request)
+        repeat_request = repeat_request - 1
+        util.sleep_time(1) -- try again in 1 second
+        P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+    end
     util:log(P_Grid and string.format("P_Grid = % 8.2f W", P_Grid) or "P_Grid: no valid data")
     util:log(P_Load and string.format("P_Load = % 8.2f W", P_Load) or "P_Load: no valid data")
     util:log(P_PV   and string.format("P_PV   = % 8.2f W", P_PV)   or "P_PV: no valid data")
