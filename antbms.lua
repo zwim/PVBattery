@@ -479,6 +479,7 @@ function AntBMS:getSOC()
     if self:getDataAge() > 60 or not self.v.SOC then
         self:evaluateParameters()
     end
+    self.v.CalculatedSOC = self.v.CalculatedSOC or 50
     return self.v.SOC or 50
 end
 

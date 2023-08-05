@@ -239,6 +239,8 @@ while true do
     util:log("Old state:", PVBattery.state)
 
     local BMS_SOC = AntBMS:getSOC()
+    local BMS_SOC_MIN = math.floor(math.min(BMS_SOC, AntBMS.v.CalculatedSOC) * 100) *.01
+    local BMS_SOC_MAX = math.floor(math.max(BMS_SOC, AntBMS.v.CalculatedSOC) * 100) * 0.01
     util:log(BMS_SOC and string.format("Battery SOC = %3d %%", BMS_SOC) or "SOC: no valid data")
 
     util:setLogNewLine(false)
@@ -247,10 +249,10 @@ while true do
 
     if P_Grid then
         if P_Grid < config.bat_max_feed_in * (1.00 + config.exceed_factor) then
-            if BMS_SOC <= config.bat_SOC_max then
+            if BMS_SOC_MIN <= config.bat_SOC_max then
                 util:log("charge")
                 PVBattery:charge()
-            elseif BMS_SOC <= 100 and current_time > SunTime.set - config.load_full_time then
+            elseif BMS_SOC_MIN <= 100 and current_time > SunTime.set - config.load_full_time then
                 -- Don't obey the max SOC before sun set (Balancing!).
                 util:log("charge full")
                 PVBattery:charge()
@@ -258,17 +260,17 @@ while true do
                 util:log("no charge after civil dusk")
                 PVBattery:idle()
             else
-                util:log("charge stopped as battery SOC=" .. BMS_SOC .. "% >" .. config.bat_SOC_max .. " %")
+                util:log("charge stopped as battery SOC=" .. BMS_SOC_MIN .. "% > " .. config.bat_SOC_max .. " %")
                 PVBattery:idle()
             end
         elseif PVBattery.state == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
             util:log("charge stopped")
             PVBattery:idle()
-        elseif BMS_SOC < config.bat_SOC_min then
-            util:log("discharge stopped as battery SOC=" .. BMS_SOC .. "% < " .. config.bat_SOC_min .. " %")
+        elseif BMS_SOC_MAX < config.bat_SOC_min then
+            util:log("discharge stopped as battery SOC=" .. BMS_SOC_MAX .. "% < " .. config.bat_SOC_min .. " %")
             PVBattery:idle()
         elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
-            if BMS_SOC >= config.bat_SOC_min then
+            if BMS_SOC_MAX >= config.bat_SOC_min then
                 util:log("discharge")
                 PVBattery:discharge()
             end
