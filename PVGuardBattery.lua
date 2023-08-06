@@ -41,8 +41,11 @@ local function readConfig()
 end
 
 while true do
+    local old_guard_time = config.guard_time
     readConfig()
-    print(string.format("Check if %s is running every %d s", SCRIPTNAME, config.guard_time))
+    if config.guard_time ~= old_guard_time then
+        print(string.format("Check if %s is running every %d s", SCRIPTNAME, config.guard_time))
+    end
 
     local handle = io.popen("ps -ax")
     local output = handle:read("*a")
@@ -57,11 +60,12 @@ while true do
         -- This will just start it in background, but kills it if this script is stopped
         os.execute("lua PVBattery.lua &")
 
+--Todo
         -- see https://stackoverflow.com/questions/19233529/run-bash-script-as-daemon
 --        os.execute("setsid " .. SCRIPTNAME .. " >/dev/null 2>&1 < /dev/null &")
 
-    else
-        print(SCRIPTNAME .. " is running")
+--    else
+--        print(SCRIPTNAME .. " is running")
     end
 
     util.sleep_time(config.guard_time or 5*60)

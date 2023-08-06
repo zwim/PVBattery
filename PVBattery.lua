@@ -12,14 +12,14 @@ util:setLog("PVBattery.log")
 local ChargeSwitch = Switch:new()
 ChargeSwitch:init("battery-charger.lan")
 ChargeSwitch:getEnergy()
-util:log("Charger", ChargeSwitch.Energy.Today)
-util:log("Charger", ChargeSwitch:getPower())
+util:log("Charger energy today", ChargeSwitch.Energy.Today, "kWh")
+util:log("Charger power", ChargeSwitch:getPower(), "W")
 
 local ChargeSwitch2 = Switch:new()
 ChargeSwitch2:init("battery-charger2.lan")
 ChargeSwitch2:getEnergy()
-util:log("Charger2", ChargeSwitch2.Energy.Today)
-util:log("Charger2", ChargeSwitch2:getPower())
+util:log("Charger2 energey today", ChargeSwitch2.Energy.Today, "kWh")
+util:log("Charger2 power", ChargeSwitch2:getPower(), "W")
 
 --util:log("toggle", ChargeSwitch:toggle("off"))
 
@@ -27,8 +27,8 @@ local DischargerSwitch = Switch:new()
 DischargerSwitch:init("battery-inverter.lan")
 --util:log("toggle", DischargerSwitch:toggle("off"))
 DischargerSwitch:getEnergy()
-util:log("Discharger", DischargerSwitch.Energy.Today)
-util:log("Discharger", DischargerSwitch:getPower())
+util:log("Discharger energy today", DischargerSwitch.Energy.Today, "kWh")
+util:log("Discharger power", DischargerSwitch:getPower(), "W")
 
 local PVBattery = {
     state = "", -- idle, charge, discharge, error
@@ -267,14 +267,14 @@ while true do
                 util:log("no charge after civil dusk")
                 PVBattery:idle()
             else
-                util:log("charge stopped as battery SOC=" .. BMS_SOC_MIN .. "% > " .. config.bat_SOC_max .. " %")
+                util:log("charge stopped as battery SOC=" .. BMS_SOC_MIN .. "% > " .. config.bat_SOC_max .. "%")
                 PVBattery:idle()
             end
         elseif PVBattery.state == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
             util:log("charge stopped")
             PVBattery:idle()
         elseif BMS_SOC_MAX < config.bat_SOC_min then
-            util:log("discharge stopped as battery SOC=" .. BMS_SOC_MAX .. "% < " .. config.bat_SOC_min .. " %")
+            util:log("discharge stopped as battery SOC=" .. BMS_SOC_MAX .. "% < " .. config.bat_SOC_min .. "%")
             PVBattery:idle()
         elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
             if BMS_SOC_MAX >= config.bat_SOC_min then
@@ -289,8 +289,9 @@ while true do
             util:log("keep " .. PVBattery.state)
         end
 
-        if PVBattery.state == "charge"  and BMS_SOC > 90 then
-            if AntBMS.v.Current < 0 and AntBMS.v.Current > -1.0 then
+        if BMS_SOC > 90 then
+            if -1.0 < AntBMS.v.Current and AntBMS.v.Current < 0.1 then
+                -- -1,0 < Current < 1.0
                 util:log("turn auto balance on")
                 AntBMS:setAutoBalance(true)
             end
