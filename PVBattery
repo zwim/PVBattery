@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+description="Start control of a PV Battery"
+command="/usr/bin/lua"
+pidfile="/run/${RC_SVCNAME}.pid"
+command_args="/opt/PVBattery/PVBattery.lua"
+
+command_background=true
+command_user="root:root"
+
+directory="/opt/PVBattery/"
+

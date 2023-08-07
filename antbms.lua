@@ -121,7 +121,7 @@ function AntBMS:setAutoBalance(on)
 
     self:evaluateParameters()
 
-    util:log("Balancer status was", string.lower(self.v.BalancedStatusText))
+    util:log("Balancer status was", self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
     print(string.find(string.lower(self.v.BalancedStatusText),"on"))
     if on then
         if string.find(string.lower(self.v.BalancedStatusText), "on") then
@@ -503,7 +503,7 @@ function AntBMS:_printValuesNotProtected()
     end
 
     util:log(string.format("SOC = %3d%%", self:getSOC()))
-    util:log(string.format("calc.SOC = %3.2f Ah", self.v.CalculatedSOC))
+    util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC))
     util:log(string.format("Current Power = %d W", self.v.CurrentPower))
     util:log(string.format("Current = %3.1f A", self.v.Current))
 
@@ -523,8 +523,8 @@ function AntBMS:_printValuesNotProtected()
     util:log(string.format("Active Balancers: %s", bitString))
 
     for i = 1, self.v.NumberOfBatteries, 2 do
-        util:log(string.format("Voltage[%2d] = %2.3f V", i, self.v.Voltage[i]),
-            i+1 <= self.v.NumberOfBatteries and string.format("Voltage[%2d] = %2.3f V", i+1, self.v.Voltage[i+1]) or "")
+        util:log(string.format("[%2d] = %2.3f V", i, self.v.Voltage[i]),
+            i+1 <= self.v.NumberOfBatteries and string.format("[%2d] = %2.3f V", i+1, self.v.Voltage[i+1]) or "")
     end
     util:log(string.format("TotalVoltage    = %3.1f V", self.v.TotalVoltage))
     util:log(string.format("Voltage sum     = %3.3f V", self.v.VoltageSum))
@@ -543,7 +543,7 @@ function AntBMS:_printValuesNotProtected()
 
     util:log("Temperatures:")
     for i = 1,6,2 do
-        util:log(string.format("%d = %3d°C", i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
+        util:log(string.format("[%d] = %3d°C", i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
     end
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))

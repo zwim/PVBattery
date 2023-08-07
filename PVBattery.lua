@@ -7,35 +7,13 @@ local Switch = require("switch")
 local lfs = require("lfs")
 local util = require("util")
 
-util:setLog("PVBattery.log")
-
 local ChargeSwitch = Switch:new()
-ChargeSwitch:init("battery-charger.lan")
-ChargeSwitch:getEnergy()
-util:log("Charger energy today", ChargeSwitch.Energy.Today, "kWh")
-util:log("Charger power", ChargeSwitch:getPower(), "W")
-
 local ChargeSwitch2 = Switch:new()
-ChargeSwitch2:init("battery-charger2.lan")
-ChargeSwitch2:getEnergy()
-util:log("Charger2 energey today", ChargeSwitch2.Energy.Today, "kWh")
-util:log("Charger2 power", ChargeSwitch2:getPower(), "W")
-
---util:log("toggle", ChargeSwitch:toggle("off"))
-
 local DischargerSwitch = Switch:new()
-DischargerSwitch:init("battery-inverter.lan")
---util:log("toggle", DischargerSwitch:toggle("off"))
-DischargerSwitch:getEnergy()
-util:log("Discharger energy today", DischargerSwitch.Energy.Today, "kWh")
-util:log("Discharger power", DischargerSwitch:getPower(), "W")
-
-local PVBattery = {
-    state = "", -- idle, charge, discharge, error
-}
 
 local config = {
-    -- don't touch these
+    log_file_name = "/var/log/PVBattery.log",
+    -- don't touch these, will get overwritten by config.lua
     config_file_name = "config.lua",
     config_file_date = 1689399515, -- 20230715090000
     -- changeable
@@ -63,6 +41,11 @@ local config = {
     -- add defaults here!
     -- todo
 }
+
+local PVBattery = {
+    state = "", -- idle, charge, discharge, error
+}
+
 
 -- Todo honor self.validConfig
 function PVBattery:readConfig()
@@ -98,6 +81,7 @@ end
 
 function PVBattery:init()
     self:readConfig()
+    util:setLog(config.log_file_name)
 
     local position = config.position
     SunTime:setPosition(position.name, position.latitude, position.longitude, position.timezone, position.height, true)
@@ -105,7 +89,24 @@ function PVBattery:init()
     SunTime:setDate()
     SunTime:calculateTimes()
 
+    util:log("Sun rise at " .. SunTime.rise)
     util:log("Sun set at " .. SunTime.set)
+
+    ChargeSwitch:init("battery-charger.lan")
+    ChargeSwitch:getEnergy()
+    util:log("Charger energy today", ChargeSwitch.Energy.Today, "kWh")
+    util:log("Charger power", ChargeSwitch:getPower(), "W")
+
+    ChargeSwitch2:init("battery-charger2.lan")
+    ChargeSwitch2:getEnergy()
+    util:log("Charger2 energy today", ChargeSwitch2.Energy.Today, "kWh")
+    util:log("Charger2 power", ChargeSwitch2:getPower(), "W")
+
+    DischargerSwitch:init("battery-inverter.lan")
+    --util:log("toggle", DischargerSwitch:toggle("off"))
+    DischargerSwitch:getEnergy()
+    util:log("Discharger energy today", DischargerSwitch.Energy.Today, "kWh")
+    util:log("Discharger power", DischargerSwitch:getPower(), "W")
 end
 
 function PVBattery:idle(force)
@@ -218,13 +219,15 @@ while true do
     if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
         SunTime:setDate()
         SunTime:calculateTimes()
-        PVBattery:cleanLogs()
+        util:cleanLogs()
+        util:log("Sun rise at " .. SunTime.rise)
+        util:log("Sun set at " .. SunTime.set)
     end
 
     local current_time = date.hour + date.min / 60 + date.sec / 3600
 
     util:log("\n#############################################")
-    util:log(os.date())
+    util:log(string.format("%d/%d/%d-%02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec))
 
     -- Update BMS, Inverter, Fronius ...
     Fronius:getPowerFlowRealtimeData()
@@ -290,7 +293,7 @@ while true do
         end
 
         if BMS_SOC > 90 then
-            if -1.0 < AntBMS.v.Current and AntBMS.v.Current < 0.1 then
+            if -1.0 <= AntBMS.v.Current and AntBMS.v.Current <= 0.15 then
                 -- -1,0 < Current < 1.0
                 util:log("turn auto balance on")
                 AntBMS:setAutoBalance(true)
