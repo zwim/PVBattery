@@ -70,7 +70,7 @@ function util.numToBits(num, nb)
         bits[#bits + 1] = rest
         num = (num - rest) / 2
     end
-    for i = #bits, nb do
+    for i = #bits+1 , nb do
         bits[i] = 0
     end
     return bits, table.concat(bits)

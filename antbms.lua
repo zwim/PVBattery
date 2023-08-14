@@ -122,7 +122,6 @@ function AntBMS:setAutoBalance(on)
     self:evaluateParameters()
 
     util:log("Balancer status was", self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
-    print(string.find(string.lower(self.v.BalancedStatusText),"on"))
     if on then
         if string.find(string.lower(self.v.BalancedStatusText), "on") then
             return -- already on
@@ -452,6 +451,8 @@ function AntBMS:evaluateParameters()
     self.v.LowestMonomer = getInt8(self.answer, 118)
     self.v.LowestVoltage = getInt16(self.answer, 119) * 1e-3
 
+    self.v.CellDiff = self.v.HighestVoltage - self.v.LowestVoltage
+
     self.v.AverageVoltage = getInt16(self.answer, 121)* 1e-3
 
     self.v.NumberOfBatteries = getInt8(self.answer, 123)
@@ -530,7 +531,7 @@ function AntBMS:_printValuesNotProtected()
     util:log(string.format("Voltage sum     = %3.3f V", self.v.VoltageSum))
 
     util:log(string.format("average voltage = %1.3f V", self.v.AverageVoltage))
-    util:log(string.format("Cell difference = %1.3f V", self.v.HighestVoltage - self.v.LowestVoltage))
+    util:log(string.format("Cell difference = %1.3f V", self.v.CellDiff))
 
     util:log(string.format("lowest monomer  = %d ", self.v.LowestMonomer), "", string.format("highest monomer = %d ", self.v.HighestMonomer ))
     util:log(string.format("lowest voltage  = %1.3f V", self.v.LowestVoltage), string.format("highest voltage = %1.3f V", self.v.HighestVoltage))
