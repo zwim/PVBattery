@@ -122,6 +122,10 @@ function AntBMS:setAutoBalance(on)
     self:evaluateParameters()
 
     util:log("Balancer status was", self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
+
+    if not self.v.BalancedStatusText then
+        util:log("xxxx error self.v.BalancedStatusText is nil")
+    end
     if on then
         if string.find(string.lower(self.v.BalancedStatusText), "on") then
             return -- already on
@@ -570,22 +574,22 @@ usage: lua antbms.lua [command]
 ]]
 
 -- Show initial values
-arg[1] = arg[1] and string.lower(arg[1])
-if arg[1] and string.find(arg[1], "help") then
+local command = arg[1] and string.lower(arg[1])
+if command and string.find(command, "help") then
     print(help_string)
-elseif arg[1] and string.find(arg[1], "show") then
+elseif command and string.find(command, "show") then
     AntBMS:printValues()
-elseif arg[1] and string.find(arg[1], "balon") then
+elseif command and string.find(command, "balon") then
     AntBMS:setAutoBalance(true)
-elseif arg[1] and string.find(arg[1], "baloff") then
+elseif command and string.find(command, "baloff") then
     AntBMS:setAutoBalance(false)
-elseif arg[1] and string.find(arg[1], "baltog") then
+elseif command and string.find(command, "baltog") then
     AntBMS:toggleAutoBalance()
-elseif arg[1] and string.find(arg[1], "reboot") then
+elseif command and string.find(command, "reboot") then
     AntBMS:reboot()
-elseif arg[1] then
+elseif command then
     print(help_string)
-    print("Wrong argument: " .. arg[1])
+    print("Wrong argument: " .. command)
 end
 
 return AntBMS

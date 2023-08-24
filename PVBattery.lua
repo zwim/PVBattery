@@ -31,7 +31,7 @@ local config = {
     exceed_factor = -0.1, -- Shift the bat_max_xxx values by -10%
 
     bat_SOC_min = 20, -- Percent
-    bat_SOC_max = 80, -- Percent
+    bat_SOC_max = 90, -- Percent
 
     load_full_time = 1, -- hour before sun set
 
@@ -46,6 +46,26 @@ local PVBattery = {
     state = "", -- idle, charge, discharge, error
 }
 
+function PVBattery:getCurrentState()
+    local state, number, pos1, pos2
+
+    pos1, pos2 = self.state:find("%a+")
+    if pos1 and pos2 then
+        state = self.state:sub(pos1, pos2)
+    else
+        state = "error unknown"
+    end
+
+    pos1, pos2 = self.state:find("%d+")
+
+    if pos1 and pos2 then
+        number = self.state:sub(pos1, pos2)
+    else
+        number = nil
+    end
+
+    return state, number
+end
 
 -- Todo honor self.validConfig
 function PVBattery:readConfig()
@@ -110,19 +130,24 @@ function PVBattery:init()
 end
 
 function PVBattery:idle(force)
-    if not force and self.state == "idle" then return end
-    local ret = DischargerSwitch:toggle("off")
+    if not force and self:getCurrentState() == "idle" then return end
+    local ret, ret_1, ret_2
+    ret = DischargerSwitch:toggle("off")
     util:log("discharge", ret)
     util.sleep_time(1)
     if string.lower(ret) ~= "off" then
         DischargerSwitch:toggle("off")
         self.state = "error"
     end
-    ret = ChargeSwitch:toggle("off")
-    util:log("charge", ret)
-    if string.lower(ret) ~= "off" then
+    ret_1 = ChargeSwitch:toggle("off")
+    util:log("charge1", ret_1)
+    ret_2 = ChargeSwitch2:toggle("off")
+    util:log("charge2", ret_2)
+    if string.lower(ret_1) ~= "off" or string.lower(ret_2) ~= "off" then
         util.sleep_time(1)
+        -- try again
         ChargeSwitch:toggle("off")
+        ChargeSwitch2:toggle("off")
         self.state = "error"
         return false
     end
@@ -131,8 +156,16 @@ function PVBattery:idle(force)
     return true
 end
 
-function PVBattery:charge(force)
-    if not force and self.state == "charge" then return end
+function PVBattery:charge(direction, force)
+    direction = direction or 0
+
+    local state, number = self:getCurrentState()
+    number = number or "0"
+
+    if not force and state == "charge" and direction == 0 then
+        return
+    end
+
     local ret = DischargerSwitch:toggle("off")
     util:log("discharge", ret)
     if string.lower(ret) ~= "off" then
@@ -140,27 +173,70 @@ function PVBattery:charge(force)
         self.state = "error"
         return false
     end
-    util.sleep_time(0.5)
-    ret = ChargeSwitch:toggle("on")
-    util:log("charger", ret)
-    if string.lower(ret) ~= "on" then
-        self:idle()
-        self.state = "error"
-        return "error"
+
+    -- Check if all chargers are running
+    if direction == 1 and number == "2" then
+        return true
     end
 
-    self.state = "charge"
-    return true
+    util.sleep_time(0.5)
+
+    if direction == 1 and number == "0" then -- no charger running
+        ret = ChargeSwitch:toggle("on")
+        util:log("charger1", ret)
+        if string.lower(ret) ~= "on" then
+            self:idle()
+            self.state = "error"
+            return "error"
+        end
+        self.state = "charge 1"
+        return true
+    elseif direction == 1 and number == "1" then -- one charger running
+        ret = ChargeSwitch2:toggle("on")
+        util:log("charger2", ret)
+        if string.lower(ret) ~= "on" then
+            self:idle()
+            self.state = "error"
+            return "error"
+        end
+        self.state = "charge 2"
+        return true
+    elseif direction == -1 and number == "2" then -- two chargers running
+        ret = ChargeSwitch2:toggle("off")
+        util:log("charger2", ret)
+        if string.lower(ret) ~= "off" then
+            self:idle()
+            self.state = "error"
+            return "error"
+        end
+        self.state = "charge 1"
+        return true
+    elseif direction == -1 and number == "1" then -- one charger running
+        ret = ChargeSwitch:toggle("off")
+        util:log("charger1", ret)
+        if string.lower(ret) ~= "off" then
+            self:idle()
+            self.state = "error"
+            return "error"
+        end
+        self.state = "idle"
+        return true
+    end
 end
 
 function PVBattery:discharge(force)
-    if not force and self.state == "discharge" then return end
-    local ret = ChargeSwitch:toggle("off")
-    util:log("charger", ret)
-    if string.lower(ret) ~= "off" then
+    if not force and self:getCurrentState() == "discharge" then return end
+    local ret, ret_1, ret_2
+    ret_1 = ChargeSwitch:toggle("off")
+    util:log("charger1", ret_1)
+    ret_2 = ChargeSwitch2:toggle("off")
+    util:log("charger2", ret_2)
+
+    if string.lower(ret_1) ~= "off" or string.lower(ret_2) ~= "off" then
         self:idle()
         return "error"
     end
+
     util.sleep_time(0.5)
     ret = DischargerSwitch:toggle("on")
     util:log("discharge", ret)
@@ -175,19 +251,26 @@ end
 
 function PVBattery:getStateFromSwitch()
     local charge_state = ChargeSwitch:getPowerState():lower()
+    local charge2_state = ChargeSwitch2:getPowerState():lower()
     local discharge_state = DischargerSwitch:getPowerState():lower()
+
+    util:log ("charge state", charge_state, "charge2 state", charge2_state, "inverter_state", discharge_state)
+
 
     if charge_state == "off" and discharge_state == "off" then
         self.state = "idle"
     elseif charge_state == "off" and discharge_state == "on" then
         self.state = "discharge"
     elseif charge_state == "on" and discharge_state == "off" then
-        self.state = "charge"
+        if charge2_state == "off" then
+            self.state = "charge 1"
+        else
+            self.state = "charge 2"
+        end
     elseif charge_state == "off" and discharge_state == "on" then
         self.state = "error"
     end
 
-    util:log ("charge state", charge_state, "inverter_state", discharge_state)
     return self.state
 end
 
@@ -198,7 +281,7 @@ PVBattery:getStateFromSwitch()
 
 util:log("Initial state: ", PVBattery.state)
 
-if PVBattery.state == "error" then
+if PVBattery:getCurrentState() == "error" then
     util:log("ERROR: all switches were on. I have turned all switches off!")
     PVBattery:idle()
 end
@@ -260,8 +343,8 @@ while true do
     if P_Grid then
         if P_Grid < config.bat_max_feed_in * (1.00 + config.exceed_factor) then
             if BMS_SOC_MIN <= config.bat_SOC_max then
-                util:log("charge")
-                PVBattery:charge()
+                util:log("charge +1")
+                PVBattery:charge(1)
             elseif BMS_SOC_MIN <= 100 and current_time > SunTime.set - config.load_full_time then
                 -- Don't obey the max SOC before sun set (Balancing!).
                 util:log("charge full")
@@ -273,9 +356,9 @@ while true do
                 util:log("charge stopped as battery SOC=" .. BMS_SOC_MIN .. "% > " .. config.bat_SOC_max .. "%")
                 PVBattery:idle()
             end
-        elseif PVBattery.state == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
-            util:log("charge stopped")
-            PVBattery:idle()
+        elseif PVBattery:getCurrentState() == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
+            util:log("charge -1")
+            PVBattery:charge(-1)
         elseif BMS_SOC_MAX < config.bat_SOC_min then
             util:log("discharge stopped as battery SOC=" .. BMS_SOC_MAX .. "% < " .. config.bat_SOC_min .. "%")
             PVBattery:idle()
@@ -284,7 +367,7 @@ while true do
                 util:log("discharge")
                 PVBattery:discharge()
             end
-        elseif PVBattery.state == "discharge" and P_Grid < config.bat_max_take_out * config.exceed_factor then
+        elseif PVBattery:getCurrentState() == "discharge" and P_Grid < config.bat_max_take_out * config.exceed_factor then
             util:log("discharge stopped")
             PVBattery:idle()
         else
@@ -293,8 +376,8 @@ while true do
         end
 
         if BMS_SOC > 90 then
-            if -1.0 <= AntBMS.v.Current and AntBMS.v.Current <= 0.15 then
-                -- -1,0 < Current < 1.0
+            if -1.0 <= AntBMS.v.Current and AntBMS.v.Current <= 0.3 and AntBMS.v.CellDiff > 0.002 then
+                -- -1.0 A < Current < 0.3 A and CellDif > 0.002 V
                 util:log("turn auto balance on")
                 AntBMS:setAutoBalance(true)
             end
