@@ -32,8 +32,13 @@ local config = {
 
     bat_SOC_min = 20, -- Percent
     bat_SOC_max = 90, -- Percent
+    bat_lowest_voltage = 2.8, -- lowest allowed voltage
 
-    load_full_time = 1, -- hour before sun set
+    deep_discharge_min = 4,
+    deep_discharge_max = 8,
+    deep_discharge_hysteresis = 4,
+
+    load_full_time = 2.5, -- hour before sun set
 
     sleep_time = 30, -- seconds to sleep per iteration
 
@@ -314,8 +319,7 @@ while true do
 
     -- Update BMS, Inverter, Fronius ...
     Fronius:getPowerFlowRealtimeData()
-    -- no need to call AntBMS:evaluateParameters() here, as it gets updated on every getter function if neccessary
---    AntBMS:evaluateParameters()
+    AntBMS:evaluateParameters()
 
     local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
     local repeat_request = math.min(20, config.sleep_time - 5)
@@ -329,16 +333,34 @@ while true do
     util:log(P_Load and string.format("P_Load = % 8.2f W", P_Load) or "P_Load: no valid data")
     util:log(P_PV   and string.format("P_PV   = % 8.2f W", P_PV)   or "P_PV: no valid data")
 
-    util:log("Old state:", PVBattery.state)
-
     local BMS_SOC = AntBMS:getSOC()
-    local BMS_SOC_MIN = math.floor(math.min(BMS_SOC, AntBMS.v.CalculatedSOC) * 100) *.01
-    local BMS_SOC_MAX = math.floor(math.max(BMS_SOC, AntBMS.v.CalculatedSOC) * 100) * 0.01
-    util:log(BMS_SOC and string.format("Battery SOC = %3d %%", BMS_SOC) or "SOC: no valid data")
+    local BMS_SOC_MIN = math.min(BMS_SOC, AntBMS.v.CalculatedSOC)
+    local BMS_SOC_MAX = math.max(BMS_SOC, AntBMS.v.CalculatedSOC)
 
+    util:log(BMS_SOC and string.format("Battery SOC = %3d %%", BMS_SOC) or "SOC: no valid data")
+    util:log("\n-------- Battery status:")
+    AntBMS:printValues()
+
+
+    local old_state = PVBattery.state
+    util:log("\n-------- Charger state:")
+    util:log("Old state:", PVBattery.state)
     util:setLogNewLine(false)
     util:log("New state:\t")
     util:setLogNewLine(true)
+
+    if AntBMS.v.LowestVoltage < config.bat_lowest_voltage then
+        util:log("Undervoltage in one cell, starting emergency charge!")
+        PVBattery:charge(1)
+    elseif BMS_SOC_MIN <= config.deep_discharge_hysteresis then
+        config.deep_discharge_hysteresis = config.deep_discharge_max
+        util:log("Emergency stop charge")
+        PVBattery:charge(1)
+    elseif config.deep_discharge_hysteresis == config.deep_discharge_max then
+        config.deep_discharge_hysteresis = config.deep_discharge_min
+        util:log("Stop emergency charge")
+        PVBattery:idle()
+    end
 
     if P_Grid then
         if P_Grid < config.bat_max_feed_in * (1.00 + config.exceed_factor) then
@@ -384,8 +406,9 @@ while true do
         end
     end
 
-    util:log("\n-------- Battery Status:")
-    AntBMS:printValues()
-
-    util.sleep_time(config.sleep_time)
+    if old_state ~= PVBattery.state then
+        util.sleep_time(5) -- sleep only 5 seconds after a change
+    else
+        util.sleep_time(config.sleep_time)
+    end
 end

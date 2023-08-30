@@ -436,7 +436,7 @@ function AntBMS:evaluateParameters()
     self.v.BalancedStatusFlag = getInt8(self.answer, 105)
 
     self.v.ChargeMosText = self.MOSFETChargeStatusFlag[self.v.ChargeMos]
-    self.v.DischargeMosText = self.MOSFETChargeStatusFlag[self.v.DischargeMos]
+    self.v.DischargeMosText = self.MOSFETDischargeStatusFlag[self.v.DischargeMos]
     self.v.BalancedStatusText = self.BalancedStatusText[self.v.BalancedStatusFlag]
 
     self.v.TireLength = getInt16(self.answer, 106)
@@ -508,19 +508,19 @@ function AntBMS:_printValuesNotProtected()
     end
 
     util:log(string.format("SOC = %3d%%", self:getSOC()))
-    util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC))
-    util:log(string.format("Current Power = %d W", self.v.CurrentPower))
+    util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
+    util:log(string.format("Current Power = %d W", self.v.CurrentPower or -666))
     util:log(string.format("Current = %3.1f A", self.v.Current))
 
-    util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity))
-    util:log(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity))
-    util:log(string.format("cycle capacity = %3.3f Ah", self.v.CycleCapacity))
+    util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity or -666))
+    util:log(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity or -666))
+    util:log(string.format("cycle capacity = %3.3f Ah", self.v.CycleCapacity or -666))
 
-    util:log(string.format("Number of Batteries = %2d", self.v.NumberOfBatteries))
+    util:log(string.format("Number of Batteries = %2d", self.v.NumberOfBatteries or -666))
 
-    util:log(string.format("Charge MOSFET status:    %s", self.v.ChargeMosText))
-    util:log(string.format("Discharge MOSFET status: %s", self.v.DischargeMosText))
-    util:log(string.format("Balanced status: %s", self.v.BalancedStatusText))
+    util:log(string.format("Charge MOSFET status:    %s", self.v.ChargeMosText or "-666"))
+    util:log(string.format("Discharge MOSFET status: %s", self.v.DischargeMosText or "-666"))
+    util:log(string.format("Balanced status: %s", self.v.BalancedStatusText or "-666"))
 
     local _, bitString
     _, bitString = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
