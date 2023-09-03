@@ -21,7 +21,6 @@ local chunk_size = 4096
 
 local buffer = ffi.new('uint8_t[?]',chunk_size)
 
-
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
 local function getInt8(ans, pos)
@@ -509,7 +508,7 @@ function AntBMS:_printValuesNotProtected()
 
     util:log(string.format("SOC = %3d%%", self:getSOC()))
     util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
-    util:log(string.format("Current Power = %d W", self.v.CurrentPower or -666))
+    util:log(string.format("Current Power = %d W (neg. means charging)", self.v.CurrentPower or -666))
     util:log(string.format("Current = %3.1f A", self.v.Current))
 
     util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity or -666))
@@ -537,14 +536,13 @@ function AntBMS:_printValuesNotProtected()
     util:log(string.format("average voltage = %1.3f V", self.v.AverageVoltage))
     util:log(string.format("Cell difference = %1.3f V", self.v.CellDiff))
 
-    util:log(string.format("lowest monomer  = %d ", self.v.LowestMonomer), "", string.format("highest monomer = %d ", self.v.HighestMonomer ))
-    util:log(string.format("lowest voltage  = %1.3f V", self.v.LowestVoltage), string.format("highest voltage = %1.3f V", self.v.HighestVoltage))
-
+    util:log(string.format("lowest voltage [%d] = %1.3f V", self.v.LowestMonomer, self.v.LowestVoltage),
+             string.format("highest voltage [%d] = %1.3f V", self.v.HighestMonomer, self.v.HighestVoltage))
 
     util:log("")
-    util:log(string.format("DischargeTubeVoltageDrop    = % 3.1f V", self.v.DischargeTubeVoltageDrop))
-    util:log(string.format("DischargeTubeDriveVoltage   = % 3.1f V", self.v.DischargeTubeDriveVoltage))
-    util:log(string.format("ChargeTubeDriveVoltage      = % 3.1f V", self.v.ChargeTubeDriveVoltage))
+    util:log(string.format("DischargeTubeVoltageDrop  = % 4.1f V", self.v.DischargeTubeVoltageDrop))
+    util:log(string.format("DischargeTubeDriveVoltage = % 4.1f V", self.v.DischargeTubeDriveVoltage))
+    util:log(string.format("ChargeTubeDriveVoltage    = % 4.1f V", self.v.ChargeTubeDriveVoltage))
 
     util:log("Temperatures:")
     for i = 1,6,2 do

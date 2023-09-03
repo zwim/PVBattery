@@ -8,4 +8,3 @@ rsync *.lua /opt/PVBattery
 
 cp PVBattery /etc/init.d/
 rc-update add PVBattery
-
