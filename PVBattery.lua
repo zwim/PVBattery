@@ -7,9 +7,12 @@ local Switch = require("switch")
 local lfs = require("lfs")
 local util = require("util")
 
-local ChargeSwitch = Switch:new()
-local ChargeSwitch2 = Switch:new()
-local DischargerSwitch = Switch:new()
+local BatteryCharge1Switch = Switch:new()
+local BatteryCharge2Switch = Switch:new()
+local BatteryInverterSwitch = Switch:new()
+local GarageInverterSwitch = Switch:new()
+local MopedChargeSwitch = Switch:new()
+local MopedInverter = Switch:new()
 
 local config = {
     -- Don't change this in a config file.
@@ -24,6 +27,10 @@ local config = {
     -- during PVBattery run.
     config_file_name = "config.lua", -- load this file
 
+    host = "battery-control.lan",
+    html_main = "/var/www/localhost/htdocs/index.html",
+    html_battery = "/var/www/localhost/htdocs/battery.html",
+
     position = {
         name = "Kirchbichl",
         latitude = 47.5109083,
@@ -33,6 +40,8 @@ local config = {
     },
 
     log_file_name = "/var/log/PVBattery.log",
+    html_main = "/var/www/localhost/htdocs/index.html",
+    html_battery = "/var/www/localhost/htdocs/battery.html",
 
     bat_max_feed_in = -350, -- Watt
     bat_max_feed_in2 = -350, -- Watt
@@ -124,42 +133,58 @@ function PVBattery:init()
     util:log("Sun rise at " .. SunTime.rise)
     util:log("Sun set at " .. SunTime.set)
 
-    ChargeSwitch:init("battery-charger.lan")
-    ChargeSwitch:getEnergy()
-    util:log("Charger energy today", ChargeSwitch.Energy.Today, "kWh")
-    util:log("Charger power", ChargeSwitch:getPower(), "W")
+    BatteryCharge1Switch:init("battery-charger.lan")
+    BatteryCharge1Switch:getEnergy()
+    util:log("Charger energy today", BatteryCharge1Switch.Energy.Today, "kWh")
+    util:log("Charger power", BatteryCharge1Switch:getPower(), "W")
 
-    ChargeSwitch2:init("battery-charger2.lan")
-    ChargeSwitch2:getEnergy()
-    util:log("Charger2 energy today", ChargeSwitch2.Energy.Today, "kWh")
-    util:log("Charger2 power", ChargeSwitch2:getPower(), "W")
+    BatteryCharge2Switch:init("battery-charger2.lan")
+    BatteryCharge2Switch:getEnergy()
+    util:log("Charger2 energy today", BatteryCharge2Switch.Energy.Today, "kWh")
+    util:log("Charger2 power", BatteryCharge2Switch:getPower(), "W")
 
-    DischargerSwitch:init("battery-inverter.lan")
-    --util:log("toggle", DischargerSwitch:toggle("off"))
-    DischargerSwitch:getEnergy()
-    util:log("Discharger energy today", DischargerSwitch.Energy.Today, "kWh")
-    util:log("Discharger power", DischargerSwitch:getPower(), "W")
+    BatteryInverterSwitch:init("battery-inverter.lan")
+    --util:log("toggle", BatteryInverterSwitch:toggle("off"))
+    BatteryInverterSwitch:getEnergy()
+    util:log("Discharger energy today", BatteryInverterSwitch.Energy.Today, "kWh")
+    util:log("Discharger power", BatteryInverterSwitch:getPower(), "W")
+
+    GarageInverterSwitch:init("192.168.1.30")
+    GarageInverterSwitch:getEnergy()
+    util:log("Garage inverter energy today", GarageInverterSwitch.Energy.Today, "kWh")
+    util:log("Garage inverter power", GarageInverterSwitch:getPower(), "W")
+
+    MopedChargeSwitch:init("moped-switch.lan")
+    MopedChargeSwitch:getEnergy()
+    util:log("Moped energy today", MopedChargeSwitch.Energy.Today, "kWh")
+    util:log("Moped power", MopedChargeSwitch:getPower(), "W")
+
+    MopedInverter:init("moped-inverter.lan")
+    MopedInverter:getEnergy()
+    util:log("Moped energy today", MopedInverter.Energy.Today, "kWh")
+    util:log("Moped power", MopedInverter:getPower(), "W")
+
 end
 
 function PVBattery:idle(force)
     if not force and self:getCurrentState() == "idle" then return end
     local ret, ret_1, ret_2
-    ret = DischargerSwitch:toggle("off")
+    ret = BatteryInverterSwitch:toggle("off")
     util:log("discharge", ret)
     util.sleep_time(1)
     if string.lower(ret) ~= "off" then
-        DischargerSwitch:toggle("off")
+        BatteryInverterSwitch:toggle("off")
         self.state = "error"
     end
-    ret_1 = ChargeSwitch:toggle("off")
+    ret_1 = BatteryCharge1Switch:toggle("off")
     util:log("charge1", ret_1)
-    ret_2 = ChargeSwitch2:toggle("off")
+    ret_2 = BatteryCharge2Switch:toggle("off")
     util:log("charge2", ret_2)
     if string.lower(ret_1) ~= "off" or string.lower(ret_2) ~= "off" then
         util.sleep_time(1)
         -- try again
-        ChargeSwitch:toggle("off")
-        ChargeSwitch2:toggle("off")
+        BatteryCharge1Switch:toggle("off")
+        BatteryCharge2Switch:toggle("off")
         self.state = "error"
         return false
     end
@@ -178,7 +203,7 @@ function PVBattery:charge(direction, force)
         return
     end
 
-    local ret = DischargerSwitch:toggle("off")
+    local ret = BatteryInverterSwitch:toggle("off")
     util:log("discharge", ret)
     if string.lower(ret) ~= "off" then
         self:idle()
@@ -194,7 +219,7 @@ function PVBattery:charge(direction, force)
     util.sleep_time(0.5)
 
     if direction == 1 and number == "0" then -- no charger running
-        ret = ChargeSwitch:toggle("on")
+        ret = BatteryCharge1Switch:toggle("on")
         util:log("charger1", ret)
         if string.lower(ret) ~= "on" then
             self:idle()
@@ -204,7 +229,7 @@ function PVBattery:charge(direction, force)
         self.state = "charge 1"
         return true
     elseif direction == 1 and number == "1" then -- one charger running
-        ret = ChargeSwitch2:toggle("on")
+        ret = BatteryCharge2Switch:toggle("on")
         util:log("charger2", ret)
         if string.lower(ret) ~= "on" then
             self:idle()
@@ -214,7 +239,7 @@ function PVBattery:charge(direction, force)
         self.state = "charge 2"
         return true
     elseif direction == -1 and number == "2" then -- two chargers running
-        ret = ChargeSwitch2:toggle("off")
+        ret = BatteryCharge2Switch:toggle("off")
         util:log("charger2", ret)
         if string.lower(ret) ~= "off" then
             self:idle()
@@ -224,7 +249,7 @@ function PVBattery:charge(direction, force)
         self.state = "charge 1"
         return true
     elseif direction == -1 and number == "1" then -- one charger running
-        ret = ChargeSwitch:toggle("off")
+        ret = BatteryCharge1Switch:toggle("off")
         util:log("charger1", ret)
         if string.lower(ret) ~= "off" then
             self:idle()
@@ -239,9 +264,9 @@ end
 function PVBattery:discharge(force)
     if not force and self:getCurrentState() == "discharge" then return end
     local ret, ret_1, ret_2
-    ret_1 = ChargeSwitch:toggle("off")
+    ret_1 = BatteryCharge1Switch:toggle("off")
     util:log("charger1", ret_1)
-    ret_2 = ChargeSwitch2:toggle("off")
+    ret_2 = BatteryCharge2Switch:toggle("off")
     util:log("charger2", ret_2)
 
     if string.lower(ret_1) ~= "off" or string.lower(ret_2) ~= "off" then
@@ -250,7 +275,7 @@ function PVBattery:discharge(force)
     end
 
     util.sleep_time(0.5)
-    ret = DischargerSwitch:toggle("on")
+    ret = BatteryInverterSwitch:toggle("on")
     util:log("discharge", ret)
     if string.lower(ret) ~= "on" then
         self:idle()
@@ -262,31 +287,216 @@ function PVBattery:discharge(force)
 end
 
 function PVBattery:getStateFromSwitch()
-    local charge_state = ChargeSwitch:getPowerState():lower()
-    local charge2_state = ChargeSwitch2:getPowerState():lower()
-    local discharge_state = DischargerSwitch:getPowerState():lower()
+    local charge1_state = BatteryCharge1Switch:getPowerState():lower()
+    local charge2_state = BatteryCharge2Switch:getPowerState():lower()
+    local discharge_state = BatteryInverterSwitch:getPowerState():lower()
 
-    util:log ("charge state", charge_state, "charge2 state", charge2_state, "inverter_state", discharge_state)
+    util:log ("charge state", charge1_state, "charge2 state", charge2_state, "inverter_state", discharge_state)
 
-
-    if charge_state == "off" and discharge_state == "off" then
+    if charge1_state == "off" and discharge_state == "off" then
         self.state = "idle"
-    elseif charge_state == "off" and discharge_state == "on" then
+    elseif charge1_state == "off" and discharge_state == "on" then
         self.state = "discharge"
-    elseif charge_state == "on" and discharge_state == "off" then
+    elseif charge1_state == "on" and discharge_state == "off" then
         if charge2_state == "off" then
             self.state = "charge 1"
         else
             self.state = "charge 2"
         end
-    elseif charge_state == "off" and discharge_state == "on" then
+    elseif charge1_state == "on" and discharge_state == "on" then
         self.state = "error"
     end
 
     return self.state
 end
 
+function PVBattery:generateHTML(info)
+
+    local file_descriptor
+
+    local function writeVal(v, nl)
+        if type(v) == "string" then
+            file_descriptor:write(v)
+        elseif type(v) == "table" then
+            local text_or_link = v[1]
+            if v[4] ~= nil then
+                text_or_link = string.format('<a href="http://%s">%s</a>', v[4].host, v[1])
+            end
+            if type(v[2]) == "number" then
+                file_descriptor:write(string.format("<td align=\"right\">%20s</td> <td>=</td> <td align=\"right\"> % 8.2f %s</td> ",
+                        text_or_link, v[2] or "", v[3] or ""))
+            else
+                file_descriptor:write(string.format(" %20s %s", text_or_link, v[2] or ""))
+            end
+        end
+        if nl then
+            file_descriptor:write("\n")
+        end
+    end
+
+    local header = [[
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Energy Flow</title>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" user-scalable="yes">
+    <meta http-equiv="refresh" content="10">
+</head>
+<body>
+]]
+    local footer = "</body></html>"
+
+    -- generate main page
+    file_descriptor = io.open(config.html_main, "w")
+    file_descriptor:write(header)
+
+    writeVal("<h1>Energy Flow</h1>")
+
+    writeVal(info.time)
+    writeVal("<br><br>")
+
+    if info.grid[2] and info.grid[2] >= 0 then
+        file_descriptor:write(string.rep(" ", 10), "optain")
+        writeVal(info.grid, true)
+    end
+    writeVal("<br>")
+
+    writeVal("<table>", true)
+        writeVal("<tr>")
+        writeVal("<td></td> <td></td> <th> Sources </th>")
+--        writeVal("<td rowspan=\"3\">Sources</td>")
+        writeVal("<td width = 10%></td>")
+        writeVal("<td></td> <td></td> <th> Sinks </th>")
+--        writeVal("<td rowspan=\"3\">Sinks</td>")
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal(info.roof)
+            writeVal("<td>") writeVal("</td>")
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal(info.garage_inverter)
+            writeVal("<td></td>")
+            writeVal(info.battery_switch_1)
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal(info.battery_inverter)
+            writeVal("<td></td>")
+            writeVal(info.battery_switch_2)
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal(info.moped_inverter)
+            writeVal("<td></td>")
+            writeVal(info.moped_switch)
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal("<td>") writeVal("<hr></td>")
+            writeVal("<td></td>")
+            writeVal("<td>") writeVal("<hr></td>")
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal(info.sources)
+            writeVal("<td></td>")
+            writeVal(info.sinks)
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal("<td>") writeVal("</td>")
+            writeVal("<td></td>")
+            writeVal("<td>") writeVal("</td>")
+        writeVal("</tr>", true)
+
+    writeVal("</table><br>")
+    if info.grid[2] and info.grid[2] <= 0 then
+        file_descriptor:write(string.rep(" ", 10), "sell")
+        info.grid[2] = - info.grid[2] -- just to show positive values
+        writeVal(info.grid, true)
+        info.grid[2] = - info.grid[2]
+    end
+
+    writeVal("<br>")
+    writeVal(string.format(" % 34s = % 8.2f W\n","Consumption", info.sources[2] - info.sinks[2] + info.grid[2]))
+
+    writeVal(string.format('<br> <a href="http://%s/battery.html">Battery</a>', config.host))
+
+    file_descriptor:write(footer)
+    file_descriptor:close()
+
+    -- Generate battery info
+    file_descriptor = io.open(config.html_battery, "w")
+    file_descriptor:write(header)
+
+    writeVal("<h1>Battery</h1>")
+
+    writeVal(info.time)
+    writeVal("<br><br>")
+
+    writeVal("<table>", true)
+        writeVal("<tr>")
+            writeVal(info.battery_SOC)
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal(info.battery_power)
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal(info.battery_current)
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal("<td>")
+            writeVal(info.battery_balancer)
+            writeVal("</td>")
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+            writeVal("<td>")
+            writeVal(info.battery_balancing)
+            writeVal("</td>")
+        writeVal("</tr>", true)
+
+        writeVal("<tr>")
+        local next_cell = string.format("<td>Cell difference % 6.4f V</td>", AntBMS.v.CellDiff)
+        writeVal(next_cell)
+        writeVal("</tr>", true)
+
+    writeVal("</table>", true)
+
+    writeVal("<br><br>")
+
+    writeVal("<table>")
+    local i = 1
+    while i <= AntBMS.v.NumberOfBatteries do
+        writeVal("<tr>")
+        local next_cell
+        next_cell = string.format("<td>[%02d] % 6.4f V</td>", i, AntBMS.v.Voltage[i])
+        writeVal(next_cell)
+        writeVal("<td></td>")
+        i = i + 1
+        if i > AntBMS.v.NumberOfBatteries then
+            break
+        end
+        next_cell = string.format("<td>[%02d] % 6.4f V</td>", i, AntBMS.v.Voltage[i])
+        writeVal(next_cell)
+        writeVal("</tr>", true)
+        i = i + 1
+    end
+    writeVal("</table>")
+
+
+    file_descriptor:write(footer)
+    file_descriptor:close()
+end
+
 function PVBattery:main()
+    local info = {}
     local last_date, date
     date = os.date("*t")
     while true do
@@ -313,7 +523,8 @@ function PVBattery:main()
         local current_time = date.hour + date.min / 60 + date.sec / 3600
 
         util:log("\n#############################################")
-        util:log(string.format("%d/%d/%d-%02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec))
+        info.time = {string.format("%d/%d/%d-%02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec), ""}
+        util:log(info.time[1])
 
         -- Update BMS, Inverter, Fronius ...
         Fronius:getPowerFlowRealtimeData()
@@ -327,13 +538,39 @@ function PVBattery:main()
             util.sleep_time(1) -- try again in 1 second
             P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         end
-        util:log(P_Grid and string.format("P_Grid = % 8.2f W", P_Grid) or "P_Grid: no valid data")
-        util:log(P_Load and string.format("P_Load = % 8.2f W", P_Load) or "P_Load: no valid data")
-        util:log(P_PV   and string.format("P_PV   = % 8.2f W", P_PV)   or "P_PV: no valid data")
+        info.grid = {"Grid", P_Grid or 0/0, "W"}
+        info.load = {"Load", P_Load or 0/0, "W"}
+        info.roof = {"Roof", P_PV or 0/0, "W"}
+        util:log(info.grid[1], info.grid[2], info.grid[3])
+        util:log(info.load[1], info.load[2], info.load[3])
+        util:log(info.roof[1], info.roof[2], info.roof[3])
 
         local BMS_SOC = AntBMS:getSOC()
         local BMS_SOC_MIN = math.min(BMS_SOC, AntBMS.v.CalculatedSOC)
         local BMS_SOC_MAX = math.max(BMS_SOC, AntBMS.v.CalculatedSOC)
+
+        info.battery_SOC = {"SOC", BMS_SOC, "%"}
+        info.battery_current = {"Current", AntBMS.v.Current, "A"}
+        info.battery_power = {"Current power", AntBMS.v.CurrentPower, "W"}
+        info.battery_balancer = {"Balancer:", AntBMS.v.BalancedStatusText, ""}
+        info.battery_balancing = {"Balancing:", AntBMS.v.ActiveBalancers, ""}
+
+        BatteryCharge1Switch:getPowerState()
+        BatteryCharge2Switch:getPowerState()
+        BatteryInverterSwitch:getPowerState()
+        GarageInverterSwitch:getPowerState()
+        MopedChargeSwitch:getPowerState()
+        MopedInverter:getPowerState()
+
+        info.battery_switch_1 = {"Battery Charger1", BatteryCharge1Switch:getPower(), "W", BatteryCharge1Switch}
+        info.battery_switch_2 = {"Battery Charger2", BatteryCharge2Switch:getPower(), "W", BatteryCharge2Switch}
+        info.battery_inverter = {"Battery Inverter", BatteryInverterSwitch:getPower(), "W", BatteryInverterSwitch}
+
+        info.garage_inverter = {"Garage Inverter", GarageInverterSwitch:getPower(), "W", GarageInverterSwitch}
+
+        info.moped_switch = {"Moped Switch", MopedChargeSwitch:getPower(), "W", MopedChargeSwitch}
+        info.moped_inverter = {"Moped Inverter", MopedInverter:getPower(), "W", MopedInverter}
+
 
         util:log("\n-------- Battery status:")
         AntBMS:printValues()
@@ -370,14 +607,14 @@ function PVBattery:main()
                     util:log("no charge after civil dusk")
                     self:idle()
                 else
-                    util:log("charge stopped as battery SOC=" .. BMS_SOC_MIN .. "% > " .. config.bat_SOC_max .. "%")
+                    util:log(string.format("charge stopped as battery SOC=%.2f%% > %3d%%", BMS_SOC_MIN, config.bat_SOC_max))
                     self:idle()
                 end
             elseif self:getCurrentState() == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
                 util:log("charge -1")
                 self:charge(-1)
             elseif BMS_SOC_MAX < config.bat_SOC_min then
-                util:log("discharge stopped as battery SOC=" .. BMS_SOC_MAX .. "% < " .. config.bat_SOC_min .. "%")
+                util:log(string.format("discharge stopped as battery SOC=%0.2f%% < %3d%%", BMS_SOC_MAX, config.bat_SOC_min))
                 self:idle()
             elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
                 if BMS_SOC_MAX >= config.bat_SOC_min then
@@ -401,13 +638,35 @@ function PVBattery:main()
             end
         end
 
+
+        local function _add(a, b)
+            if b and b == b  then
+                return a + b
+            else
+                return a
+            end
+        end
+        info.sources = {"Total Source", 0, "W"}
+        info.sources[2] = _add(info.sources[2], info.roof[2])
+        info.sources[2] = _add(info.sources[2], info.battery_inverter[2])
+        info.sources[2] = _add(info.sources[2], info.garage_inverter[2])
+        info.sources[2] = _add(info.sources[2], info.moped_inverter[2])
+
+        info.sinks = {"Total Sink", 0, "W"}
+        info.sinks[2] = _add(info.sinks[2], info.battery_switch_1[2])
+        info.sinks[2] = _add(info.sinks[2], info.battery_switch_2[2])
+        info.sinks[2] = _add(info.sinks[2], info.moped_switch[2])
+
+
+        self:generateHTML(info)
+
+        util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
+
         if old_state ~= self.state then
             util.sleep_time(5) -- sleep only 5 seconds after a change
         else
             util.sleep_time(config.sleep_time)
         end
-
-        util:log("\n. . . . . . . . . . . . . . . . . . . . . . .")
     end
 end
 

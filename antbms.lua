@@ -147,7 +147,7 @@ function AntBMS:toggleAutoBalance()
 
     self.answer = {}
 
-    print("xxx setAutoBalance", write_data_hex)
+    print("xxx setAutoBalance", os.date(), write_data_hex)
 
     local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
     if fd <= 0 then
@@ -469,8 +469,10 @@ function AntBMS:evaluateParameters()
     self.v.DischargeTubeDriveVoltage = getInt16(self.answer, 126) * 0.1
     self.v.ChargeTubeDriveVoltage = getInt16(self.answer, 128) * 0.1
 
-
     self.v.BalancingFlags = getInt32(self.answer, 132)
+
+    local _
+    _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
 
     self.answer = {} -- clear old received bytes
     self.timeOfLastRequiredData = util.getCurrentTime()
@@ -501,14 +503,23 @@ end
 function AntBMS:_printValuesNotProtected()
     self:evaluateParameters()
 
-    if self.v == {} then
+    if not next(self.v) then -- check if table self.v is empty!
         util:log("No values decoded yet!")
         return false
     end
 
     util:log(string.format("SOC = %3d%%", self:getSOC()))
     util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
-    util:log(string.format("Current Power = %d W (neg. means charging)", self.v.CurrentPower or -666))
+
+    local charging_text = ""
+    if self.v.CurrentPower then
+        if self.v.CurrentPower < 0 then
+            charging_text = "charge"
+        else
+            charging_text = "discharge"
+        end
+    end
+    util:log(string.format("Current Power = %d W (%s)", self.v.CurrentPower or -666, charging_text))
     util:log(string.format("Current = %3.1f A", self.v.Current))
 
     util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity or -666))
@@ -521,10 +532,7 @@ function AntBMS:_printValuesNotProtected()
     util:log(string.format("Discharge MOSFET status: %s", self.v.DischargeMosText or "-666"))
     util:log(string.format("Balanced status: %s", self.v.BalancedStatusText or "-666"))
 
-    local _, bitString
-    _, bitString = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
-
-    util:log(string.format("Active Balancers: %s", bitString))
+    util:log(string.format("Active Balancers: %s", self.v.ActiveBalancers))
 
     for i = 1, self.v.NumberOfBatteries, 2 do
         util:log(string.format("[%2d] = %2.3f V", i, self.v.Voltage[i]),

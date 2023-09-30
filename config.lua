@@ -8,6 +8,10 @@
 
 log_file_name = "/var/log/PVBattery.log"
 
+host = "battery-control.lan"
+html_main = "/var/www/localhost/htdocs/index.html"
+html_battery = "/var/www/localhost/htdocs/battery.html"
+
 position = {
     name = "Kirchbichl",
     latitude = 47.5109083,
