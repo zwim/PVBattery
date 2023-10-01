@@ -21,7 +21,6 @@ local chunk_size = 4096
 
 local buffer = ffi.new('uint8_t[?]',chunk_size)
 
-
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
 local function getInt8(ans, pos)
@@ -121,8 +120,11 @@ function AntBMS:setAutoBalance(on)
 
     self:evaluateParameters()
 
-    util:log("Balancer status was", string.lower(self.v.BalancedStatusText))
-    print(string.find(string.lower(self.v.BalancedStatusText),"on"))
+    util:log("Balancer status was", self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
+
+    if not self.v.BalancedStatusText then
+        util:log("xxxx error self.v.BalancedStatusText is nil")
+    end
     if on then
         if string.find(string.lower(self.v.BalancedStatusText), "on") then
             return -- already on
@@ -145,7 +147,7 @@ function AntBMS:toggleAutoBalance()
 
     self.answer = {}
 
-    print("xxx setAutoBalance", write_data_hex)
+    print("xxx setAutoBalance", os.date(), write_data_hex)
 
     local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
     if fd <= 0 then
@@ -413,6 +415,8 @@ function AntBMS:evaluateParameters()
 
     self.v.PhysicalCapacity = getInt32(self.answer, 75) * 1e-6
     self.v.RemainingCapacity = getInt32(self.answer, 79) * 1e-6
+    self.v.CalculatedSOC = self.v.RemainingCapacity / self.v.PhysicalCapacity * 100
+
     self.v.CycleCapacity = getInt32(self.answer, 83) * 1e-6
 
     self.v.uptime = getInt32(self.answer, 87)
@@ -431,7 +435,7 @@ function AntBMS:evaluateParameters()
     self.v.BalancedStatusFlag = getInt8(self.answer, 105)
 
     self.v.ChargeMosText = self.MOSFETChargeStatusFlag[self.v.ChargeMos]
-    self.v.DischargeMosText = self.MOSFETChargeStatusFlag[self.v.DischargeMos]
+    self.v.DischargeMosText = self.MOSFETDischargeStatusFlag[self.v.DischargeMos]
     self.v.BalancedStatusText = self.BalancedStatusText[self.v.BalancedStatusFlag]
 
     self.v.TireLength = getInt16(self.answer, 106)
@@ -450,16 +454,25 @@ function AntBMS:evaluateParameters()
     self.v.LowestMonomer = getInt8(self.answer, 118)
     self.v.LowestVoltage = getInt16(self.answer, 119) * 1e-3
 
+    self.v.CellDiff = self.v.HighestVoltage - self.v.LowestVoltage
+
     self.v.AverageVoltage = getInt16(self.answer, 121)* 1e-3
 
     self.v.NumberOfBatteries = getInt8(self.answer, 123)
 
     self.v.DischargeTubeVoltageDrop = getInt16(self.answer, 124) * 0.1
+    if self.v.DischargeTubeVoltageDrop > 2^15 then
+        self.v.DischargeTubeVoltageDrop = self.v.DischargeTubeVoltageDrop - 2^15
+    end
+    self.v.DischargeTubeVoltageDrop = self.v.DischargeTubeVoltageDrop * 0.1
+
     self.v.DischargeTubeDriveVoltage = getInt16(self.answer, 126) * 0.1
     self.v.ChargeTubeDriveVoltage = getInt16(self.answer, 128) * 0.1
 
-
     self.v.BalancingFlags = getInt32(self.answer, 132)
+
+    local _
+    _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
 
     self.answer = {} -- clear old received bytes
     self.timeOfLastRequiredData = util.getCurrentTime()
@@ -472,6 +485,7 @@ function AntBMS:getSOC()
     if self:getDataAge() > 60 or not self.v.SOC then
         self:evaluateParameters()
     end
+    self.v.CalculatedSOC = self.v.CalculatedSOC or 50
     return self.v.SOC or 50
 end
 
@@ -489,51 +503,58 @@ end
 function AntBMS:_printValuesNotProtected()
     self:evaluateParameters()
 
-    if self.v == {} then
+    if not next(self.v) then -- check if table self.v is empty!
         util:log("No values decoded yet!")
         return false
     end
 
     util:log(string.format("SOC = %3d%%", self:getSOC()))
-    util:log(string.format("Current Power = %d W", self.v.CurrentPower))
+    util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
+
+    local charging_text = ""
+    if self.v.CurrentPower then
+        if self.v.CurrentPower < 0 then
+            charging_text = "charge"
+        else
+            charging_text = "discharge"
+        end
+    end
+    util:log(string.format("Current Power = %d W (%s)", self.v.CurrentPower or -666, charging_text))
     util:log(string.format("Current = %3.1f A", self.v.Current))
 
-    util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity))
-    util:log(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity))
+    util:log(string.format("rem. capacity  = %3.3f Ah", self.v.RemainingCapacity or -666))
+    util:log(string.format("phys. capacity = %3.3f Ah", self.v.PhysicalCapacity or -666))
+    util:log(string.format("cycle capacity = %3.3f Ah", self.v.CycleCapacity or -666))
 
-    util:log(string.format("Number of Batteries = %2d", self.v.NumberOfBatteries))
+    util:log(string.format("Number of Batteries = %2d", self.v.NumberOfBatteries or -666))
 
-    util:log(string.format("Charge MOSFET status:    %s", self.v.ChargeMosText))
-    util:log(string.format("Discharge MOSFET status: %s", self.v.DischargeMosText))
-    util:log(string.format("Balanced status: %s", self.v.BalancedStatusText))
+    util:log(string.format("Charge MOSFET status:    %s", self.v.ChargeMosText or "-666"))
+    util:log(string.format("Discharge MOSFET status: %s", self.v.DischargeMosText or "-666"))
+    util:log(string.format("Balanced status: %s", self.v.BalancedStatusText or "-666"))
 
-    local _, bitString
-    _, bitString = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
-
-    util:log(string.format("Active Balancers : %s", bitString))
+    util:log(string.format("Active Balancers: %s", self.v.ActiveBalancers))
 
     for i = 1, self.v.NumberOfBatteries, 2 do
-        util:log(string.format("Voltage[%2d] = %2.3f V", i, self.v.Voltage[i]),
-            i+1 <= self.v.NumberOfBatteries and string.format("Voltage[%2d] = %2.3f V", i+1, self.v.Voltage[i+1]) or "")
+        util:log(string.format("[%2d] = %2.3f V", i, self.v.Voltage[i]),
+            i+1 <= self.v.NumberOfBatteries and string.format("[%2d] = %2.3f V", i+1, self.v.Voltage[i+1]) or "")
     end
     util:log(string.format("TotalVoltage    = %3.1f V", self.v.TotalVoltage))
     util:log(string.format("Voltage sum     = %3.3f V", self.v.VoltageSum))
 
     util:log(string.format("average voltage = %1.3f V", self.v.AverageVoltage))
-    util:log(string.format("Cell difference = %1.3f V", self.v.HighestVoltage - self.v.LowestVoltage))
+    util:log(string.format("Cell difference = %1.3f V", self.v.CellDiff))
 
-    util:log(string.format("lowest monomer  = %d ", self.v.LowestMonomer), "", string.format("highest monomer = %d ", self.v.HighestMonomer ))
-    util:log(string.format("lowest voltage  = %1.3f V", self.v.LowestVoltage), string.format("highest voltage = %1.3f V", self.v.HighestVoltage))
-
+    util:log(string.format("lowest voltage [%d] = %1.3f V", self.v.LowestMonomer, self.v.LowestVoltage),
+             string.format("highest voltage [%d] = %1.3f V", self.v.HighestMonomer, self.v.HighestVoltage))
 
     util:log("")
-    util:log(string.format("DischargeTubeVoltageDrop    = % 3.1f V", self.v.DischargeTubeVoltageDrop))
-    util:log(string.format("DischargeTubeDriveVoltage   = % 3.1f V", self.v.DischargeTubeDriveVoltage))
-    util:log(string.format("ChargeTubeDriveVoltage      = % 3.1f V", self.v.ChargeTubeDriveVoltage))
+    util:log(string.format("DischargeTubeVoltageDrop  = % 4.1f V", self.v.DischargeTubeVoltageDrop))
+    util:log(string.format("DischargeTubeDriveVoltage = % 4.1f V", self.v.DischargeTubeDriveVoltage))
+    util:log(string.format("ChargeTubeDriveVoltage    = % 4.1f V", self.v.ChargeTubeDriveVoltage))
 
     util:log("Temperatures:")
     for i = 1,6,2 do
-        util:log(string.format("%d = %3d°C", i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
+        util:log(string.format("[%d] = %3d°C", i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
     end
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
@@ -559,22 +580,22 @@ usage: lua antbms.lua [command]
 ]]
 
 -- Show initial values
-arg[1] = arg[1] and string.lower(arg[1])
-if arg[1] and string.find(arg[1], "help") then
+local command = arg[1] and string.lower(arg[1])
+if command and string.find(command, "help") then
     print(help_string)
-elseif arg[1] and string.find(arg[1], "show") then
+elseif command and string.find(command, "show") then
     AntBMS:printValues()
-elseif arg[1] and string.find(arg[1], "balon") then
+elseif command and string.find(command, "balon") then
     AntBMS:setAutoBalance(true)
-elseif arg[1] and string.find(arg[1], "baloff") then
+elseif command and string.find(command, "baloff") then
     AntBMS:setAutoBalance(false)
-elseif arg[1] and string.find(arg[1], "baltog") then
+elseif command and string.find(command, "baltog") then
     AntBMS:toggleAutoBalance()
-elseif arg[1] and string.find(arg[1], "reboot") then
+elseif command and string.find(command, "reboot") then
     AntBMS:reboot()
-elseif arg[1] then
+elseif command then
     print(help_string)
-    print("Wrong argument: " .. arg[1])
+    print("Wrong argument: " .. command)
 end
 
 return AntBMS

@@ -17,7 +17,7 @@ function util:setLog(log_file_name)
         self.log_file:close()
     end
     if log_file_name then
-        self.log_file = io.open (log_file_name , "a")
+        self.log_file = io.open(log_file_name , "a")
         if not self.log_file then
             print("ERROR opening log file:", log_file_name, self.log_file_name)
         end
@@ -70,7 +70,7 @@ function util.numToBits(num, nb)
         bits[#bits + 1] = rest
         num = (num - rest) / 2
     end
-    for i = #bits, nb do
+    for i = #bits+1 , nb do
         bits[i] = 0
     end
     return bits, table.concat(bits)
@@ -88,5 +88,17 @@ function util.getCurrentTime()
     return sec + nsec * 1e-9
 end
 
+function util:cleanLogs()
+    -- compress log file
+    local handle = io.popen("stat -f -c %T " .. self.log_file_name)
+    local result = handle:read("*a")
+    handle:close()
+    if result:find("btrfs") then
+        os.execute("btrfs filesystem defragment -r -v -czstd " .. self.log_file_name)
+    else
+        print("todo log file compression") -- todos
+    end
+
+end
 
 return util

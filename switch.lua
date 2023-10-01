@@ -14,8 +14,6 @@ end
 
 local util = require("util")
 
-local host = "192.168.0.149"
-
 local Switch = {
     host = nil,
     body = nil,
@@ -36,7 +34,7 @@ function Switch:init(host_name)
 end
 
 function Switch:getEnergy()
-    if not host then return end
+    if not self.host then return end
     local url = string.format("http://%s/cm?cmnd=EnergyTotal", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     local decoded = json.decode(self.body)
@@ -45,16 +43,16 @@ function Switch:getEnergy()
 end
 
 function Switch:getPower()
-    if not host then return end
+    if not self.host then return end
     local url = string.format("http://%s/cm?cmnd=Status%%208", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     local decoded = json.decode(self.body)
-    self.Power = decoded and decoded.StatusSNS and decoded.StatusSNS.ENERGY and decoded.StatusSNS.ENERGY.Power or nil
+    self.Power = decoded and decoded.StatusSNS and decoded.StatusSNS.ENERGY and decoded.StatusSNS.ENERGY.Power or (0/0)
     return self.Power
 end
 
 function Switch:toggle(on)
-    if not host then return end
+    if not self.host then return end
 
     if not on then
         on = "2"
