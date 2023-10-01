@@ -463,7 +463,7 @@ function PVBattery:generateHTML(info)
         writeVal("</tr>", true)
 
         writeVal("<tr>")
-        local next_cell = string.format("<td>Cell difference % 6.4f V</td>", AntBMS.v.CellDiff)
+        local next_cell = string.format("<td>Cell difference % 6.3f V</td>", AntBMS.v.CellDiff)
         writeVal(next_cell)
         writeVal("</tr>", true)
 
