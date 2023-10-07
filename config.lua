@@ -32,7 +32,7 @@ deep_discharge_min = 4
 deep_discharge_max = 8
 deep_discharge_hysteresis = 4
 
-bat_lowest_voltage = 2.82 -- lowest allowed voltage
+bat_lowest_voltage = 2.89 -- lowest allowed voltage
 
 load_full_time = 2.5 -- hour before sun set
 

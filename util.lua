@@ -88,6 +88,17 @@ function util.getCurrentTime()
     return sec + nsec * 1e-9
 end
 
+function util.hourToTime(h)
+    local hour, min, sec
+
+    hour = math.floor(h)
+    h = (h - hour) * 60
+    min = math.floor(h)
+    h = (h - min) * 60
+    sec = math.floor(h + 0.5)
+    return hour, min, sec
+end
+
 function util:cleanLogs()
     -- compress log file
     local handle = io.popen("stat -f -c %T " .. self.log_file_name)
