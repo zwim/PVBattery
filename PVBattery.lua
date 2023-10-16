@@ -523,194 +523,195 @@ end
 function PVBattery:main()
     local info = {}
     local last_date, date
+    -- optain a date in the past
     date = os.date("*t")
     date.year = date.year - 1
 
     while true do
-        -- The inner loop may be ended, if an error (network, bluetooth ...) is detected,
-        -- so start the loop again.
-        while true do
-            local short_sleep = math.huge
-            local old_state = self.state
+        local short_sleep = math.huge
+        local old_state = self.state
 
-            -- if config has changed, reload it
-            self:readConfig()
+        -- if config has changed, reload it
+        self:readConfig()
 
-        --    AntBMS:readAutoBalance(true)
-        --    AntBMS:setAutoBalance(true)
-        --    AntBMS:readAutoBalance(true)
+    --    AntBMS:readAutoBalance(true)
+    --    AntBMS:setAutoBalance(true)
+    --    AntBMS:readAutoBalance(true)
 
-            -- do the sun set and rise calculations if necessary
-            last_date = date
-            date = os.date("*t")
-            if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
-                SunTime:setDate()
-                SunTime:calculateTimes()
-                util:cleanLogs()
-                local h, m, s
-                h, m, s = util.hourToTime(SunTime.rise)
-                util:log("Sun rise at " .. string.format("%02d:%02d:%02d", h, m, s))
-                h, m, s = util.hourToTime(SunTime.set)
-                util:log("Sun set at " .. string.format("%02d:%02d:%02d", h, m, s))
+        last_date = date
+        date = os.date("*t")
+        util:log("\n#############################################")
+        info.time = {string.format("%d/%d/%d-%02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec), ""}
+        util:log(info.time[1])
+
+        -- Do the sun set and rise calculations if necessary
+        if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
+            SunTime:setDate()
+            SunTime:calculateTimes()
+            util:cleanLogs()
+            local h, m, s
+            h, m, s = util.hourToTime(SunTime.rise)
+            util:log("Sun rise at " .. string.format("%02d:%02d:%02d", h, m, s))
+            h, m, s = util.hourToTime(SunTime.set)
+            util:log("Sun set at " .. string.format("%02d:%02d:%02d", h, m, s))
+            short_sleep = 1
+        end
+
+        -- Update Fronius
+        util:log("\n-------- Total Overview:")
+        Fronius:getPowerFlowRealtimeData()
+        local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+        local repeat_request = math.min(20, config.sleep_time - 5)
+        while not P_Grid or not P_Load or not P_PV and repeat_request > 0 do
+            util:log("Communication error: repeat request:", repeat_request)
+            repeat_request = repeat_request - 1
+            util.sleep_time(1) -- try again in 1 second
+            P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+        end
+        info.grid = {"Grid", P_Grid or 0/0, "W", "192.168.0.49"}
+        info.load = {"Load", P_Load or 0/0, "W", "192.168.0.49"}
+        info.roof = {"Roof", P_PV or 0/0,   "W", "192.168.0.49"}
+        util:log(string.format("%8s %8.2f %s", info.grid[1], info.grid[2], info.grid[3]))
+        util:log(string.format("%8s %8.2f %s", info.load[1], info.load[2], info.load[3]))
+        util:log(string.format("%8s %8.2f %s", info.roof[1], info.roof[2], info.roof[3]))
+
+        -- Update BMS
+        AntBMS:evaluateParameters()
+
+        local BMS_SOC = AntBMS:getSOC()
+        local BMS_SOC_MIN = math.min(BMS_SOC, AntBMS.v.CalculatedSOC)
+        local BMS_SOC_MAX = math.max(BMS_SOC, AntBMS.v.CalculatedSOC)
+
+        info.battery_SOC = {"SOC", AntBMS.v.CalculatedSOC, "%"}
+        info.battery_current = {"Current", AntBMS.v.Current, "A"}
+        info.battery_power = {"Current power", AntBMS.v.CurrentPower, "W"}
+        info.battery_balancer = {"Balancer:", AntBMS.v.BalancedStatusText, ""}
+        info.battery_balancing = {"Balancing:", AntBMS.v.ActiveBalancers, ""}
+
+        util:log("\n-------- Battery status:")
+        AntBMS:printValues()
+
+--[[
+        BatteryCharge1Switch:getPowerState()
+        BatteryCharge2Switch:getPowerState()
+        BatteryInverterSwitch:getPowerState()
+        GarageInverterSwitch:getPowerState()
+        MopedChargeSwitch:getPowerState()
+        MopedInverter:getPowerState()
+]]
+
+        info.battery_switch_1 = {"Battery Charger1", BatteryCharge1Switch:getPower(), "W", BatteryCharge1Switch}
+        info.battery_switch_2 = {"Battery Charger2", BatteryCharge2Switch:getPower(), "W", BatteryCharge2Switch}
+        info.battery_inverter = {"Battery Inverter", BatteryInverterSwitch:getPower(), "W", BatteryInverterSwitch}
+
+        info.garage_inverter = {"Garage Inverter", GarageInverterSwitch:getPower(), "W", GarageInverterSwitch}
+
+        info.moped_switch = {"Moped Switch", MopedChargeSwitch:getPower(), "W", MopedChargeSwitch}
+        info.moped_inverter = {"Moped Inverter", MopedInverter:getPower(), "W", MopedInverter}
+
+
+        util:log("\n-------- Charger state:")
+        util:log("Old state:", self.state)
+        util:setLogNewLine(false)
+        util:log("New state:\t")
+        util:setLogNewLine(true)
+
+        if AntBMS.v.LowestVoltage then
+            if AntBMS.v.LowestVoltage < config.bat_lowest_voltage then
+                util:log("Undervoltage in one cell, starting emergency charge!")
+                self:charge(1)
+            elseif BMS_SOC_MIN <= config.deep_discharge_hysteresis then
+                config.deep_discharge_hysteresis = config.deep_discharge_max
+                util:log("Emergency stop charge")
+                self:charge(1)
+            elseif config.deep_discharge_hysteresis == config.deep_discharge_max then
+                config.deep_discharge_hysteresis = config.deep_discharge_min
+                util:log("Stop emergency charge")
+                self:idle()
             end
+        else
+            short_sleep = 1 -- try to read values in 1 sec
+        end
 
+        if P_Grid then
             local current_time = date.hour + date.min / 60 + date.sec / 3600
 
-            util:log("\n#############################################")
-            info.time = {string.format("%d/%d/%d-%02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec), ""}
-            util:log(info.time[1])
-
-            -- Update BMS, Inverter, Fronius ...
-            Fronius:getPowerFlowRealtimeData()
-            AntBMS:evaluateParameters()
-
-            local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
-            local repeat_request = math.min(20, config.sleep_time - 5)
-            while not P_Grid or not P_Load or not P_PV and repeat_request > 0 do
-                util:log("Communication error: repeat request:", repeat_request)
-                repeat_request = repeat_request - 1
-                util.sleep_time(1) -- try again in 1 second
-                P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
-            end
-            info.grid = {"Grid", P_Grid or 0/0, "W", "192.168.0.49"}
-            info.load = {"Load", P_Load or 0/0, "W", "192.168.0.49"}
-            info.roof = {"Roof", P_PV or 0/0,   "W", "192.168.0.49"}
-            util:log(string.format("%8s %8.2f %s", info.grid[1], info.grid[2], info.grid[3]))
-            util:log(string.format("%8s %8.2f %s", info.load[1], info.load[2], info.load[3]))
-            util:log(string.format("%8s %8.2f %s", info.roof[1], info.roof[2], info.roof[3]))
-
-            local BMS_SOC = AntBMS:getSOC()
-            local BMS_SOC_MIN = math.min(BMS_SOC, AntBMS.v.CalculatedSOC)
-            local BMS_SOC_MAX = math.max(BMS_SOC, AntBMS.v.CalculatedSOC)
-
-            info.battery_SOC = {"SOC", AntBMS.v.CalculatedSOC, "%"}
-            info.battery_current = {"Current", AntBMS.v.Current, "A"}
-            info.battery_power = {"Current power", AntBMS.v.CurrentPower, "W"}
-            info.battery_balancer = {"Balancer:", AntBMS.v.BalancedStatusText, ""}
-            info.battery_balancing = {"Balancing:", AntBMS.v.ActiveBalancers, ""}
-
-            BatteryCharge1Switch:getPowerState()
-            BatteryCharge2Switch:getPowerState()
-            BatteryInverterSwitch:getPowerState()
-            GarageInverterSwitch:getPowerState()
-            MopedChargeSwitch:getPowerState()
-            MopedInverter:getPowerState()
-
-            info.battery_switch_1 = {"Battery Charger1", BatteryCharge1Switch:getPower(), "W", BatteryCharge1Switch}
-            info.battery_switch_2 = {"Battery Charger2", BatteryCharge2Switch:getPower(), "W", BatteryCharge2Switch}
-            info.battery_inverter = {"Battery Inverter", BatteryInverterSwitch:getPower(), "W", BatteryInverterSwitch}
-
-            info.garage_inverter = {"Garage Inverter", GarageInverterSwitch:getPower(), "W", GarageInverterSwitch}
-
-            info.moped_switch = {"Moped Switch", MopedChargeSwitch:getPower(), "W", MopedChargeSwitch}
-            info.moped_inverter = {"Moped Inverter", MopedInverter:getPower(), "W", MopedInverter}
-
-
-            util:log("\n-------- Battery status:")
-            AntBMS:printValues()
-
-            util:log("\n-------- Charger state:")
-            util:log("Old state:", self.state)
-            util:setLogNewLine(false)
-            util:log("New state:\t")
-            util:setLogNewLine(true)
-
-            if AntBMS.v.LowestVoltage then
-                if AntBMS.v.LowestVoltage < config.bat_lowest_voltage then
-                    util:log("Undervoltage in one cell, starting emergency charge!")
+            if P_Grid < config.bat_max_feed_in * (1.00 + config.exceed_factor) then
+                if BMS_SOC_MIN <= config.bat_SOC_max then
+                    util:log("charge +1")
                     self:charge(1)
-                elseif BMS_SOC_MIN <= config.deep_discharge_hysteresis then
-                    config.deep_discharge_hysteresis = config.deep_discharge_max
-                    util:log("Emergency stop charge")
-                    self:charge(1)
-                elseif config.deep_discharge_hysteresis == config.deep_discharge_max then
-                    config.deep_discharge_hysteresis = config.deep_discharge_min
-                    util:log("Stop emergency charge")
-                    self:idle()
-                end
-            else
-                short_sleep = 1 -- try to read values in 1 sec
-            end
-
-            if P_Grid then
-                if P_Grid < config.bat_max_feed_in * (1.00 + config.exceed_factor) then
-                    if BMS_SOC_MIN <= config.bat_SOC_max then
-                        util:log("charge +1")
-                        self:charge(1)
-                    elseif BMS_SOC_MIN <= 100 and current_time > SunTime.set - config.load_full_time then
-                        -- Don't obey the max SOC before sun set (Balancing!).
-                        util:log("charge full")
-                        self:charge()
-                    elseif current_time > SunTime.set_civil then
-                        util:log("no charge after civil dusk")
-                        self:idle()
-                    else
-                        util:log(string.format("charge stopped as battery SOC %.2f%% > %2d%%", BMS_SOC_MIN, config.bat_SOC_max))
-                        self:idle()
-                    end
-                elseif self:getCurrentState() == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
-                    util:log("charge -1")
-                    self:charge(-1)
-                elseif BMS_SOC_MIN < config.bat_SOC_min then
-                    util:log(string.format("discharge stopped as battery SOC %0.2f%% < %2d%%", BMS_SOC_MIN, config.bat_SOC_min))
-                    self:idle()
-                elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
-                    if BMS_SOC_MAX >= config.bat_SOC_min then
-                        util:log("discharge")
-                        self:discharge()
-                    end
-                elseif self:getCurrentState() == "discharge" and P_Grid < config.bat_max_take_out * config.exceed_factor then
-                    util:log("discharge stopped")
+                elseif BMS_SOC_MIN <= 100 and current_time > SunTime.set - config.load_full_time then
+                    -- Don't obey the max SOC before sun set (Balancing!).
+                    util:log("charge full")
+                    self:charge()
+                elseif current_time > SunTime.set_civil then
+                    util:log("no charge after civil dusk")
                     self:idle()
                 else
-                    -- keep old state
-                    util:log("keep " .. self.state)
+                    util:log(string.format("charge stopped as battery SOC %.2f%% > %2d%%", BMS_SOC_MIN, config.bat_SOC_max))
+                    self:idle()
                 end
-
-                if BMS_SOC > 90 then
-                    if not next(AntBMS.v) then
-                        short_sleep = 1
-                    elseif -1.0 <= AntBMS.v.Current and AntBMS.v.Current <= 0.3 and AntBMS.v.CellDiff > 0.002 then
-                        -- -1.0 A < Current < 0.3 A and CellDif > 0.002 V
-                        util:log("turn auto balance on")
-                        AntBMS:setAutoBalance(true)
-                    end
+            elseif self:getCurrentState() == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
+                util:log("charge -1")
+                self:charge(-1)
+            elseif BMS_SOC_MIN < config.bat_SOC_min then
+                util:log(string.format("discharge stopped as battery SOC %0.2f%% < %2d%%", BMS_SOC_MIN, config.bat_SOC_min))
+                self:idle()
+            elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
+                if BMS_SOC_MAX >= config.bat_SOC_min then
+                    util:log("discharge")
+                    self:discharge()
                 end
+            elseif self:getCurrentState() == "discharge" and P_Grid < config.bat_max_take_out * config.exceed_factor then
+                util:log("discharge stopped")
+                self:idle()
             else
-                short_sleep = 1 -- try to read values in 1 sec
+                -- keep old state
+                util:log("keep " .. self.state)
             end
 
-            local function _add(a, b)
-                if b and b == b  then
-                    return a + b
-                else
-                    return a
+            if BMS_SOC > 90 then
+                if not next(AntBMS.v) then
+                    short_sleep = 1
+                elseif -1.0 <= AntBMS.v.Current and AntBMS.v.Current <= 0.3 and AntBMS.v.CellDiff > 0.002 then
+                    -- -1.0 A < Current < 0.3 A and CellDif > 0.002 V
+                    util:log("turn auto balance on")
+                    AntBMS:setAutoBalance(true)
                 end
             end
-            info.sources = {"Total Source", 0, "W"}
-            info.sources[2] = _add(info.sources[2], info.roof[2])
-            info.sources[2] = _add(info.sources[2], info.battery_inverter[2])
-            info.sources[2] = _add(info.sources[2], info.garage_inverter[2])
-            info.sources[2] = _add(info.sources[2], info.moped_inverter[2])
+        else
+            short_sleep = 1 -- try to read values in 1 sec
+        end
 
-            info.sinks = {"Total Sink", 0, "W"}
-            info.sinks[2] = _add(info.sinks[2], info.battery_switch_1[2])
-            info.sinks[2] = _add(info.sinks[2], info.battery_switch_2[2])
-            info.sinks[2] = _add(info.sinks[2], info.moped_switch[2])
-
-
-            self:generateHTML(info)
-
-            util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
-
-            if old_state ~= self.state then
-                util.sleep_time(5) -- sleep only 5 seconds after a change
+        local function _add(a, b)
+            if b and b == b  then
+                return a + b
             else
-                util:log("\n. . . . . . . . . short . . . . . . . . . . . .")
-                util.sleep_time(math.min(config.sleep_time, short_sleep))
+                return a
             end
-        end -- end of inner loop
-    end -- end of outer loop
+        end
+        info.sources = {"Total Source", 0, "W"}
+        info.sources[2] = _add(info.sources[2], info.roof[2])
+        info.sources[2] = _add(info.sources[2], info.battery_inverter[2])
+        info.sources[2] = _add(info.sources[2], info.garage_inverter[2])
+        info.sources[2] = _add(info.sources[2], info.moped_inverter[2])
+
+        info.sinks = {"Total Sink", 0, "W"}
+        info.sinks[2] = _add(info.sinks[2], info.battery_switch_1[2])
+        info.sinks[2] = _add(info.sinks[2], info.battery_switch_2[2])
+        info.sinks[2] = _add(info.sinks[2], info.moped_switch[2])
+
+
+        self:generateHTML(info)
+
+        util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
+
+        if old_state ~= self.state then
+            util.sleep_time(5) -- sleep only 5 seconds after a change
+        else
+            util.sleep_time(math.min(config.sleep_time, short_sleep))
+        end
+    end -- end of inner loop
 end
 
 -------------------------------------------------------------------------------
@@ -735,4 +736,6 @@ if PVBattery:getCurrentState() == "error" then
     PVBattery:idle()
 end
 
-PVBattery:main()
+while true do
+    PVBattery:main()
+end
