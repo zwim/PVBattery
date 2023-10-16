@@ -124,14 +124,20 @@ function PVBattery:init()
     self:readConfig()
     util:setLog(config.log_file_name or "config.lua")
 
+    util:log("\n#############################################")
+    util:log("PV-Control stated.")
+    util:log("#############################################")
+
     local position = config.position
     SunTime:setPosition(position.name, position.latitude, position.longitude, position.timezone, position.height, true)
 
     SunTime:setDate()
     SunTime:calculateTimes()
-
-    util:log("Sun rise at " .. SunTime.rise)
-    util:log("Sun set at " .. SunTime.set)
+    local h, m, s
+    h, m, s = util.hourToTime(SunTime.rise)
+    util:log("Sun rise at " .. string.format("%02d:%02d:%02d", h, m, s))
+    h, m, s = util.hourToTime(SunTime.set)
+    util:log("Sun set at " .. string.format("%02d:%02d:%02d", h, m, s))
 
     BatteryCharge1Switch:init("battery-charger.lan")
     BatteryCharge1Switch:getEnergy()
@@ -319,7 +325,9 @@ function PVBattery:generateHTML(info)
             file_descriptor:write(v)
         elseif type(v) == "table" then
             local text_or_link = v[1]
-            if v[4] ~= nil then
+            if type(v[4]) == "string" then
+                text_or_link = string.format('<a href="http://%s">%s</a>', v[4], v[1])
+            elseif v[4] ~= nil then
                 text_or_link = string.format('<a href="http://%s">%s</a>', v[4].host, v[1])
             end
             if type(v[2]) == "number" then
@@ -356,8 +364,18 @@ function PVBattery:generateHTML(info)
     writeVal(info.time)
     writeVal("<br><br>")
 
+    local h, m, s
+    h, m, s = util.hourToTime(SunTime.rise)
+    writeVal("Sun rise at " .. string.format("%02d:%02d:%02d", h, m, s))
+    writeVal("<br>", true)
+    h, m, s = util.hourToTime(SunTime.set)
+    writeVal("Sun set at " .. string.format("%02d:%02d:%02d", h, m, s))
+    writeVal("<br>", true)
+
+    writeVal("<br><br>")
+
     if info.grid[2] and info.grid[2] >= 0 then
-        file_descriptor:write(string.rep(" ", 10), "optain")
+        file_descriptor:write(string.rep(" ", 10), "optain ")
         writeVal(info.grid, true)
     end
     writeVal("<br>")
@@ -414,7 +432,7 @@ function PVBattery:generateHTML(info)
 
     writeVal("</table><br>")
     if info.grid[2] and info.grid[2] <= 0 then
-        file_descriptor:write(string.rep(" ", 10), "sell")
+        file_descriptor:write(string.rep(" ", 10), "sell ")
         info.grid[2] = - info.grid[2] -- just to show positive values
         writeVal(info.grid, true)
         info.grid[2] = - info.grid[2]
@@ -436,6 +454,13 @@ function PVBattery:generateHTML(info)
 
     writeVal(info.time)
     writeVal("<br><br>")
+
+    if not next(AntBMS.v) then
+        writeVal("Communication error. Will retry ...")
+        file_descriptor:write(footer)
+        file_descriptor:close()
+        return
+    end
 
     writeVal("<table>", true)
         writeVal("<tr>")
@@ -463,7 +488,7 @@ function PVBattery:generateHTML(info)
         writeVal("</tr>", true)
 
         writeVal("<tr>")
-        local next_cell = string.format("<td>Cell difference % 6.3f V</td>", AntBMS.v.CellDiff)
+        local next_cell = string.format("<td>Cell difference % 6.3f V</td>", AntBMS.v.CellDiff or 0/0)
         writeVal(next_cell)
         writeVal("</tr>", true)
 
@@ -476,14 +501,14 @@ function PVBattery:generateHTML(info)
     while i <= AntBMS.v.NumberOfBatteries do
         writeVal("<tr>")
         local next_cell
-        next_cell = string.format("<td>[%02d] % 6.4f V</td>", i, AntBMS.v.Voltage[i])
+        next_cell = string.format("<td>[%02d] % 6.3f V</td>", i, AntBMS.v.Voltage[i] or 0/0 )
         writeVal(next_cell)
         writeVal("<td></td>")
         i = i + 1
         if i > AntBMS.v.NumberOfBatteries then
             break
         end
-        next_cell = string.format("<td>[%02d] % 6.4f V</td>", i, AntBMS.v.Voltage[i])
+        next_cell = string.format("<td>[%02d] % 6.3f V</td>", i, AntBMS.v.Voltage[i] or 0/0 )
         writeVal(next_cell)
         writeVal("</tr>", true)
         i = i + 1
@@ -498,8 +523,12 @@ end
 function PVBattery:main()
     local info = {}
     local last_date, date
+    -- optain a date in the past
     date = os.date("*t")
+    date.year = date.year - 1
+
     while true do
+        local short_sleep = math.huge
         local old_state = self.state
 
         -- if config has changed, reload it
@@ -509,27 +538,28 @@ function PVBattery:main()
     --    AntBMS:setAutoBalance(true)
     --    AntBMS:readAutoBalance(true)
 
-        -- do the sun set and rise calculations if necessary
         last_date = date
         date = os.date("*t")
-        if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
-            SunTime:setDate()
-            SunTime:calculateTimes()
-            util:cleanLogs()
-            util:log("Sun rise at " .. SunTime.rise)
-            util:log("Sun set at " .. SunTime.set)
-        end
-
-        local current_time = date.hour + date.min / 60 + date.sec / 3600
-
         util:log("\n#############################################")
         info.time = {string.format("%d/%d/%d-%02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec), ""}
         util:log(info.time[1])
 
-        -- Update BMS, Inverter, Fronius ...
-        Fronius:getPowerFlowRealtimeData()
-        AntBMS:evaluateParameters()
+        -- Do the sun set and rise calculations if necessary
+        if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
+            SunTime:setDate()
+            SunTime:calculateTimes()
+            util:cleanLogs()
+            local h, m, s
+            h, m, s = util.hourToTime(SunTime.rise)
+            util:log("Sun rise at " .. string.format("%02d:%02d:%02d", h, m, s))
+            h, m, s = util.hourToTime(SunTime.set)
+            util:log("Sun set at " .. string.format("%02d:%02d:%02d", h, m, s))
+            short_sleep = 1
+        end
 
+        -- Update Fronius
+        util:log("\n-------- Total Overview:")
+        Fronius:getPowerFlowRealtimeData()
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         local repeat_request = math.min(20, config.sleep_time - 5)
         while not P_Grid or not P_Load or not P_PV and repeat_request > 0 do
@@ -538,29 +568,37 @@ function PVBattery:main()
             util.sleep_time(1) -- try again in 1 second
             P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         end
-        info.grid = {"Grid", P_Grid or 0/0, "W"}
-        info.load = {"Load", P_Load or 0/0, "W"}
-        info.roof = {"Roof", P_PV or 0/0, "W"}
-        util:log(info.grid[1], info.grid[2], info.grid[3])
-        util:log(info.load[1], info.load[2], info.load[3])
-        util:log(info.roof[1], info.roof[2], info.roof[3])
+        info.grid = {"Grid", P_Grid or 0/0, "W", "192.168.0.49"}
+        info.load = {"Load", P_Load or 0/0, "W", "192.168.0.49"}
+        info.roof = {"Roof", P_PV or 0/0,   "W", "192.168.0.49"}
+        util:log(string.format("%8s %8.2f %s", info.grid[1], info.grid[2], info.grid[3]))
+        util:log(string.format("%8s %8.2f %s", info.load[1], info.load[2], info.load[3]))
+        util:log(string.format("%8s %8.2f %s", info.roof[1], info.roof[2], info.roof[3]))
+
+        -- Update BMS
+        AntBMS:evaluateParameters()
 
         local BMS_SOC = AntBMS:getSOC()
         local BMS_SOC_MIN = math.min(BMS_SOC, AntBMS.v.CalculatedSOC)
         local BMS_SOC_MAX = math.max(BMS_SOC, AntBMS.v.CalculatedSOC)
 
-        info.battery_SOC = {"SOC", BMS_SOC, "%"}
+        info.battery_SOC = {"SOC", AntBMS.v.CalculatedSOC, "%"}
         info.battery_current = {"Current", AntBMS.v.Current, "A"}
         info.battery_power = {"Current power", AntBMS.v.CurrentPower, "W"}
         info.battery_balancer = {"Balancer:", AntBMS.v.BalancedStatusText, ""}
         info.battery_balancing = {"Balancing:", AntBMS.v.ActiveBalancers, ""}
 
+        util:log("\n-------- Battery status:")
+        AntBMS:printValues()
+
+--[[
         BatteryCharge1Switch:getPowerState()
         BatteryCharge2Switch:getPowerState()
         BatteryInverterSwitch:getPowerState()
         GarageInverterSwitch:getPowerState()
         MopedChargeSwitch:getPowerState()
         MopedInverter:getPowerState()
+]]
 
         info.battery_switch_1 = {"Battery Charger1", BatteryCharge1Switch:getPower(), "W", BatteryCharge1Switch}
         info.battery_switch_2 = {"Battery Charger2", BatteryCharge2Switch:getPower(), "W", BatteryCharge2Switch}
@@ -572,29 +610,32 @@ function PVBattery:main()
         info.moped_inverter = {"Moped Inverter", MopedInverter:getPower(), "W", MopedInverter}
 
 
-        util:log("\n-------- Battery status:")
-        AntBMS:printValues()
-
         util:log("\n-------- Charger state:")
         util:log("Old state:", self.state)
         util:setLogNewLine(false)
         util:log("New state:\t")
         util:setLogNewLine(true)
 
-        if AntBMS.v.LowestVoltage < config.bat_lowest_voltage then
-            util:log("Undervoltage in one cell, starting emergency charge!")
-            self:charge(1)
-        elseif BMS_SOC_MIN <= config.deep_discharge_hysteresis then
-            config.deep_discharge_hysteresis = config.deep_discharge_max
-            util:log("Emergency stop charge")
-            self:charge(1)
-        elseif config.deep_discharge_hysteresis == config.deep_discharge_max then
-            config.deep_discharge_hysteresis = config.deep_discharge_min
-            util:log("Stop emergency charge")
-            self:idle()
+        if AntBMS.v.LowestVoltage then
+            if AntBMS.v.LowestVoltage < config.bat_lowest_voltage then
+                util:log("Undervoltage in one cell, starting emergency charge!")
+                self:charge(1)
+            elseif BMS_SOC_MIN <= config.deep_discharge_hysteresis then
+                config.deep_discharge_hysteresis = config.deep_discharge_max
+                util:log("Emergency stop charge")
+                self:charge(1)
+            elseif config.deep_discharge_hysteresis == config.deep_discharge_max then
+                config.deep_discharge_hysteresis = config.deep_discharge_min
+                util:log("Stop emergency charge")
+                self:idle()
+            end
+        else
+            short_sleep = 1 -- try to read values in 1 sec
         end
 
         if P_Grid then
+            local current_time = date.hour + date.min / 60 + date.sec / 3600
+
             if P_Grid < config.bat_max_feed_in * (1.00 + config.exceed_factor) then
                 if BMS_SOC_MIN <= config.bat_SOC_max then
                     util:log("charge +1")
@@ -607,14 +648,14 @@ function PVBattery:main()
                     util:log("no charge after civil dusk")
                     self:idle()
                 else
-                    util:log(string.format("charge stopped as battery SOC=%.2f%% > %3d%%", BMS_SOC_MIN, config.bat_SOC_max))
+                    util:log(string.format("charge stopped as battery SOC %.2f%% > %2d%%", BMS_SOC_MIN, config.bat_SOC_max))
                     self:idle()
                 end
             elseif self:getCurrentState() == "charge" and P_Grid > config.bat_max_feed_in * config.exceed_factor then
                 util:log("charge -1")
                 self:charge(-1)
-            elseif BMS_SOC_MAX < config.bat_SOC_min then
-                util:log(string.format("discharge stopped as battery SOC=%0.2f%% < %3d%%", BMS_SOC_MAX, config.bat_SOC_min))
+            elseif BMS_SOC_MIN < config.bat_SOC_min then
+                util:log(string.format("discharge stopped as battery SOC %0.2f%% < %2d%%", BMS_SOC_MIN, config.bat_SOC_min))
                 self:idle()
             elseif P_Grid > config.bat_max_take_out * (1.00 + config.exceed_factor) then
                 if BMS_SOC_MAX >= config.bat_SOC_min then
@@ -630,14 +671,17 @@ function PVBattery:main()
             end
 
             if BMS_SOC > 90 then
-                if -1.0 <= AntBMS.v.Current and AntBMS.v.Current <= 0.3 and AntBMS.v.CellDiff > 0.002 then
+                if not next(AntBMS.v) then
+                    short_sleep = 1
+                elseif -1.0 <= AntBMS.v.Current and AntBMS.v.Current <= 0.3 and AntBMS.v.CellDiff > 0.002 then
                     -- -1.0 A < Current < 0.3 A and CellDif > 0.002 V
                     util:log("turn auto balance on")
                     AntBMS:setAutoBalance(true)
                 end
             end
+        else
+            short_sleep = 1 -- try to read values in 1 sec
         end
-
 
         local function _add(a, b)
             if b and b == b  then
@@ -665,9 +709,9 @@ function PVBattery:main()
         if old_state ~= self.state then
             util.sleep_time(5) -- sleep only 5 seconds after a change
         else
-            util.sleep_time(config.sleep_time)
+            util.sleep_time(math.min(config.sleep_time, short_sleep))
         end
-    end
+    end -- end of inner loop
 end
 
 -------------------------------------------------------------------------------
@@ -692,4 +736,6 @@ if PVBattery:getCurrentState() == "error" then
     PVBattery:idle()
 end
 
-PVBattery:main()
+while true do
+    PVBattery:main()
+end
