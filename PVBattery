@@ -12,3 +12,6 @@ command_user="root:root"
 
 directory="/opt/PVBattery/"
 
+ln -s "/var/www/localhost/htdocs/index.html" /tmp/index.html"
+ln -s "/var/www/localhost/htdocs/battery.html" /tmp/battery.html"
+

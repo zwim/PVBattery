@@ -12,7 +12,7 @@ local BatteryCharge2Switch = Switch:new()
 local BatteryInverterSwitch = Switch:new()
 local GarageInverterSwitch = Switch:new()
 local MopedChargeSwitch = Switch:new()
-local MopedInverter = Switch:new()
+local MopedInverterSwitch = Switch:new()
 
 local config = {
     -- Don't change this in a config file.
@@ -29,6 +29,7 @@ local config = {
 
     host = "battery-control.lan",
     html_main = "/var/www/localhost/htdocs/index.html",
+
     html_battery = "/var/www/localhost/htdocs/battery.html",
 
     position = {
@@ -60,7 +61,14 @@ local config = {
 
     sleep_time = 30, -- seconds to sleep per iteration
 
-    guard_time = 5 * 60 -- 5 minutes
+    guard_time = 5 * 60, -- 5 minutes
+
+    charger1 = "battery-charger.lan",
+    charger2 = "battery-charger2.lan",
+    battery_inverter = "battery-inverter.lan",
+    garage_inverter = "192.168.1.30",
+    moped_charger = "moped-charger.lan",
+    moped_inverter = "moped-inverter.lan",
 }
 
 local PVBattery = {
@@ -140,35 +148,35 @@ function PVBattery:init()
     util:log("Sun set at " .. string.format("%02d:%02d:%02d", h, m, s))
 
     BatteryCharge1Switch:init("battery-charger.lan")
-    BatteryCharge1Switch:getEnergy()
-    util:log("Charger energy today", BatteryCharge1Switch.Energy.Today, "kWh")
+    BatteryCharge1Switch:getEnergyTotal()
+    util:log("Charger energy today", BatteryCharge1Switch:getEnergyToday(), "kWh")
     util:log("Charger power", BatteryCharge1Switch:getPower(), "W")
 
     BatteryCharge2Switch:init("battery-charger2.lan")
-    BatteryCharge2Switch:getEnergy()
-    util:log("Charger2 energy today", BatteryCharge2Switch.Energy.Today, "kWh")
+    BatteryCharge2Switch:getEnergyTotal()
+    util:log("Charger2 energy today", BatteryCharge2Switch:getEnergyToday(), "kWh")
     util:log("Charger2 power", BatteryCharge2Switch:getPower(), "W")
 
     BatteryInverterSwitch:init("battery-inverter.lan")
     --util:log("toggle", BatteryInverterSwitch:toggle("off"))
-    BatteryInverterSwitch:getEnergy()
-    util:log("Discharger energy today", BatteryInverterSwitch.Energy.Today, "kWh")
+    BatteryInverterSwitch:getEnergyTotal()
+    util:log("Discharger energy today", BatteryInverterSwitch:getEnergyToday(), "kWh")
     util:log("Discharger power", BatteryInverterSwitch:getPower(), "W")
 
     GarageInverterSwitch:init("192.168.1.30")
-    GarageInverterSwitch:getEnergy()
-    util:log("Garage inverter energy today", GarageInverterSwitch.Energy.Today, "kWh")
+    GarageInverterSwitch:getEnergyTotal()
+    util:log("Garage inverter energy today", GarageInverterSwitch:getEnergyToday(), "kWh")
     util:log("Garage inverter power", GarageInverterSwitch:getPower(), "W")
 
     MopedChargeSwitch:init("moped-switch.lan")
-    MopedChargeSwitch:getEnergy()
-    util:log("Moped energy today", MopedChargeSwitch.Energy.Today, "kWh")
+    MopedChargeSwitch:getEnergyTotal()
+    util:log("Moped energy today", MopedChargeSwitch:getEnergyToday(), "kWh")
     util:log("Moped power", MopedChargeSwitch:getPower(), "W")
 
-    MopedInverter:init("moped-inverter.lan")
-    MopedInverter:getEnergy()
-    util:log("Moped energy today", MopedInverter.Energy.Today, "kWh")
-    util:log("Moped power", MopedInverter:getPower(), "W")
+    MopedInverterSwitch:init("moped-inverter.lan")
+    MopedInverterSwitch:getEnergyTotal()
+    util:log("Moped energy today", MopedInverterSwitch:getEnergyToday(), "kWh")
+    util:log("Moped power", MopedInverterSwitch:getPower(), "W")
 
 end
 
@@ -409,7 +417,7 @@ function PVBattery:generateHTML(info)
         writeVal("<tr>")
             writeVal(info.moped_inverter)
             writeVal("<td></td>")
-            writeVal(info.moped_switch)
+            writeVal(info.moped_charger)
         writeVal("</tr>", true)
 
         writeVal("<tr>")
@@ -515,7 +523,6 @@ function PVBattery:generateHTML(info)
     end
     writeVal("</table>")
 
-
     file_descriptor:write(footer)
     file_descriptor:close()
 end
@@ -578,6 +585,7 @@ function PVBattery:main()
         -- Update BMS
         AntBMS:evaluateParameters()
 
+        AntBMS:evaluateParameters()
         local BMS_SOC = AntBMS:getSOC()
         local BMS_SOC_MIN = math.min(BMS_SOC, AntBMS.v.CalculatedSOC)
         local BMS_SOC_MAX = math.max(BMS_SOC, AntBMS.v.CalculatedSOC)
@@ -587,28 +595,6 @@ function PVBattery:main()
         info.battery_power = {"Current power", AntBMS.v.CurrentPower, "W"}
         info.battery_balancer = {"Balancer:", AntBMS.v.BalancedStatusText, ""}
         info.battery_balancing = {"Balancing:", AntBMS.v.ActiveBalancers, ""}
-
-        util:log("\n-------- Battery status:")
-        AntBMS:printValues()
-
---[[
-        BatteryCharge1Switch:getPowerState()
-        BatteryCharge2Switch:getPowerState()
-        BatteryInverterSwitch:getPowerState()
-        GarageInverterSwitch:getPowerState()
-        MopedChargeSwitch:getPowerState()
-        MopedInverter:getPowerState()
-]]
-
-        info.battery_switch_1 = {"Battery Charger1", BatteryCharge1Switch:getPower(), "W", BatteryCharge1Switch}
-        info.battery_switch_2 = {"Battery Charger2", BatteryCharge2Switch:getPower(), "W", BatteryCharge2Switch}
-        info.battery_inverter = {"Battery Inverter", BatteryInverterSwitch:getPower(), "W", BatteryInverterSwitch}
-
-        info.garage_inverter = {"Garage Inverter", GarageInverterSwitch:getPower(), "W", GarageInverterSwitch}
-
-        info.moped_switch = {"Moped Switch", MopedChargeSwitch:getPower(), "W", MopedChargeSwitch}
-        info.moped_inverter = {"Moped Inverter", MopedInverter:getPower(), "W", MopedInverter}
-
 
         util:log("\n-------- Charger state:")
         util:log("Old state:", self.state)
@@ -681,7 +667,25 @@ function PVBattery:main()
             end
         else
             short_sleep = 1 -- try to read values in 1 sec
-        end
+        end -- if Grid
+
+--[[
+        BatteryCharge1Switch:getPowerState()
+        BatteryCharge2Switch:getPowerState()
+        BatteryInverterSwitch:getPowerState()
+        GarageInverterSwitch:getPowerState()
+        MopedChargeSwitch:getPowerState()
+        MopedInverterSwitch:getPowerState()
+]]
+
+        info.battery_switch_1 = {"Battery Charger1", BatteryCharge1Switch:getPower(), "W", BatteryCharge1Switch}
+        info.battery_switch_2 = {"Battery Charger2", BatteryCharge2Switch:getPower(), "W", BatteryCharge2Switch}
+        info.battery_inverter = {"Battery Inverter", BatteryInverterSwitch:getPower(), "W", BatteryInverterSwitch}
+
+        info.garage_inverter = {"Garage Inverter", GarageInverterSwitch:getPower(), "W", GarageInverterSwitch}
+
+        info.moped_charger = {"Moped Switch", MopedChargeSwitch:getPower(), "W", MopedChargeSwitch}
+        info.moped_inverter = {"Moped Inverter", MopedInverterSwitch:getPower(), "W", MopedInverterSwitch}
 
         local function _add(a, b)
             if b and b == b  then
@@ -699,7 +703,7 @@ function PVBattery:main()
         info.sinks = {"Total Sink", 0, "W"}
         info.sinks[2] = _add(info.sinks[2], info.battery_switch_1[2])
         info.sinks[2] = _add(info.sinks[2], info.battery_switch_2[2])
-        info.sinks[2] = _add(info.sinks[2], info.moped_switch[2])
+        info.sinks[2] = _add(info.sinks[2], info.moped_charger[2])
 
 
         self:generateHTML(info)
