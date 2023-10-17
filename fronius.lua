@@ -24,6 +24,7 @@ local GetMeterRealtimeData_cmd = "GetMeterRealtimeData.cgi?Scope=Device&DeviceId
     .. "&DataCollection=CommonInverterData"
 
 local Fronius = {
+    host = host,
     url = "",
     Data = {},
     Request = {},

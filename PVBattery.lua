@@ -29,7 +29,6 @@ local config = {
 
     host = "battery-control.lan",
     html_main = "/var/www/localhost/htdocs/index.html",
-
     html_battery = "/var/www/localhost/htdocs/battery.html",
 
     position = {
@@ -133,7 +132,7 @@ function PVBattery:init()
     util:setLog(config.log_file_name or "config.lua")
 
     util:log("\n#############################################")
-    util:log("PV-Control stated.")
+    util:log("PV-Control started.")
     util:log("#############################################")
 
     local position = config.position
@@ -325,7 +324,6 @@ function PVBattery:getStateFromSwitch()
 end
 
 function PVBattery:generateHTML(info)
-
     local file_descriptor
 
     local function writeVal(v, nl)
@@ -383,7 +381,7 @@ function PVBattery:generateHTML(info)
     writeVal("<br><br>")
 
     if info.grid[2] and info.grid[2] >= 0 then
-        file_descriptor:write(string.rep(" ", 10), "optain ")
+        file_descriptor:write(string.rep(" ", 10), "optain from ")
         writeVal(info.grid, true)
     end
     writeVal("<br>")
@@ -440,7 +438,7 @@ function PVBattery:generateHTML(info)
 
     writeVal("</table><br>")
     if info.grid[2] and info.grid[2] <= 0 then
-        file_descriptor:write(string.rep(" ", 10), "sell ")
+        file_descriptor:write(string.rep(" ", 10), "sell to ")
         info.grid[2] = - info.grid[2] -- just to show positive values
         writeVal(info.grid, true)
         info.grid[2] = - info.grid[2]
@@ -537,6 +535,7 @@ function PVBattery:main()
     while true do
         local short_sleep = math.huge
         local old_state = self.state
+        local _start_time = util.getCurrentTime()
 
         -- if config has changed, reload it
         self:readConfig()
@@ -582,9 +581,7 @@ function PVBattery:main()
         util:log(string.format("%8s %8.2f %s", info.load[1], info.load[2], info.load[3]))
         util:log(string.format("%8s %8.2f %s", info.roof[1], info.roof[2], info.roof[3]))
 
-        -- Update BMS
-        AntBMS:evaluateParameters()
-
+		-- Update BMS
         AntBMS:evaluateParameters()
         local BMS_SOC = AntBMS:getSOC()
         local BMS_SOC_MIN = math.min(BMS_SOC, AntBMS.v.CalculatedSOC)
@@ -595,6 +592,9 @@ function PVBattery:main()
         info.battery_power = {"Current power", AntBMS.v.CurrentPower, "W"}
         info.battery_balancer = {"Balancer:", AntBMS.v.BalancedStatusText, ""}
         info.battery_balancing = {"Balancing:", AntBMS.v.ActiveBalancers, ""}
+
+        util:log("\n-------- Battery status:")
+        AntBMS:printValues()
 
         util:log("\n-------- Charger state:")
         util:log("Old state:", self.state)
@@ -711,9 +711,9 @@ function PVBattery:main()
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
 
         if old_state ~= self.state then
-            util.sleep_time(5) -- sleep only 5 seconds after a change
+            util.sleep_time(5 - (util.getCurrentTime() - _start_time)) -- sleep only 5 seconds after a change
         else
-            util.sleep_time(math.min(config.sleep_time, short_sleep))
+            util.sleep_time(math.min(config.sleep_time - (util.getCurrentTime() - _start_time), short_sleep))
         end
     end -- end of inner loop
 end

@@ -4,24 +4,9 @@
 -- https://github.com/syssi/esphome-ant-bms
 -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
 
-
 local util = require("util")
-local ffi = require("ffi")
 
 local SERIAL_PORT = "/dev/rfcomm0"
-
---- The libc functions used by this process.
-ffi.cdef[[
-  int open(const char* pathname, int flags);
-  int close(int fd);
-  int read(int fd, void* buf, size_t count);
-  int write(int fd, const void* buf, size_t count);
-  int syncfs(int dd);
-]]
-local O_NONBLOCK = 2048
-local chunk_size = 4096
-
-local buffer = ffi.new('uint8_t[?]', chunk_size)
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -146,159 +131,42 @@ function AntBMS:setAutoBalance(on)
 end
 
 function AntBMS:toggleAutoBalance()
-    local serial_out
     local auto_balance = 252 -- adress of auto balance
     local write_data_hex = "A5A5".. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
 
-    self.answer = {}
-
     print("xxx setAutoBalance", os.date(), write_data_hex)
 
-    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
-    if fd <= 0 then
-        util:log("ERROR opening serial_in")
-        return -1
-    end
-
-    -- wait and read some existing(?) crap
-    util.sleep_time(0.1)
-    ffi.C.read(fd, buffer, chunk_size)
-
-    serial_out = io.open(SERIAL_PORT, "wb")
-    if not serial_out then
-        util:log("ERROR opening serial_out")
-        ffi.C.close(fd)
-        return
-    end
-    serial_out:write(util.HexToNum(write_data_hex))
-    serial_out:flush()
-
-    while true do
-        util.sleep_time(0.25)
-        local nbytes = ffi.C.read(fd, buffer, chunk_size)
-
-        print("nbytes=", nbytes)
-        if nbytes <= 0 then
-            break
-        end
-
-        for i = 0, nbytes-1 do
-            table.insert(self.answer, buffer[i])
-        end
-    end
-
-    serial_out:close()
-    ffi.C.close(fd)
+    self:_readData(write_data_hex, 6)
 
     for i = 1, #self.answer do
         print("xxx", string.format("x%02x", self.answer[i]))
     end
-end
-
-function AntBMS:reboot()
-    local serial_out
-    local reboot = 254 -- adress of reboot
-    local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
-
-    self.answer = {}
-
-    print("xxx setAutoBalance", write_data_hex)
-
-    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
-    if fd <= 0 then
-        util:log("ERROR opening serial_in")
-        return -1
-    end
-
-    -- wait and read some existing(?) crap
-    util.sleep_time(0.1)
-    ffi.C.read(fd, buffer, chunk_size)
-
-    serial_out = io.open(SERIAL_PORT, "wb")
-    if not serial_out then
-        util:log("ERROR opening serial_out")
-        ffi.C.close(fd)
-        return
-    end
-    serial_out:write(util.HexToNum(write_data_hex))
-    serial_out:flush()
-
-    while true do
-        util.sleep_time(0.25)
-        local nbytes = ffi.C.read(fd, buffer, chunk_size)
-
-        print("nbytes=", nbytes)
-        if nbytes <= 0 then
-            break
-        end
-
-        for i = 0, nbytes-1 do
-            table.insert(self.answer, buffer[i])
-        end
-    end
-
-    serial_out:close()
-    ffi.C.close(fd)
-
-    for i = 1, #self.answer do
-        print("xxx", string.format("x%02x", self.answer[i]))
-    end
+    return #self.answer
 end
 
 function AntBMS:readAutoBalance()
-    local serial_out
     local auto_balance = 252 -- adress of auto balance
-
     local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
-
-    self.answer = {}
-
     print("xxx ReadAutoBalance", read_data_hex)
 
-    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
-    if fd <= 0 then
-        util:log("ERROR opening serial_in")
-        return -1
-    end
+    self:_readData(read_data_hex, 6)
+    return #self.answer
+end
 
-    -- wait and read some existing(?) crap
-    util.sleep_time(0.1)
-    ffi.C.read(fd, buffer, chunk_size)
+function AntBMS:reboot()
+    local reboot = 254 -- adress of reboot
+    local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
 
-    serial_out = io.open(SERIAL_PORT, "wb")
-    if not serial_out then
-        util:log("ERROR opening serial_out")
-        ffi.C.close(fd)
-        return
-    end
-    serial_out:write(util.HexToNum(read_data_hex))
-    serial_out:flush()
-
-    while true do
-        util.sleep_time(0.25)
-        local nbytes = ffi.C.read(fd, buffer, chunk_size)
-
-        print("nbytes=", nbytes)
-        if nbytes <= 0 then
-            break
-        end
-
-        for i = 0, nbytes-1 do
-            table.insert(self.answer, buffer[i])
-        end
-    end
-
-    serial_out:close()
-    ffi.C.close(fd)
+    self:_readData(write_data_hex, 6)
 
     for i = 1, #self.answer do
         print("xxx", string.format("x%02x", self.answer[i]))
     end
-
+    return #self.answer
 end
 
-function AntBMS:_readData()
-    local request_hex = "DBDB00000000"
+function AntBMS:_readData(request_hex, read_data_size)
+    self.answer = {}
 
     local serial = io.open(SERIAL_PORT, "r+b")
     if not serial then
@@ -319,24 +187,20 @@ function AntBMS:_readData()
     serial:flush()
 
     local wait_time = 0.20 -- sec
-    self.answer = {}
-    for i = 1, math.floor(5/wait_time) do
+    for _ = 1, math.floor(5/wait_time) do
         util.sleep_time(wait_time) -- wait a bit
-
         local rec_part = serial:read("*all")
-
         for n = 1, #rec_part do
             table.insert(self.answer, rec_part:byte(n))
         end
 
-        if #self.answer >= READ_DATA_SIZE then
+        if #self.answer >= read_data_size then
             break
         end
     end
     serial:close()
     return #self.answer
 end
-
 
 function AntBMS:isChecksumOk()
     if #self.answer < READ_DATA_SIZE then
@@ -389,7 +253,8 @@ function AntBMS:evaluateParameters()
     local checksum = false
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
-        self:_readData()
+        self:_readData("DBDB00000000", READ_DATA_SIZE)
+
         checksum = self:isChecksumOk()
         if checksum then
             break
