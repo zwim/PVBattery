@@ -6,6 +6,9 @@
 
 local util = require("util")
 
+
+local http = require("socket.http")
+
 local SERIAL_PORT = "/dev/rfcomm0"
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
@@ -38,7 +41,8 @@ local READ_DATA_SIZE = 140
 
 -- Todo honor self.validStatus
 function AntBMS:init()
-    local retval = os.execute("sh init_Ant_BMS.sh")
+--    local retval = os.execute("sh init_Ant_BMS.sh")
+    local retval = 0
     if retval ~= 0 then
         self.validStatus = false
         util:log("XXXXXXXXXXXXXXXXXX initialization error")
@@ -136,7 +140,18 @@ function AntBMS:toggleAutoBalance()
 
     print("xxx setAutoBalance", os.date(), write_data_hex)
 
-    self:_readData(write_data_hex, 6)
+    -- self:_readData(write_data_hex, 6)
+    local url = string.format("http://192.168.0.234/balance.toggle")
+    self.body, self.code, self.headers, self.status = http.request(url)
+    if not self.body then
+        return false
+    end
+
+    self.answer = {}
+    for n = 1, #self.body do
+        table.insert(self.answer, self.body:byte(n))
+    end
+
 
     for i = 1, #self.answer do
         print("xxx", string.format("x%02x", self.answer[i]))
@@ -149,20 +164,30 @@ function AntBMS:readAutoBalance()
     local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
     print("xxx ReadAutoBalance", read_data_hex)
 
-    self:_readData(read_data_hex, 6)
+    -- self:_readData(read_data_hex, 6)
+    local url = string.format("http://192.168.0.234/balance.read")
+    self.body, self.code, self.headers, self.status = http.request(url)
+    if not self.body then
+        return false
+    end
+
+
+    self.answer = {}
+    for n = 1, #self.body do
+        table.insert(self.answer, self.body:byte(n))
+    end
+
     return #self.answer
 end
 
 function AntBMS:reboot()
     local reboot = 254 -- adress of reboot
     local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
+    print("xxx write reboot", write_data_hex)
 
-    self:_readData(write_data_hex, 6)
-
-    for i = 1, #self.answer do
-        print("xxx", string.format("x%02x", self.answer[i]))
-    end
-    return #self.answer
+--    self:_readData(write_data_hex, 6)
+    local url = string.format("http://192.168.0.234/reboot")
+    self.body, self.code, self.headers, self.status = http.request(url)
 end
 
 function AntBMS:_readData(request_hex, read_data_size)
@@ -253,7 +278,16 @@ function AntBMS:evaluateParameters()
     local checksum = false
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
-        self:_readData("DBDB00000000", READ_DATA_SIZE)
+--        self:_readData("DBDB00000000", READ_DATA_SIZE)
+        local url = string.format("http://192.168.0.234/bms.data")
+        self.body, self.code, self.headers, self.status = http.request(url)
+        if not self.body then
+            return false
+        end
+        self.answer = {}
+        for n = 1, #self.body do
+            table.insert(self.answer, self.body:byte(n))
+        end
 
         checksum = self:isChecksumOk()
         if checksum then
