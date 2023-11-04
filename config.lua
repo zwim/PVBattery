@@ -35,6 +35,7 @@ deep_discharge_max = 8
 deep_discharge_hysteresis = 4
 
 bat_lowest_voltage = 2.89 -- lowest allowed voltage
+max_cell_diff = 0.100 -- maximum allowed cell diff
 
 load_full_time = 2.5 -- hour before sun set
 
