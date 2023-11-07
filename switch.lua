@@ -1,8 +1,12 @@
 -- loads the HTTP module and any libraries it requires
 local http = require("socket.http")
-
 -- json module
 local json = require ("dkjson")
+
+local config = require("configuration")
+local util = require("util")
+
+
 local decode_unchecked = json.decode
 function json.decode(data)
     if data then
@@ -12,8 +16,6 @@ function json.decode(data)
     end
 end
 
-local util = require("util")
-
 local Switch = {
     timeOfLastRequiredData = 0, -- no data requiered yet
     host = nil,
@@ -21,17 +23,15 @@ local Switch = {
     status = nil,
     headers = nil,
     code = nil,
-}
+    max_power = 0,
+    power_state = 0,
+    }
 
 function Switch:new(o)
     o = o or {}   -- create object if user does not provide one
     setmetatable(o, self)
     self.__index = self
     return o
-end
-
-function Switch:init(host_name)
-    self.host = host_name
 end
 
 function Switch:getDataAge()
@@ -42,10 +42,10 @@ function Switch:_getStatus()
     if not self.host then
         return false
     end
-    if self:getDataAge() < 1 then
+    if self:getDataAge() < config.update_interval then
         return true
     end
-    local url = string.format("http://%s/cm?cmnd=Status%%200", self.host)
+    local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     self.decoded = json.decode(self.body)
 
@@ -86,7 +86,19 @@ function Switch:getPower()
     end
 
     local Power = self.decoded and self.decoded.StatusSNS and self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Power or (0/0)
+
+    if Power then
+        local weight = 0.1
+        self.max_power = self.max_power * ( 1 - weight) + Power * weight
+    end
+--[[    if Power > self.max_power then
+        self.max_power = Power
+    end ]]
     return Power
+end
+
+function Switch:getMaxPower()
+    return self.max_power
 end
 
 function Switch:getPowerState()
@@ -94,11 +106,15 @@ function Switch:getPowerState()
         return ""
     end
 
-    local Power = self.decoded and self.decoded.Status and self.decoded.Status.Power
-    util:log(Power)
-    if Power == 0 then
+    if self:getDataAge() > config.update_interval then
+        self:getPower() -- update max_power
+    end
+
+    self.power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
+    util:log(self.power_state)
+    if self.power_state == 0 then
         return "off"
-    elseif Power == 1 then
+    elseif self.power_state == 1 then
         return "on"
     else
         return ""

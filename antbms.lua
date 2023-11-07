@@ -4,12 +4,11 @@
 -- https://github.com/syssi/esphome-ant-bms
 -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
 
-local util = require("util")
-
-
 local http = require("socket.http")
+local util = require("util")
+local config = require("configuration")
 
-local SERIAL_PORT = "/dev/rfcomm0"
+local READ_DATA_SIZE = 140
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -32,23 +31,12 @@ end
 ----------------------------------------------------------------
 
 local AntBMS = {
-    timeOfLastRequiredData = 0, -- no data yet
-    answer = {},
+    host = "",
     v = {},
-}
+    timeOfLastRequiredData = 0, -- no data yet
 
-local READ_DATA_SIZE = 140
-
--- Todo honor self.validStatus
-function AntBMS:init()
---    local retval = os.execute("sh init_Ant_BMS.sh")
-    local retval = 0
-    if retval ~= 0 then
-        self.validStatus = false
-        util:log("XXXXXXXXXXXXXXXXXX initialization error")
-    end
-    self.validStatus = true
-    self.MOSFETChargeStatusFlag = {
+    MOSFETChargeStatusFlag = {
+        [0] = "Off",
         "Open",
         "Overvoltage protection",
         "Over current protection",
@@ -64,10 +52,11 @@ function AntBMS:init()
         "Discharge tube abnormality",
         "14", -- 14
         "Manually closed",
-    }
-    self.MOSFETChargeStatusFlag[0] = "Off"
+    },
+--    MOSFETChargeStatusFlag[0] = "Off",
 
-    self.MOSFETDischargeStatusFlag = {
+    MOSFETDischargeStatusFlag = {
+        [0] = "Off",
         "Open",
         "Over discharge protection",
         "Over current protection",
@@ -83,10 +72,11 @@ function AntBMS:init()
         "Discharge tube abnormality",
         "Start exception",
         "Manually closed",
-    }
-    self.MOSFETDischargeStatusFlag[0] = "Off"
+    },
+--    MOSFETDischargeStatusFlag[0] = "Off",
 
-    self.BalancedStatusText = {
+    BalancedStatusText = {
+        [0] = "Off",
         "Exceeds the limit equilibrium",
         "Charge differential pressure balance",
         "Balanced over temperature",
@@ -102,8 +92,17 @@ function AntBMS:init()
         "13",
         "14",
         "15",
-    }
-    self.BalancedStatusText[0] = "Off"
+    },
+--    BalancedStatusText[0] = "Off",
+
+    answer = {},
+}
+
+function AntBMS:new(o)
+    o = o or {}   -- create object if user does not provide one
+    setmetatable(o, self)
+    self.__index = self
+    return o
 end
 
 function AntBMS:setAutoBalance(on)
@@ -140,8 +139,7 @@ function AntBMS:toggleAutoBalance()
 
     print("xxx setAutoBalance", os.date(), write_data_hex)
 
-    -- self:_readData(write_data_hex, 6)
-    local url = string.format("http://192.168.0.234/balance.toggle")
+    local url = string.format("http://" .. self.host .. "/balance.toggle")
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
@@ -164,8 +162,7 @@ function AntBMS:readAutoBalance()
     local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
     print("xxx ReadAutoBalance", read_data_hex)
 
-    -- self:_readData(read_data_hex, 6)
-    local url = string.format("http://192.168.0.234/balance.read")
+    local url = string.format("http://" .. self.host .. "/balance.read")
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
@@ -185,46 +182,8 @@ function AntBMS:reboot()
     local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
     print("xxx write reboot", write_data_hex)
 
---    self:_readData(write_data_hex, 6)
-    local url = string.format("http://192.168.0.234/reboot")
+    local url = string.format("http://" .. self.host .. "/reboot")
     self.body, self.code, self.headers, self.status = http.request(url)
-end
-
-function AntBMS:_readData(request_hex, read_data_size)
-    self.answer = {}
-
-    local serial = io.open(SERIAL_PORT, "r+b")
-    if not serial then
-        util:log("ERROR opening serial:", SERIAL_PORT)
-        return -1
-    end
-
-    -- read crap
-    while true do
-        util.sleep_time(0.10)
-        if #serial:read("*all") == 0 then
-            break
-        end
-    end
-
-    -- write request to bluetooth
-    serial:write(util.HexToNum(request_hex))
-    serial:flush()
-
-    local wait_time = 0.20 -- sec
-    for _ = 1, math.floor(5/wait_time) do
-        util.sleep_time(wait_time) -- wait a bit
-        local rec_part = serial:read("*all")
-        for n = 1, #rec_part do
-            table.insert(self.answer, rec_part:byte(n))
-        end
-
-        if #self.answer >= read_data_size then
-            break
-        end
-    end
-    serial:close()
-    return #self.answer
 end
 
 function AntBMS:isChecksumOk()
@@ -267,8 +226,11 @@ end
 
 -- This is the usual way of reading new parameters
 function AntBMS:evaluateParameters()
+    if not self.host or self.host == "" then
+        return false
+    end
     -- Require Data only, if the last require was at least a second ago
-    if self:getDataAge() < 1 then -- todo make this configurable
+    if self:getDataAge() < config.update_interval then
         return true
     end
 
@@ -278,8 +240,7 @@ function AntBMS:evaluateParameters()
     local checksum = false
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
---        self:_readData("DBDB00000000", READ_DATA_SIZE)
-        local url = string.format("http://192.168.0.234/bms.data")
+        local url = string.format("http://" .. self.host .. "/bms.data")
         self.body, self.code, self.headers, self.status = http.request(url)
         if not self.body then
             return false
@@ -386,15 +347,6 @@ function AntBMS:evaluateParameters()
     return true
 end
 
-function AntBMS:getSOC()
-    -- Require SOC at mostly 1 time per minute
-    if self:getDataAge() > 60 or not self.v.SOC then
-        self:evaluateParameters()
-    end
-    self.v.CalculatedSOC = self.v.CalculatedSOC or 50
-    return self.v.SOC or 50
-end
-
 function AntBMS:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
@@ -407,13 +359,64 @@ function AntBMS:printValues()
     end
 end
 
+function AntBMS:readyToCharge()
+    self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.CellDiff > config.max_cell_diff then
+            self:setAutoBalance(true)
+            return false
+        elseif self.v.HighestVoltage > config.bat_highest_voltage then
+            self:setAutoBalance(true)
+            return false
+        elseif self.v.SOC > config.bat_SOC_max then
+            self:setAutoBalance(true)
+            return false
+        else
+            return true
+        end
+    end
+    return nil
+end
+
+function AntBMS:readyToDischarge()
+    self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.CellDiff > config.max_cell_diff then
+            self:setAutoBalance(true)
+            return false
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage then
+            return false
+        elseif self.v.SOC <= config.bat_SOC_min + config.bat_hysteresis then
+            return false
+        else
+            return true
+        end
+    end
+    return nil
+end
+
+function AntBMS:isLowCharged()
+    self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.LowestVoltage < config.bat_lowest_voltage then
+            return true
+        elseif self.v.SOC <= config.bat_SOC_min then
+            return true
+        else
+            return false
+        end
+    end
+    return nil
+end
+
 function AntBMS:_printValuesNotProtected()
     if not next(self.v) then -- check if table self.v is empty!
         util:log("No values decoded yet!")
         return false
     end
 
-    util:log(string.format("SOC = %3d%%", self:getSOC()))
+    util:log(string.format("BMS: %s", self.host))
+    util:log(string.format("SOC = %3d%%", self.v.SOC))
     util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
 
     local charging_text = ""
@@ -464,43 +467,6 @@ function AntBMS:_printValuesNotProtected()
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
     return true
-end
-
-AntBMS:init()
-
-AntBMS:evaluateParameters()
-
-local help_string = [[
-This module provides methods to control an ANT-BMS (version before 2021; the "old one").
-
-When this module is called with parameters, certain functions of the ANT-BMS can be executed.
-
-usage: lua antbms.lua [command]
-    command can be:
-        show      ... shows current BMS values
-        balon     ... turns auto balance on
-        baloff    ... turns auto balance off
-        baltoggle ... toggles auto balance
-        reboot    ... reboot bms
-]]
-
--- Show initial values
-local command = arg[1] and string.lower(arg[1])
-if command and string.find(command, "help") then
-    print(help_string)
-elseif command and string.find(command, "show") then
-    AntBMS:printValues()
-elseif command and string.find(command, "balon") then
-    AntBMS:setAutoBalance(true)
-elseif command and string.find(command, "baloff") then
-    AntBMS:setAutoBalance(false)
-elseif command and string.find(command, "baltog") then
-    AntBMS:toggleAutoBalance()
-elseif command and string.find(command, "reboot") then
-    AntBMS:reboot()
-elseif command then
-    print(help_string)
-    print("Wrong argument: " .. command)
 end
 
 return AntBMS

@@ -2,10 +2,10 @@
 
 -- loads the HTTP module and any libraries it requires
 local http = require("socket.http")
-
 -- json module
 local json = require("dkjson")
 
+local config = require("configuration")
 local util = require("util")
 
 local host = "192.168.0.49"
@@ -30,6 +30,13 @@ local Fronius = {
     Request = {},
     timeOfLastRequiredData = 0, -- no data yet
 }
+
+function Fronius:new(o)
+    o = o or {}   -- create object if user does not provide one
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
 
 function Fronius:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
@@ -74,7 +81,7 @@ end
 
 -- todo add a getter if neccessary
 function Fronius:getGridLoadPV()
-    if self:getDataAge() > 1 then -- todo make this configurable
+    if self:getDataAge() > config.update_interval then
         self:getPowerFlowRealtimeData()
     end
     if self:gotValidRealtimeData() then
