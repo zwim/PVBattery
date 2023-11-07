@@ -21,6 +21,7 @@ local Switch = {
     status = nil,
     headers = nil,
     code = nil,
+    max_power = 0;
 }
 
 function Switch:new(o)
@@ -28,10 +29,6 @@ function Switch:new(o)
     setmetatable(o, self)
     self.__index = self
     return o
-end
-
-function Switch:init(host_name)
-    self.host = host_name
 end
 
 function Switch:getDataAge()
@@ -45,7 +42,7 @@ function Switch:_getStatus()
     if self:getDataAge() < 1 then
         return true
     end
-    local url = string.format("http://%s/cm?cmnd=Status%%200", self.host)
+    local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     self.decoded = json.decode(self.body)
 
@@ -86,6 +83,14 @@ function Switch:getPower()
     end
 
     local Power = self.decoded and self.decoded.StatusSNS and self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Power or (0/0)
+
+    if Power then
+        local weight = 0.1
+        self.max_power = self.max_power * ( 1 - weight) + Power * weight
+    end
+--[[    if Power > self.max_power then
+        self.max_power = Power
+    end ]]
     return Power
 end
 
@@ -94,11 +99,13 @@ function Switch:getPowerState()
         return ""
     end
 
-    local Power = self.decoded and self.decoded.Status and self.decoded.Status.Power
+    self:getPower() -- update max_power
+
+    local PowerState = self.decoded and self.decoded.Status and self.decoded.Status.Power
     util:log(Power)
-    if Power == 0 then
+    if PowerState == 0 then
         return "off"
-    elseif Power == 1 then
+    elseif PowerState == 1 then
         return "on"
     else
         return ""
