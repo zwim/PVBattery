@@ -1,7 +1,6 @@
 local AntBMS = require("antbms")
 local Fronius = require("fronius")
 local SunTime = require("suntime/suntime")
-local Switch = require("switch")
 local ChargerClass = require("charger")
 local InverterClass = require("inverter")
 
@@ -44,6 +43,7 @@ function PVBattery:init()
 		local inv = InverterClass:new {
 			inverter_host = config.Device[i].inverter_switch,
 			inverter_min_power = config.Device[i].inverter_min_power,
+			skip = config.Device[i].inverter_skip,
 			BMS = BMS,
 		}
 		table.insert(self.Inverter, inv)
@@ -58,10 +58,8 @@ function PVBattery:init()
 	end
 
 	-- set max_power to a small value, will get updated during run
-	for i = 1, #self.Charger do
-		self.Charger[i].Switch.max_power = 50
-		self.Charger[i].Switch.max_power = 50
-		self.Charger[i].Switch.max_power = 50
+	for _, chg in pairs (self.Charger) do
+		chg.Switch.max_power = 50
 	end
 
 end
@@ -70,11 +68,11 @@ function PVBattery:findBestCharger(req_power)
 	local pos = 0
 	local avail_power = 0
 
-	for i = 1, #self.Charger do
-		local max_power = self.Charger[i].Switch.max_power or 0
+	for i, chg in pairs(self.Charger) do
+		local max_power = chg:getMaxPower() or 0
 		if max_power < req_power and max_power > avail_power then
-			if self.Charger[i]:readyToCharge() then
-				if self.Charger[i]:getPowerState() == "off" then
+			if chg:readyToCharge() then
+				if chg:getPowerState() == "off" then
 					pos = i
 					avail_power = max_power
 				end
@@ -82,9 +80,8 @@ function PVBattery:findBestCharger(req_power)
 		end
 	end
 
-	if pos > 0 then
-		self.is_charging = true
-    end
+	self.is_charging = (pos > 0)
+
 	return pos, avail_power
 end
 
@@ -95,8 +92,11 @@ function PVBattery:findBestInverter(req_power)
 	for i = 1, #self.Inverter do
 		local min_power = self.Inverter[i].inverter_min_power or math.huge
 		if min_power < req_power and min_power > avail_power then
+			util.printTime("xxxA" .. i)
 			if self.Inverter[i]:readyToDischarge() then
+				util.printTime("xxxB" .. i)
 				if self.Inverter[i]:getPowerState() ~= "on" then
+					util.printTime("xxxC" .. i)
 					pos = i
 					avail_power = min_power
 				end
@@ -118,7 +118,7 @@ end
 
 function PVBattery:isDischarging()
 	for _, inverter in pairs(self.Inverter) do
-		if inverter:getPowerState() == "on" then
+		if not inverter.inverter_skip and inverter:getPowerState() == "on" then
 			return true
 		end
 	end
@@ -133,6 +133,8 @@ function PVBattery:generateHTML(P_Grid, P_Load, P_PV)
 		{"_$SUNSET", self.sunset},
 		{"_$FRONIUS_ADR", config.FRONIUS_ADR},
 		{"_$P_GRID", string.format("%7.2f", P_Grid)},
+		{"_$P_SELL_GRID", P_Grid < 0 and string.format("%7.2f", P_Grid) or "0.00"},
+		{"_$P_BUY_GRID", P_Grid > 0 and string.format("%7.2f", P_Grid) or "0.00"},
 		{"_$P_LOAD", string.format("%7.2f", P_Load)},
 		{"_$P_ROOF", string.format("%7.2f", P_PV)},
 		{"_$BMS1_INFO", "http://" .. self.BMS[1].host .. "/show"},
@@ -150,7 +152,37 @@ function PVBattery:generateHTML(P_Grid, P_Load, P_PV)
 		{"_$GARAGE_INVERTER_POWER",
 			string.format("%7.2f", self.Inverter[2]:getCurrentPower())},
 		{"_$GARAGE_INVERTER", self.Inverter[2].inverter_host},
+		{"_$MOPED_CHARGER_POWER",
+			string.format("%7.2f", self.Charger[3]:getCurrentPower())},
+		{"_$MOPED_CHARGER", self.Charger[3].switch_host},
+		{"_$MOPED_INVERTER_POWER",
+			string.format("%7.2f", self.Inverter[3]:getCurrentPower())},
+		{"_$MOPED_INVERTER", self.Inverter[3].inverter_host},
 	}
+
+	local sinks = 0
+	for _, chg in pairs(self.Charger) do
+		local x = chg:getCurrentPower()
+		sinks = sinks + (x or 0)
+	end
+	table.insert(TEMPLATE_PARSER, {"_$POWER_SINKS",
+			string.format("%7.2f", sinks)})
+
+	local sources = 0
+	for _, inv in pairs(self.Inverter) do
+		local x = inv:getCurrentPower()
+		sources = sources + (x or 0)
+	end
+	table.insert(TEMPLATE_PARSER, {"_$POWER_SOURCES",
+			string.format("%7.2f", sources)})
+
+	table.insert(TEMPLATE_PARSER, {"_$POWER_CONSUMED",
+			string.format("%7.2f", P_Grid + sources - sinks)})
+
+
+
+
+
 
 	local date = os.date("*t")
 
@@ -193,6 +225,11 @@ function PVBattery:main()
         local old_state = self.state
         local _start_time = util.getCurrentTime()
 
+		local charger_num = 0
+		local charger_power
+		local inverter_num = 0
+		local inverter_power
+
         -- if config has changed, reload it
         config:read()
 
@@ -203,6 +240,15 @@ function PVBattery:main()
         last_date = date
         date = os.date("*t")
         util:log("\n#############################################")
+
+		local date_string = string.format("%d/%d/%d-%02d:%02d:%02d",
+		last_date.year, last_date.month, last_date.day,
+		last_date.hour, last_date.min, last_date.sec)
+
+		util:log(date_string)
+		util.printTime(1)
+
+
 
         -- Do the sun set and rise calculations if necessary
         if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
@@ -219,6 +265,8 @@ function PVBattery:main()
             short_sleep = 1
         end
 
+		util.printTime(2)
+
         -- Update Fronius
         util:log("\n-------- Total Overview:")
         Fronius:getPowerFlowRealtimeData()
@@ -230,6 +278,9 @@ function PVBattery:main()
             util.sleep_time(1) -- try again in 1 second
             P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         end
+
+		util.printTime(3)
+
 
 		if not P_Grid then
 			short_sleep = 1
@@ -244,22 +295,30 @@ function PVBattery:main()
 
         if not skip then
 			print("P_GRID", P_Grid)
-			local charger_num = 0
-			local charger_power
-			local inverter_num = 0
-			local inverter_power
 
-			for i = 1, #self.BMS do
-				self.BMS[i]:evaluateParameters()
+			util.printTime(4)
+
+			for _,charger in pairs(self.Charger) do
+				if charger.BMS:isLowCharged() then
+					skip = true
+					charger:startCharge()
+				end
 			end
 
+			util.printTime(5)
+
+		end
+
+		if not skip then
 			if P_Grid > 0 then
 				if self:isCharging() then
 					for i = 1, #self.Charger do
-						self.Charger[i].stopCharge()
+						self.Charger[i]:stopCharge()
 					end
+					util.printTime(51)
 				else
 					inverter_num, inverter_power = self:findBestInverter(P_Grid)
+					util.printTime(52)
 					print(inverter_num, inverter_power)
 					print("xxx activate inverter:", inverter_num)
 					if inverter_num > 0 then
@@ -271,9 +330,11 @@ function PVBattery:main()
 					for i = 1, #self.Inverter do
 						self.Inverter[i]:stopDischarge()
 					end
+				util.printTime(53)
 				else
 					charger_num, charger_power = self:findBestCharger(-P_Grid)
 					print(charger_num, charger_power)
+					util.printTime(54)
 					print("xxx activate charger:", charger_num)
 					if charger_num > 0 then
 						self.Charger[charger_num]:startCharge()
@@ -284,7 +345,16 @@ function PVBattery:main()
 
         end -- if skip
 
+		util.printTime(666)
+
+
+		for _, bms in pairs(self.BMS) do
+			bms:printValues()
+		end
+
         self:generateHTML(P_Grid, P_Load, P_PV)
+
+
 
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
 

@@ -5,6 +5,7 @@ local AntBMS = require("antbms")
 
 local Inverter = {
     inverter_host == "",
+    skip = false,
     bms_host = "",
     Switch = nil,
     dynamic_load = false,
@@ -35,7 +36,9 @@ function Inverter:startDischarge(req_power)
 end
 
 function Inverter:stopDischarge()
-    self.Switch:toggle("off")
+    if not self.skip then
+        self.Switch:toggle("off")
+    end
 end
 
 function Inverter:getCurrentPower()
@@ -47,13 +50,14 @@ function Inverter:getPowerState()
 end
 
 function Inverter:readyToDischarge()
-    if self.BMS:readyToDischarge() then
+    if self.skip then
         return true
-    else
-        self:stopDischarge()
-        return false
     end
+    local ready = self.BMS:readyToDischarge()
+    if ready == false then
+        self:stopDischarge()
+    end
+    return ready
 end
-
 
 return Inverter

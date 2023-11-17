@@ -31,8 +31,12 @@ function Charger:getCurrentPower()
    return self.Switch:getPower()
 end
 
+function Charger:getMaxPower()
+   return self.Switch:getMaxPower()
+end
+
 function Charger:getPowerState()
-   return self.Switch:getPower()
+   return self.Switch:getPowerState()
 end
 
 function Charger:stopCharge()

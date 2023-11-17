@@ -76,6 +76,16 @@ function util.numToBits(num, nb)
     return bits, table.concat(bits)
 end
 
+function util.printTime(str)
+    local date = os.date("*t")
+
+	local date_time_string = string.format("%d/%d/%d-%02d:%02d:%02d",
+		date.year, date.month, date.day, date.hour, date.min, date.sec)
+
+    print("Zeitstempel: " .. str .. "----" .. date_time_string)
+end
+
+
 function util.sleep_time(time)
     if time <= 0 then return end
     local sec = math.floor(time)

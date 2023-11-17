@@ -8,7 +8,6 @@ local http = require("socket.http")
 local util = require("util")
 local config = require("configuration")
 
-
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
 local function getInt8(ans, pos)
@@ -94,9 +93,7 @@ local AntBMS = {
     },
 --    BalancedStatusText[0] = "Off",
 
-
     answer = {},
-
 }
 
 function AntBMS:new(o)
@@ -229,8 +226,11 @@ end
 
 -- This is the usual way of reading new parameters
 function AntBMS:evaluateParameters()
+    if not self.host or self.host == "" then
+        return false
+    end
     -- Require Data only, if the last require was at least a second ago
-    if self:getDataAge() < 1 then -- todo make this configurable
+    if self:getDataAge() < config.update_interval then
         return true
     end
 
@@ -347,15 +347,6 @@ function AntBMS:evaluateParameters()
     return true
 end
 
-function AntBMS:getSOC()
-    -- Require SOC at mostly 1 time per minute
-    if self:getDataAge() > 60 or not self.v.SOC then
-        self:evaluateParameters()
-    end
-    self.v.CalculatedSOC = self.v.CalculatedSOC or 50
-    return self.v.SOC or 50
-end
-
 function AntBMS:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
@@ -384,24 +375,40 @@ function AntBMS:readyToCharge()
             return true
         end
     end
-    return false
+    return nil
 end
 
 function AntBMS:readyToDischarge()
+    util.printTime("x1")
     self:evaluateParameters()
+    util.printTime("x1")
     if self.v.CellDiff then
         if self.v.CellDiff > config.max_cell_diff then
             self:setAutoBalance(true)
             return false
         elseif self.v.LowestVoltage < config.bat_lowest_voltage then
             return false
-        elseif self.v.SOC <= config.bat_SOC_min then -- add hysteresis
+        elseif self.v.SOC <= config.bat_SOC_min + config.bat_hysteresis then
             return false
         else
             return true
         end
     end
-    return false
+    return nil
+end
+
+function AntBMS:isLowCharged()
+    self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.LowestVoltage < config.bat_lowest_voltage then
+            return true
+        elseif self.v.SOC <= config.bat_SOC_min then
+            return true
+        else
+            return false
+        end
+    end
+    return nil
 end
 
 function AntBMS:_printValuesNotProtected()
@@ -410,7 +417,8 @@ function AntBMS:_printValuesNotProtected()
         return false
     end
 
-    util:log(string.format("SOC = %3d%%", self:getSOC()))
+    util:log(string.format("BMS: %s", self.host))
+    util:log(string.format("SOC = %3d%%", self.v.SOC))
     util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
 
     local charging_text = ""

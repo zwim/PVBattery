@@ -19,7 +19,7 @@ Sun set at _$SUNSET<br>
       <br>
       <td align="right">optain from <a href="http://_$FRONIUS_ADR">Grid</a></td>
       <td>=</td>
-      <td align="right">  _$P_GRID W</td>
+      <td align="right">  _$P_BUY_GRID W</td>
     </tr>
    <tr>
       <td></td>
@@ -55,13 +55,13 @@ Sun set at _$SUNSET<br>
       <td align="right"> _$BATTERY_CHARGER2_POWER W</td>
    </tr>
    <tr>
-      <td align="right"><a href="http://moped-inverter.lan">Moped Inverter</a></td>
+      <td align="right"><a href="http://_$MOPED_INVERTER">Moped Inverter</a></td>
       <td>=</td>
-      <td align="right">      nan W</td>
+      <td align="right"> _$MOPED_CHARGER_POWER W</td>
       <td></td>
-      <td align="right"><a href="http://moped-switch.lan">Moped Switch</a></td>
+      <td align="right"><a href="http://_$MOPED_CHARGER">Moped Charger</a></td>
       <td>=</td>
-      <td align="right">      nan W</td>
+      <td align="right"> _$MOPED_INVERTER_POWER W</td>
    </tr>
    <tr>
       <td>
@@ -75,11 +75,11 @@ Sun set at _$SUNSET<br>
    <tr>
       <td align="right">        Total Source</td>
       <td>=</td>
-      <td align="right">  3523.35 W</td>
+      <td align="right">  _$POWER_SOURCES W</td>
       <td></td>
       <td align="right">          Total Sink</td>
       <td>=</td>
-      <td align="right">   520.90 W</td>
+      <td align="right">  _$POWER_SINKS W</td>
    </tr>
    <tr>
       <td></td>
@@ -90,17 +90,18 @@ Sun set at _$SUNSET<br>
       <br>
       <td align="right">sell to <a href="http://_$FRONIUS_ADR">Grid</a></td>
       <td>=</td>
-      <td align="right">  _$P_GRID W</td>
+      <td align="right">  _$P_SELL_GRID W</td>
    </tr>
    <tr>
       <td align="right">Consumption</td>
       <td>=</td>
-      <td align="right">   530.85 W</td>
+      <td align="right">  _$POWER_CONSUMED W</td>
     </tr>
 </table>
 
 
 <a href="_$BMS1_INFO">Battery1 Status</a>
 <br>
-<a href="_$BMS1_BALANCE">Battery1 Balanceer Toggle</a>
+<br>
+<a href="_$BMS1_BALANCE">Battery1 Balancer Toggle</a>
 </body></html>

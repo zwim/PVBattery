@@ -41,9 +41,7 @@ local configuration = {
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
 
-    deep_discharge_min = 4,
-    deep_discharge_max = 8,
-    deep_discharge_hysteresis = 4,
+    bat_hysteresis = 2,
 
     load_full_time = 2, -- hour before sun set
 
@@ -63,23 +61,26 @@ local configuration = {
             inverter_switch = "battery-inverter.lan",
             inverter_control = nil,
             inverter_min_power = 110,
-            BMS = "192.168.0.234",
+            inverter_skip = false,
+            BMS = "batter-bms.ln",
         },
         { -- Device[2]
             name = "Garage Inverter",
             charger_switch = {},
             inverter_switch = "192.168.1.30",
             inverter_control = nil,
+            inverter_skip = true,
             BMS = nil,
         },
         { -- Device[3]
             name = "Moped",
             charger_switch = {
-                "moped-charger.lan",
+                "moped-charger",
             },
-            inverter_switch = "moped-inverter.lan",
+            inverter_switch = "moped-inverter",
             inverter_control = "192.168.0.13",
             inverter_min_power = 10,
+            inverter_skip = false,
             BMS = "192.168.0.13",
         },
     }

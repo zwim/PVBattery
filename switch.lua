@@ -1,8 +1,12 @@
 -- loads the HTTP module and any libraries it requires
 local http = require("socket.http")
-
 -- json module
 local json = require ("dkjson")
+
+local config = require("configuration")
+local util = require("util")
+
+
 local decode_unchecked = json.decode
 function json.decode(data)
     if data then
@@ -12,8 +16,6 @@ function json.decode(data)
     end
 end
 
-local util = require("util")
-
 local Switch = {
     timeOfLastRequiredData = 0, -- no data requiered yet
     host = nil,
@@ -21,8 +23,9 @@ local Switch = {
     status = nil,
     headers = nil,
     code = nil,
-    max_power = 0;
-}
+    max_power = 0,
+    power_state = 0,
+    }
 
 function Switch:new(o)
     o = o or {}   -- create object if user does not provide one
@@ -39,7 +42,7 @@ function Switch:_getStatus()
     if not self.host then
         return false
     end
-    if self:getDataAge() < 1 then
+    if self:getDataAge() < config.update_interval then
         return true
     end
     local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
@@ -94,18 +97,24 @@ function Switch:getPower()
     return Power
 end
 
+function Switch:getMaxPower()
+    return self.max_power
+end
+
 function Switch:getPowerState()
     if not self:_getStatus() then
         return ""
     end
 
-    self:getPower() -- update max_power
+    if self:getDataAge() > config.update_interval then
+        self:getPower() -- update max_power
+    end
 
-    local PowerState = self.decoded and self.decoded.Status and self.decoded.Status.Power
-    util:log(Power)
-    if PowerState == 0 then
+    self.power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
+    util:log(self.power_state)
+    if self.power_state == 0 then
         return "off"
-    elseif PowerState == 1 then
+    elseif self.power_state == 1 then
         return "on"
     else
         return ""
