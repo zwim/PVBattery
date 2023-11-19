@@ -8,6 +8,8 @@ local http = require("socket.http")
 local util = require("util")
 local config = require("configuration")
 
+local READ_DATA_SIZE = 140
+
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
 local function getInt8(ans, pos)
@@ -102,8 +104,6 @@ function AntBMS:new(o)
     self.__index = self
     return o
 end
-
-local READ_DATA_SIZE = 140
 
 function AntBMS:setAutoBalance(on)
     if on == nil then

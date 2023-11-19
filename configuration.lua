@@ -99,7 +99,7 @@ function configuration:read()
     end
 
     if config_time == configuration.config_file_date then
-        return true -- no need to reload
+        return nil -- no need to reload
     end
 
     chunk, err = loadfile(file, "t", configuration)
@@ -110,7 +110,7 @@ function configuration:read()
         configuration.config_file_date = config_time
         self.validConfig = true
         -- ToDo: print the new config
-        return true
+        return nil
     else
         util:log("Error loading config file: " .. configuration.config_file_name, "Err:" .. err)
         self.validConfig = false

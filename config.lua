@@ -39,7 +39,7 @@ max_cell_diff = 0.100 -- maximum allowed cell diff
 
 load_full_time = 2.5 -- hour before sun set
 
-sleep_time = 3 -- seconds to sleep per iteration
+sleep_time = 15 -- seconds to sleep per iteration
 
 update_interval = 10 -- oldage time
 
@@ -77,6 +77,6 @@ Device = {
         inverter_control = "fehltnoch",
         inverter_min_power = 10,
         inverter_skip = false,
-        BMS = "192.168.1.13",
+        BMS = "", -- fehlt noch
     },
 }

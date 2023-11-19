@@ -80,8 +80,6 @@ function PVBattery:findBestCharger(req_power)
 		end
 	end
 
-	self.is_charging = (pos > 0)
-
 	return pos, avail_power
 end
 
@@ -89,13 +87,13 @@ function PVBattery:findBestInverter(req_power)
 	local pos = 0
 	local avail_power = 0
 
-	for i = 1, #self.Inverter do
-		local min_power = self.Inverter[i].inverter_min_power or math.huge
+	for i, inv in pairs(self.Inverter) do
+		local min_power = inv.inverter_min_power or math.huge
 		if min_power < req_power and min_power > avail_power then
 			util.printTime("xxxA" .. i)
-			if self.Inverter[i]:readyToDischarge() then
+			if inv:readyToDischarge() then
 				util.printTime("xxxB" .. i)
-				if self.Inverter[i]:getPowerState() ~= "on" then
+				if inv:getPowerState() ~= "on" then
 					util.printTime("xxxC" .. i)
 					pos = i
 					avail_power = min_power
@@ -179,11 +177,6 @@ function PVBattery:generateHTML(P_Grid, P_Load, P_PV)
 	table.insert(TEMPLATE_PARSER, {"_$POWER_CONSUMED",
 			string.format("%7.2f", P_Grid + sources - sinks)})
 
-
-
-
-
-
 	local date = os.date("*t")
 
 	TEMPLATE_PARSER[1][2] = string.format("%d/%d/%d-%02d:%02d:%02d",
@@ -221,8 +214,7 @@ function PVBattery:main()
 
     while true do
 		local skip = false
-        local short_sleep = math.huge
-        local old_state = self.state
+        local short_sleep = nil -- a number here will shorten the sleep time
         local _start_time = util.getCurrentTime()
 
 		local charger_num = 0
@@ -231,11 +223,9 @@ function PVBattery:main()
 		local inverter_power
 
         -- if config has changed, reload it
-        config:read()
-
-    --    AntBMS:readAutoBalance(true)
-    --    AntBMS:setAutoBalance(true)
-    --    AntBMS:readAutoBalance(true)
+        if config:read() ~= nil then
+			short_sleep = 1
+		end
 
         last_date = date
         date = os.date("*t")
@@ -247,8 +237,6 @@ function PVBattery:main()
 
 		util:log(date_string)
 		util.printTime(1)
-
-
 
         -- Do the sun set and rise calculations if necessary
         if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
@@ -299,21 +287,23 @@ function PVBattery:main()
 			util.printTime(4)
 
 			for _,charger in pairs(self.Charger) do
+				util.printTime(4 .. _)
 				if charger.BMS:isLowCharged() then
+					util.printTime(4 .. _ .. ":-)")
 					skip = true
 					charger:startCharge()
 				end
+				util.printTime(4 .. _)
 			end
-
 			util.printTime(5)
-
 		end
 
 		if not skip then
 			if P_Grid > 0 then
 				if self:isCharging() then
-					for i = 1, #self.Charger do
-						self.Charger[i]:stopCharge()
+					short_sleep = 1
+					for _, chg in pairs(self.Charger) do
+						chg:stopCharge()
 					end
 					util.printTime(51)
 				else
@@ -323,12 +313,14 @@ function PVBattery:main()
 					print("xxx activate inverter:", inverter_num)
 					if inverter_num > 0 then
 						self.Inverter[inverter_num]:startDischarge(P_Grid)
+						short_sleep = 10  -- inverters are slower than chargers
 					end
 				end
 			else
 				if self:isDischarging() then
-					for i = 1, #self.Inverter do
-						self.Inverter[i]:stopDischarge()
+					short_sleep = 1
+					for _, inv in pairs(self.Inverter) do
+						inv:stopDischarge()
 					end
 				util.printTime(53)
 				else
@@ -338,15 +330,14 @@ function PVBattery:main()
 					print("xxx activate charger:", charger_num)
 					if charger_num > 0 then
 						self.Charger[charger_num]:startCharge()
+						short_sleep = 10  -- inverters are slower than chargers
 						print("switch: ", charger_num, " max_power", self.Charger[charger_num].Switch.max_power)
 					end
 				end
 			end
-
         end -- if skip
 
 		util.printTime(666)
-
 
 		for _, bms in pairs(self.BMS) do
 			bms:printValues()
@@ -354,14 +345,12 @@ function PVBattery:main()
 
         self:generateHTML(P_Grid, P_Load, P_PV)
 
-
-
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
 
-        if old_state ~= self.state then
-            util.sleep_time(5 - (util.getCurrentTime() - _start_time)) -- sleep only 5 seconds after a change
+        if short_sleep then
+            util.sleep_time(short_sleep - (util.getCurrentTime() - _start_time))
         else
-            util.sleep_time(math.min(config.sleep_time - (util.getCurrentTime() - _start_time), short_sleep))
+            util.sleep_time(config.sleep_time - (util.getCurrentTime() - _start_time))
         end
     end -- end of inner loop
 end
