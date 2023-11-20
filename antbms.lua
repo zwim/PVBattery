@@ -96,6 +96,7 @@ local AntBMS = {
 --    BalancedStatusText[0] = "Off",
 
     answer = {},
+    rescue_charge = false, -- flag if battery is to low
 }
 
 function AntBMS:new(o)
@@ -379,9 +380,7 @@ function AntBMS:readyToCharge()
 end
 
 function AntBMS:readyToDischarge()
-    util.printTime("x1")
     self:evaluateParameters()
-    util.printTime("x1")
     if self.v.CellDiff then
         if self.v.CellDiff > config.max_cell_diff then
             self:setAutoBalance(true)
@@ -400,15 +399,26 @@ end
 function AntBMS:isLowCharged()
     self:evaluateParameters()
     if self.v.CellDiff then
-        if self.v.LowestVoltage < config.bat_lowest_voltage then
+        if self.v.LowestVoltage < config.bat_lowest_rescue then
+            self.rescue_charge = true
+            return true
+        elseif self.v.SOC < config.bat_SOC_min_rescue then
+            self.rescue_charge = true
+            return true
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage then
             return true
         elseif self.v.SOC <= config.bat_SOC_min then
             return true
         else
+            self.rescue_charge = false
             return false
         end
     end
     return nil
+end
+
+function AntBMS:rescueCharge()
+    return self.rescue_charge
 end
 
 function AntBMS:_printValuesNotProtected()

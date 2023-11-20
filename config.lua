@@ -30,10 +30,12 @@ exceed_factor = -0.15 -- shift the above values 10% down
 
 bat_SOC_min = 18 -- Percent
 bat_SOC_max = 100 -- Percent
+bat_SOC_min_rescue = 10 -- start rescue charge
 
 bat_hysteresis = 2
 
-bat_lowest_voltage = 2.89 -- lowest allowed voltage
+bat_lowest_voltage = 2.901 -- lowest allowed voltage
+bat_lowest_rescue = 2.801 -- start rescue charge
 bat_hightest_voltage = 3.53 -- lowest allowed voltage
 max_cell_diff = 0.100 -- maximum allowed cell diff
 

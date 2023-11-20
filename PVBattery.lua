@@ -90,11 +90,8 @@ function PVBattery:findBestInverter(req_power)
 	for i, inv in pairs(self.Inverter) do
 		local min_power = inv.inverter_min_power or math.huge
 		if min_power < req_power and min_power > avail_power then
-			util.printTime("xxxA" .. i)
 			if inv:readyToDischarge() then
-				util.printTime("xxxB" .. i)
 				if inv:getPowerState() ~= "on" then
-					util.printTime("xxxC" .. i)
 					pos = i
 					avail_power = min_power
 				end
@@ -130,6 +127,7 @@ function PVBattery:generateHTML(P_Grid, P_Load, P_PV)
 		{"_$SUNRISE", self.sunrise},
 		{"_$SUNSET", self.sunset},
 		{"_$FRONIUS_ADR", config.FRONIUS_ADR},
+		{"_$STATE_OF_OPERATION", self.state},
 		{"_$P_GRID", string.format("%7.2f", P_Grid)},
 		{"_$P_SELL_GRID", P_Grid < 0 and string.format("%7.2f", P_Grid) or "0.00"},
 		{"_$P_BUY_GRID", P_Grid > 0 and string.format("%7.2f", P_Grid) or "0.00"},
@@ -212,8 +210,11 @@ function PVBattery:main()
     date = os.date("*t")
     date.year = date.year - 1
 
+	-- state can be idle, lowBattery, lowSoc, highBattery, highSoc, charging, discharging
+	self.state = "idle"
+
     while true do
-		local skip = false
+		local skip_loop = false
         local short_sleep = nil -- a number here will shorten the sleep time
         local _start_time = util.getCurrentTime()
 
@@ -236,7 +237,6 @@ function PVBattery:main()
 		last_date.hour, last_date.min, last_date.sec)
 
 		util:log(date_string)
-		util.printTime(1)
 
         -- Do the sun set and rise calculations if necessary
         if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
@@ -253,8 +253,6 @@ function PVBattery:main()
             short_sleep = 1
         end
 
-		util.printTime(2)
-
         -- Update Fronius
         util:log("\n-------- Total Overview:")
         Fronius:getPowerFlowRealtimeData()
@@ -267,12 +265,9 @@ function PVBattery:main()
             P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         end
 
-		util.printTime(3)
-
-
 		if not P_Grid then
 			short_sleep = 1
-			skip = true
+			skip_loop = true
 		end
 
         util:log(string.format("Grid %8.2f W", P_Grid))
@@ -281,63 +276,67 @@ function PVBattery:main()
 
 --        util:log("\n-------- Battery status:")
 
-        if not skip then
+        if not skip_loop then
 			print("P_GRID", P_Grid)
 
-			util.printTime(4)
-
-			for _,charger in pairs(self.Charger) do
-				util.printTime(4 .. _)
-				if charger.BMS:isLowCharged() then
-					util.printTime(4 .. _ .. ":-)")
-					skip = true
-					charger:startCharge()
+			for _,inv in pairs(self.Inverter) do
+				if inv.BMS:isLowCharged() then
+					skip_loop = true
+					inv:stopDischarge()
+					self.state = "lowBattery"
 				end
-				util.printTime(4 .. _)
 			end
-			util.printTime(5)
+
+			if skip_loop then
+				for _,charger in pairs(self.Charger) do
+					if charger.BMS:isLowCharged() then
+						self.state = "lowBattery"
+					end
+					if charger.BMS:rescueCharge() then
+						charger:startCharge()
+					end
+				end
+			end
 		end
 
-		if not skip then
-			if P_Grid > 0 then
+		if not skip_loop then
+			if P_Grid > 0 and self.state ~= "lowBattery" then
 				if self:isCharging() then
 					short_sleep = 1
 					for _, chg in pairs(self.Charger) do
 						chg:stopCharge()
 					end
-					util.printTime(51)
+					self.state = "idle"
 				else
 					inverter_num, inverter_power = self:findBestInverter(P_Grid)
-					util.printTime(52)
 					print(inverter_num, inverter_power)
 					print("xxx activate inverter:", inverter_num)
 					if inverter_num > 0 then
 						self.Inverter[inverter_num]:startDischarge(P_Grid)
 						short_sleep = 10  -- inverters are slower than chargers
+						self.state = "discharging"
 					end
 				end
-			else
+			elseif P_Grid < 0 then
 				if self:isDischarging() then
 					short_sleep = 1
 					for _, inv in pairs(self.Inverter) do
 						inv:stopDischarge()
 					end
-				util.printTime(53)
+					self.state = "idle"
 				else
 					charger_num, charger_power = self:findBestCharger(-P_Grid)
 					print(charger_num, charger_power)
-					util.printTime(54)
 					print("xxx activate charger:", charger_num)
 					if charger_num > 0 then
 						self.Charger[charger_num]:startCharge()
 						short_sleep = 10  -- inverters are slower than chargers
 						print("switch: ", charger_num, " max_power", self.Charger[charger_num].Switch.max_power)
+						self.state = "charging"
 					end
 				end
 			end
-        end -- if skip
-
-		util.printTime(666)
+        end -- if skip__loop
 
 		for _, bms in pairs(self.BMS) do
 			bms:printValues()
@@ -345,6 +344,7 @@ function PVBattery:main()
 
         self:generateHTML(P_Grid, P_Load, P_PV)
 
+		print("new state", self.state)
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
 
         if short_sleep then
