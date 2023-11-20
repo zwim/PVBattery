@@ -4,22 +4,11 @@
 -- https://github.com/syssi/esphome-ant-bms
 -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
 
-
+local http = require("socket.http")
 local util = require("util")
-local ffi = require("ffi")
+local config = require("configuration")
 
-local SERIAL_PORT = "/dev/rfcomm0"
-
---- The libc functions used by this process.
-ffi.cdef[[
-  int open(const char* pathname, int flags);
-  int close(int fd);
-  int read(int fd, void* buf, size_t count);
-]]
-local O_NONBLOCK = 2048
-local chunk_size = 4096
-
-local buffer = ffi.new('uint8_t[?]',chunk_size)
+local READ_DATA_SIZE = 140
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -42,20 +31,12 @@ end
 ----------------------------------------------------------------
 
 local AntBMS = {
-    timeOfLastRequiredData = 0, -- no data yet
-    answer = {},
+    host = "",
     v = {},
-}
+    timeOfLastRequiredData = 0, -- no data yet
 
--- Todo honor self.validStatus
-function AntBMS:init()
-    local retval = os.execute("sh init_Ant_BMS.sh")
-    if retval ~= 0 then
-        self.validStatus = false
-        util:log("XXXXXXXXXXXXXXXXXX initialization error")
-    end
-    self.validStatus = true
-    self.MOSFETChargeStatusFlag = {
+    MOSFETChargeStatusFlag = {
+        [0] = "Off",
         "Open",
         "Overvoltage protection",
         "Over current protection",
@@ -71,10 +52,11 @@ function AntBMS:init()
         "Discharge tube abnormality",
         "14", -- 14
         "Manually closed",
-    }
-    self.MOSFETChargeStatusFlag[0] = "Off"
+    },
+--    MOSFETChargeStatusFlag[0] = "Off",
 
-    self.MOSFETDischargeStatusFlag = {
+    MOSFETDischargeStatusFlag = {
+        [0] = "Off",
         "Open",
         "Over discharge protection",
         "Over current protection",
@@ -90,10 +72,11 @@ function AntBMS:init()
         "Discharge tube abnormality",
         "Start exception",
         "Manually closed",
-    }
-    self.MOSFETDischargeStatusFlag[0] = "Off"
+    },
+--    MOSFETDischargeStatusFlag[0] = "Off",
 
-    self.BalancedStatusText = {
+    BalancedStatusText = {
+        [0] = "Off",
         "Exceeds the limit equilibrium",
         "Charge differential pressure balance",
         "Balanced over temperature",
@@ -109,8 +92,17 @@ function AntBMS:init()
         "13",
         "14",
         "15",
-    }
-    self.BalancedStatusText[0] = "Off"
+    },
+--    BalancedStatusText[0] = "Off",
+
+    answer = {},
+}
+
+function AntBMS:new(o)
+    o = o or {}   -- create object if user does not provide one
+    setmetatable(o, self)
+    self.__index = self
+    return o
 end
 
 function AntBMS:setAutoBalance(on)
@@ -124,6 +116,7 @@ function AntBMS:setAutoBalance(on)
 
     if not self.v.BalancedStatusText then
         util:log("xxxx error self.v.BalancedStatusText is nil")
+        return
     end
     if on then
         if string.find(string.lower(self.v.BalancedStatusText), "on") then
@@ -141,198 +134,60 @@ function AntBMS:setAutoBalance(on)
 end
 
 function AntBMS:toggleAutoBalance()
-    local serial_out
     local auto_balance = 252 -- adress of auto balance
     local write_data_hex = "A5A5".. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
 
-    self.answer = {}
-
     print("xxx setAutoBalance", os.date(), write_data_hex)
 
-    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
-    if fd <= 0 then
-        util:log("ERROR opening serial_in")
-        return -1
+    local url = string.format("http://" .. self.host .. "/balance.toggle")
+    self.body, self.code, self.headers, self.status = http.request(url)
+    if not self.body then
+        return false
     end
-
-    -- wait and read some existing(?) crap
-    util.sleep_time(0.1)
-    ffi.C.read(fd, buffer, chunk_size)
-
-    serial_out = io.open(SERIAL_PORT, "wb")
-    if not serial_out then
-        util:log("ERROR opening serial_out")
-        ffi.C.close(fd)
-        return
-    end
-    serial_out:write(util.HexToNum(write_data_hex))
-    serial_out:flush()
-
-    while true do
-        util.sleep_time(0.25)
-        local nbytes = ffi.C.read(fd, buffer, chunk_size)
-
-        print("nbytes=", nbytes)
-        if nbytes <= 0 then
-            break
-        end
-
-        for i = 0, nbytes-1 do
-            table.insert(self.answer, buffer[i])
-        end
-    end
-
-    serial_out:close()
-    ffi.C.close(fd)
-
-    for i = 1, #self.answer do
-        print("xxx", string.format("x%02x", self.answer[i]))
-    end
-end
-
-function AntBMS:reboot()
-    local serial_out
-    local reboot = 254 -- adress of auto balance
-    local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
 
     self.answer = {}
-
-    print("xxx setAutoBalance", write_data_hex)
-
-    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
-    if fd <= 0 then
-        util:log("ERROR opening serial_in")
-        return -1
+    for n = 1, #self.body do
+        table.insert(self.answer, self.body:byte(n))
     end
 
-    -- wait and read some existing(?) crap
-    util.sleep_time(0.1)
-    ffi.C.read(fd, buffer, chunk_size)
-
-    serial_out = io.open(SERIAL_PORT, "wb")
-    if not serial_out then
-        util:log("ERROR opening serial_out")
-        ffi.C.close(fd)
-        return
-    end
-    serial_out:write(util.HexToNum(write_data_hex))
-    serial_out:flush()
-
-    while true do
-        util.sleep_time(0.25)
-        local nbytes = ffi.C.read(fd, buffer, chunk_size)
-
-        print("nbytes=", nbytes)
-        if nbytes <= 0 then
-            break
-        end
-
-        for i = 0, nbytes-1 do
-            table.insert(self.answer, buffer[i])
-        end
-    end
-
-    serial_out:close()
-    ffi.C.close(fd)
 
     for i = 1, #self.answer do
         print("xxx", string.format("x%02x", self.answer[i]))
     end
+    return #self.answer
 end
 
 function AntBMS:readAutoBalance()
-    local serial_out
     local auto_balance = 252 -- adress of auto balance
-
     local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
-
-    self.answer = {}
-
     print("xxx ReadAutoBalance", read_data_hex)
 
-    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
-    if fd <= 0 then
-        util:log("ERROR opening serial_in")
-        return -1
+    local url = string.format("http://" .. self.host .. "/balance.read")
+    self.body, self.code, self.headers, self.status = http.request(url)
+    if not self.body then
+        return false
     end
 
-    -- wait and read some existing(?) crap
-    util.sleep_time(0.1)
-    ffi.C.read(fd, buffer, chunk_size)
 
-    serial_out = io.open(SERIAL_PORT, "wb")
-    if not serial_out then
-        util:log("ERROR opening serial_out")
-        ffi.C.close(fd)
-        return
-    end
-    serial_out:write(util.HexToNum(read_data_hex))
-    serial_out:flush()
-
-    while true do
-        util.sleep_time(0.25)
-        local nbytes = ffi.C.read(fd, buffer, chunk_size)
-
-        print("nbytes=", nbytes)
-        if nbytes <= 0 then
-            break
-        end
-
-        for i = 0, nbytes-1 do
-            table.insert(self.answer, buffer[i])
-        end
+    self.answer = {}
+    for n = 1, #self.body do
+        table.insert(self.answer, self.body:byte(n))
     end
 
-    serial_out:close()
-    ffi.C.close(fd)
-
-    for i = 1, #self.answer do
-        print("xxx", string.format("x%02x", self.answer[i]))
-    end
-
+    return #self.answer
 end
 
-function AntBMS:_readData()
-    local serial_out
-    local request_hex = "DBDB00000000"
+function AntBMS:reboot()
+    local reboot = 254 -- adress of reboot
+    local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
+    print("xxx write reboot", write_data_hex)
 
-    local fd = ffi.C.open(SERIAL_PORT, O_NONBLOCK)
-    if fd <= 0 then
-        util:log("ERROR opening serial_in")
-        return -1
-    end
-
-    -- wait and read some existing(?) crap
-    util.sleep_time(0.1)
-    ffi.C.read(fd, buffer, chunk_size)
-
-    serial_out = io.open(SERIAL_PORT, "wb")
-    if not serial_out then
-        util:log("ERROR opening serial_out")
-        ffi.C.close(fd)
-        return
-    end
-    serial_out:write(util.HexToNum(request_hex))
-    serial_out:flush()
-
-    while true do
-        util.sleep_time(0.25)
-        local nbytes = ffi.C.read(fd, buffer, chunk_size)
-
---        print("nbytes=", nbytes)
-        if nbytes <= 0 then
-            ffi.C.close(fd)
-            return false
-        end
-
-        for i = 0, nbytes-1 do
-            table.insert(self.answer, buffer[i])
-        end
-    end
+    local url = string.format("http://" .. self.host .. "/reboot")
+    self.body, self.code, self.headers, self.status = http.request(url)
 end
 
 function AntBMS:isChecksumOk()
-    if #self.answer < 140 then
+    if #self.answer < READ_DATA_SIZE then
         return false
     end
 
@@ -340,12 +195,12 @@ function AntBMS:isChecksumOk()
     -- We leaf the loop if checksum is OK or if there is to less data
     while true do
         -- delete leading bytes until 0xAA55AAFF
-        while getInt32(self.answer, 0) ~= 0xAA55AAFF and #self.answer >= 140 do
+        while getInt32(self.answer, 0) ~= 0xAA55AAFF and #self.answer >= READ_DATA_SIZE do
             table.remove(self.answer, 1)
         end
 
         -- bail out if to less data left, after cleaning
-        if #self.answer < 140 then
+        if #self.answer < READ_DATA_SIZE then
             util:log("to less data")
             break
         end
@@ -371,8 +226,11 @@ end
 
 -- This is the usual way of reading new parameters
 function AntBMS:evaluateParameters()
+    if not self.host or self.host == "" then
+        return false
+    end
     -- Require Data only, if the last require was at least a second ago
-    if self:getDataAge() < 1 then -- todo make this configurable
+    if self:getDataAge() < config.update_interval then
         return true
     end
 
@@ -381,8 +239,17 @@ function AntBMS:evaluateParameters()
 
     local checksum = false
     local retries = 10
-    while #self.answer < 140 and retries > 0 do
-        self:_readData()
+    while #self.answer < READ_DATA_SIZE and retries > 0 do
+        local url = string.format("http://" .. self.host .. "/bms.data")
+        self.body, self.code, self.headers, self.status = http.request(url)
+        if not self.body then
+            return false
+        end
+        self.answer = {}
+        for n = 1, #self.body do
+            table.insert(self.answer, self.body:byte(n))
+        end
+
         checksum = self:isChecksumOk()
         if checksum then
             break
@@ -480,35 +347,78 @@ function AntBMS:evaluateParameters()
     return true
 end
 
-function AntBMS:getSOC()
-    -- Require SOC at mostly 1 time per minute
-    if self:getDataAge() > 60 or not self.v.SOC then
-        self:evaluateParameters()
-    end
-    self.v.CalculatedSOC = self.v.CalculatedSOC or 50
-    return self.v.SOC or 50
-end
-
 function AntBMS:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
 function AntBMS:printValues()
+    self:evaluateParameters()
     local success, err = pcall(self._printValuesNotProtected, self)
     if not success then
         util:log("BMS reported no values; Error: ", tostring(err))
     end
 end
 
-function AntBMS:_printValuesNotProtected()
+function AntBMS:readyToCharge()
     self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.CellDiff > config.max_cell_diff then
+            self:setAutoBalance(true)
+            return false
+        elseif self.v.HighestVoltage > config.bat_highest_voltage then
+            self:setAutoBalance(true)
+            return false
+        elseif self.v.SOC > config.bat_SOC_max then
+            self:setAutoBalance(true)
+            return false
+        else
+            return true
+        end
+    end
+    return nil
+end
 
+function AntBMS:readyToDischarge()
+    util.printTime("x1")
+    self:evaluateParameters()
+    util.printTime("x1")
+    if self.v.CellDiff then
+        if self.v.CellDiff > config.max_cell_diff then
+            self:setAutoBalance(true)
+            return false
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage then
+            return false
+        elseif self.v.SOC <= config.bat_SOC_min + config.bat_hysteresis then
+            return false
+        else
+            return true
+        end
+    end
+    return nil
+end
+
+function AntBMS:isLowCharged()
+    self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.LowestVoltage < config.bat_lowest_voltage then
+            return true
+        elseif self.v.SOC <= config.bat_SOC_min then
+            return true
+        else
+            return false
+        end
+    end
+    return nil
+end
+
+function AntBMS:_printValuesNotProtected()
     if not next(self.v) then -- check if table self.v is empty!
         util:log("No values decoded yet!")
         return false
     end
 
-    util:log(string.format("SOC = %3d%%", self:getSOC()))
+    util:log(string.format("BMS: %s", self.host))
+    util:log(string.format("SOC = %3d%%", self.v.SOC))
     util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
 
     local charging_text = ""
@@ -559,43 +469,6 @@ function AntBMS:_printValuesNotProtected()
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
     return true
-end
-
-AntBMS:init()
-
-AntBMS:evaluateParameters()
-
-local help_string = [[
-This module provides methods to control an ANT-BMS (version before 2021; the "old one").
-
-When this module is called with parameters, certain functions of the ANT-BMS can be executed.
-
-usage: lua antbms.lua [command]
-    command can be:
-        show      ... shows current BMS values
-        balon     ... turns auto balance on
-        baloff    ... turns auto balance off
-        baltoggle ... toggles auto balance
-        reboot    ... reboot bms
-]]
-
--- Show initial values
-local command = arg[1] and string.lower(arg[1])
-if command and string.find(command, "help") then
-    print(help_string)
-elseif command and string.find(command, "show") then
-    AntBMS:printValues()
-elseif command and string.find(command, "balon") then
-    AntBMS:setAutoBalance(true)
-elseif command and string.find(command, "baloff") then
-    AntBMS:setAutoBalance(false)
-elseif command and string.find(command, "baltog") then
-    AntBMS:toggleAutoBalance()
-elseif command and string.find(command, "reboot") then
-    AntBMS:reboot()
-elseif command then
-    print(help_string)
-    print("Wrong argument: " .. command)
 end
 
 return AntBMS

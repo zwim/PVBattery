@@ -76,7 +76,18 @@ function util.numToBits(num, nb)
     return bits, table.concat(bits)
 end
 
+function util.printTime(str)
+    local date = os.date("*t")
+
+	local date_time_string = string.format("%d/%d/%d-%02d:%02d:%02d",
+		date.year, date.month, date.day, date.hour, date.min, date.sec)
+
+    print("Zeitstempel: " .. str .. "----" .. date_time_string)
+end
+
+
 function util.sleep_time(time)
+    if time <= 0 then return end
     local sec = math.floor(time)
     local nsec = (time - sec) * 1e9
     posix.time.nanosleep({tv_sec = sec, tv_nsec = nsec})
@@ -109,7 +120,17 @@ function util:cleanLogs()
     else
         print("todo log file compression") -- todos
     end
+end
 
+function util.hourToTime(h)
+    local hour, min, sec
+
+    hour = math.floor(h)
+    h = (h - hour) * 60
+    min = math.floor(h)
+    h = (h - min) * 60
+    sec = math.floor(h + 0.5)
+    return hour, min, sec
 end
 
 return util
