@@ -89,7 +89,7 @@ function PVBattery:findBestInverter(req_power)
 
 	for i, inv in pairs(self.Inverter) do
 		local min_power = inv.inverter_min_power or math.huge
-		if min_power < req_power and min_power > avail_power then
+		if min_power < req_power and min_power > avail_power then<<<<<<< HEAD
 			if inv:readyToDischarge() then
 				if inv:getPowerState() ~= "on" then
 					pos = i
