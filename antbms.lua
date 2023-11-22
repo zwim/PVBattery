@@ -113,7 +113,8 @@ function AntBMS:setAutoBalance(on)
 
     self:evaluateParameters()
 
-    util:log("Balancer status was", self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
+    util:log("Balancer status was ",
+        self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
 
     if not self.v.BalancedStatusText then
         util:log("xxxx error self.v.BalancedStatusText is nil")
@@ -136,11 +137,12 @@ end
 
 function AntBMS:toggleAutoBalance()
     local auto_balance = 252 -- adress of auto balance
-    local write_data_hex = "A5A5".. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
+    local write_data_hex = "A5A5".. string.format("%02x", auto_balance) .. "00"
+        .. "00" .. string.format("%02x", auto_balance)
 
     print("xxx setAutoBalance", os.date(), write_data_hex)
 
-    local url = string.format("http://" .. self.host .. "/balance.toggle")
+    local url = string.format("http://%s/balance.toggle", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
@@ -160,10 +162,11 @@ end
 
 function AntBMS:readAutoBalance()
     local auto_balance = 252 -- adress of auto balance
-    local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
+    local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00"
+        .. "00" .. string.format("%02x", auto_balance)
     print("xxx ReadAutoBalance", read_data_hex)
 
-    local url = string.format("http://" .. self.host .. "/balance.read")
+    local url = string.format("http://%s/balance.read", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
@@ -183,8 +186,14 @@ function AntBMS:reboot()
     local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
     print("xxx write reboot", write_data_hex)
 
-    local url = string.format("http://" .. self.host .. "/reboot")
+    local url = string.format("http://%s/reboot", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
+end
+
+function AntBMS:setPower(power)
+    -- we may use `http://ip.ip.ip.ip/set?power=<value>` here
+    local url = string.format("http://%s/set?power=%d", self.host, power)
+self.body, self.code, self.headers, self.status = http.request(url)
 end
 
 function AntBMS:isChecksumOk()
@@ -241,7 +250,7 @@ function AntBMS:evaluateParameters()
     local checksum = false
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
-        local url = string.format("http://" .. self.host .. "/bms.data")
+        local url = string.format("http://%s/bms.data", self.host)
         self.body, self.code, self.headers, self.status = http.request(url)
         if not self.body then
             return false
@@ -339,8 +348,8 @@ function AntBMS:evaluateParameters()
 
     self.v.BalancingFlags = getInt32(self.answer, 132)
 
-    local _
-    _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
+    local _ -- _ is a table of the bits ;-)
+    _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries)
 
     self.answer = {} -- clear old received bytes
     self.timeOfLastRequiredData = util.getCurrentTime()
@@ -360,6 +369,7 @@ function AntBMS:printValues()
     end
 end
 
+-- Todo: RescueDischarge ????
 function AntBMS:readyToCharge()
     self:evaluateParameters()
     if self.v.CellDiff then
@@ -386,17 +396,19 @@ function AntBMS:readyToDischarge()
             self:setAutoBalance(true)
             return false
         elseif self.v.LowestVoltage < config.bat_lowest_voltage then
+            self.rescue_charge = true
             return false
         elseif self.v.SOC <= config.bat_SOC_min + config.bat_hysteresis then
             return false
         else
+            self.rescue_charge = false
             return true
         end
     end
     return nil
 end
 
-function AntBMS:isLowCharged()
+function AntBMS:isLowChargedOrNeedsRescue()
     self:evaluateParameters()
     if self.v.CellDiff then
         if self.v.LowestVoltage < config.bat_lowest_rescue then
@@ -417,7 +429,7 @@ function AntBMS:isLowCharged()
     return nil
 end
 
-function AntBMS:rescueCharge()
+function AntBMS:requestRescueCharge()
     return self.rescue_charge
 end
 
@@ -474,7 +486,8 @@ function AntBMS:_printValuesNotProtected()
 
     util:log("Temperatures:")
     for i = 1,6,2 do
-        util:log(string.format("[%d] = %3d°C", i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
+        util:log(string.format("[%d] = %3d°C",
+            i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
     end
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))

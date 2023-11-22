@@ -3,9 +3,11 @@
 local Switch = require("switch")
 local AntBMS = require("antbms")
 
+local util = require("util")
+
 local Inverter = {
-    inverter_host == "",
     skip = false,
+    inverter_host = "",
     bms_host = "",
     Switch = nil,
     dynamic_load = false,
@@ -29,16 +31,21 @@ function Inverter:new(o)
 end
 
 function Inverter:startDischarge(req_power)
+    if self.skip then return end
+
     if self.BMS:readyToDischarge() then
+        self.BMS:setPower(req_power)
+        util.sleep_time(5)
         self.Switch:toggle("on")
-        -- todo xxxx add rs485 here
     end
 end
 
 function Inverter:stopDischarge()
-    if not self.skip then
-        self.Switch:toggle("off")
-    end
+    if self.skip then return end
+
+    self.BMS:setPower(0)
+    util.sleep_time(5)
+    self.Switch:toggle("off")
 end
 
 function Inverter:getCurrentPower()
@@ -50,9 +57,8 @@ function Inverter:getPowerState()
 end
 
 function Inverter:readyToDischarge()
-    if self.skip then
-        return true
-    end
+    if self.skip then return true end
+
     local ready = self.BMS:readyToDischarge()
     if ready == false then
         self:stopDischarge()

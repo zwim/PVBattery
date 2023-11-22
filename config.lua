@@ -6,6 +6,9 @@
 
 -- config_file_name = "config.lua"
 
+-- The globals here are locals after ``chunk, err = loadfile(file, "t", configuration)` so:
+-- luacheck: ignore 111
+
 log_file_name = "/var/log/PVBattery.log"
 
 host = "battery-control.lan"

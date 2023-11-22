@@ -16,8 +16,6 @@ local configuration = {
     config_file_name = "config.lua", -- load this file
 
     host = "battery-control.lan",
-    html_main = "/var/www/localhost/htdocs/index.html",
-    html_battery = "/var/www/localhost/htdocs/battery.html",
 
     position = {
         name = "Kirchbichl",
