@@ -6,7 +6,6 @@ local json = require ("dkjson")
 local config = require("configuration")
 local util = require("util")
 
-
 local decode_unchecked = json.decode
 function json.decode(data)
     if data then
@@ -58,7 +57,8 @@ function Switch:getEnergyTotal()
         return (0/0)
     end
 
-    local Energy = self.decoded and self.decoded.StatusSNS and self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Total or (0/0)
+    local Energy = self.decoded and self.decoded.StatusSNS and
+        self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Total or (0/0)
     return Energy
 end
 
@@ -67,7 +67,8 @@ function Switch:getEnergyToday()
         return (0/0)
     end
 
-    local Energy = self.decoded and self.decoded.StatusSNS and self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Today or (0/0)
+    local Energy = self.decoded and self.decoded.StatusSNS and
+        self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Today or (0/0)
     return Energy
 end
 
@@ -76,7 +77,8 @@ function Switch:getEnergyYesterday()
         return (0/0)
     end
 
-    local Energy = self.decoded and self.decoded.StatusSNS and self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Yesterday or (0/0)
+    local Energy = self.decoded and self.decoded.StatusSNS and
+        self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Yesterday or (0/0)
     return Energy
 end
 
@@ -85,9 +87,10 @@ function Switch:getPower()
         return (0/0)
     end
 
-    local Power = self.decoded and self.decoded.StatusSNS and self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Power or (0/0)
+    local Power = self.decoded and self.decoded.StatusSNS and
+        self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Power or (0/0)
 
-    if Power then
+    if Power and Power > 50 then
         local weight = 0.1
         self.max_power = self.max_power * ( 1 - weight) + Power * weight
     end
@@ -111,7 +114,7 @@ function Switch:getPowerState()
     end
 
     self.power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
-    util:log(self.power_state)
+--    util:log(self.power_state)
     if self.power_state == 0 then
         return "off"
     elseif self.power_state == 1 then

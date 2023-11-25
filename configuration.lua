@@ -16,8 +16,6 @@ local configuration = {
     config_file_name = "config.lua", -- load this file
 
     host = "battery-control.lan",
-    html_main = "/var/www/localhost/htdocs/index.html",
-    html_battery = "/var/www/localhost/htdocs/battery.html",
 
     position = {
         name = "Kirchbichl",
@@ -40,6 +38,7 @@ local configuration = {
     bat_SOC_max = 90, -- Percent
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
+    max_cell_diff = 0.100,
 
     bat_hysteresis = 2,
 

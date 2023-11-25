@@ -9,6 +9,8 @@ local util = require("util")
 local config = require("configuration")
 
 local READ_DATA_SIZE = 140
+local ESP32_HARD_RESET_COMMAND =
+    "esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -96,6 +98,7 @@ local AntBMS = {
 --    BalancedStatusText[0] = "Off",
 
     answer = {},
+    rescue_charge = false, -- flag if battery is to low
 }
 
 function AntBMS:new(o)
@@ -110,9 +113,12 @@ function AntBMS:setAutoBalance(on)
         on = true
     end
 
+    self:clearDataAge()
     self:evaluateParameters()
+    self:clearDataAge()
 
-    util:log("Balancer status was", self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
+    util:log("Balancer status was ",
+        self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
 
     if not self.v.BalancedStatusText then
         util:log("xxxx error self.v.BalancedStatusText is nil")
@@ -134,47 +140,21 @@ function AntBMS:setAutoBalance(on)
 end
 
 function AntBMS:toggleAutoBalance()
-    local auto_balance = 252 -- adress of auto balance
-    local write_data_hex = "A5A5".. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
-
-    print("xxx setAutoBalance", os.date(), write_data_hex)
-
-    local url = string.format("http://" .. self.host .. "/balance.toggle")
+    local url = string.format("http://%s/balance.toggle", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
     end
 
-    self.answer = {}
-    for n = 1, #self.body do
-        table.insert(self.answer, self.body:byte(n))
-    end
-
-
-    for i = 1, #self.answer do
-        print("xxx", string.format("x%02x", self.answer[i]))
-    end
-    return #self.answer
 end
 
 function AntBMS:readAutoBalance()
-    local auto_balance = 252 -- adress of auto balance
-    local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00" .. "00" .. string.format("%02x", auto_balance)
-    print("xxx ReadAutoBalance", read_data_hex)
-
-    local url = string.format("http://" .. self.host .. "/balance.read")
+    print("readAutoBalance not implemented yet")
+    local url = string.format("http://%s/balance.read", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
     end
-
-
-    self.answer = {}
-    for n = 1, #self.body do
-        table.insert(self.answer, self.body:byte(n))
-    end
-
-    return #self.answer
 end
 
 function AntBMS:reboot()
@@ -182,8 +162,14 @@ function AntBMS:reboot()
     local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
     print("xxx write reboot", write_data_hex)
 
-    local url = string.format("http://" .. self.host .. "/reboot")
+    local url = string.format("http://%s/reboot", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
+end
+
+function AntBMS:setPower(power)
+    -- we may use `http://ip.ip.ip.ip/set?power=<value>` here
+    local url = string.format("http://%s/set?power=%d", self.host, power)
+self.body, self.code, self.headers, self.status = http.request(url)
 end
 
 function AntBMS:isChecksumOk()
@@ -240,9 +226,11 @@ function AntBMS:evaluateParameters()
     local checksum = false
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
-        local url = string.format("http://" .. self.host .. "/bms.data")
+        local url = string.format("http://%s/bms.data", self.host)
         self.body, self.code, self.headers, self.status = http.request(url)
         if not self.body then
+            -- maybe the BMS has lost internet connection, so reset the ESP32
+            os.execute(ESP32_HARD_RESET_COMMAND)
             return false
         end
         self.answer = {}
@@ -338,8 +326,8 @@ function AntBMS:evaluateParameters()
 
     self.v.BalancingFlags = getInt32(self.answer, 132)
 
-    local _
-    _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries) -- _ is a table of the bits ;-)
+    local _ -- _ is a table of the bits ;-)
+    _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries)
 
     self.answer = {} -- clear old received bytes
     self.timeOfLastRequiredData = util.getCurrentTime()
@@ -351,6 +339,10 @@ function AntBMS:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
+function AntBMS:clearDataAge()
+    self.timeOfLastRequiredData = 0
+end
+
 function AntBMS:printValues()
     self:evaluateParameters()
     local success, err = pcall(self._printValuesNotProtected, self)
@@ -359,16 +351,17 @@ function AntBMS:printValues()
     end
 end
 
+-- Todo: RescueDischarge ????
 function AntBMS:readyToCharge()
     self:evaluateParameters()
     if self.v.CellDiff then
-        if self.v.CellDiff > config.max_cell_diff then
+        if self.v.CellDiff >= config.max_cell_diff then
             self:setAutoBalance(true)
             return false
-        elseif self.v.HighestVoltage > config.bat_highest_voltage then
+        elseif self.v.HighestVoltage >= config.bat_highest_voltage then
             self:setAutoBalance(true)
             return false
-        elseif self.v.SOC > config.bat_SOC_max then
+        elseif self.v.SOC >= config.bat_SOC_max then
             self:setAutoBalance(true)
             return false
         else
@@ -379,33 +372,64 @@ function AntBMS:readyToCharge()
 end
 
 function AntBMS:readyToDischarge()
-    util.printTime("x1")
     self:evaluateParameters()
-    util.printTime("x1")
     if self.v.CellDiff then
         if self.v.CellDiff > config.max_cell_diff then
             self:setAutoBalance(true)
             return false
         elseif self.v.LowestVoltage < config.bat_lowest_voltage then
+            self.rescue_charge = true
             return false
         elseif self.v.SOC <= config.bat_SOC_min + config.bat_hysteresis then
             return false
         else
+            self.rescue_charge = false
             return true
         end
     end
     return nil
 end
 
-function AntBMS:isLowCharged()
+function AntBMS:isLowChargedOrNeedsRescue()
     self:evaluateParameters()
     if self.v.CellDiff then
-        if self.v.LowestVoltage < config.bat_lowest_voltage then
+        if self.v.LowestVoltage < config.bat_lowest_rescue then
+            self.rescue_charge = true
+            return true
+        elseif self.v.SOC < config.bat_SOC_min_rescue then
+            self.rescue_charge = true
+            return true
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage then
             return true
         elseif self.v.SOC <= config.bat_SOC_min then
             return true
         else
+            self.rescue_charge = false
             return false
+        end
+    end
+    return nil
+end
+
+function AntBMS:requestRescueCharge()
+    return self.rescue_charge
+end
+
+function AntBMS:recoverFromRescueCharge()
+    if not self.rescue_charge then
+        return
+    end
+
+    self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.LowestVoltage > config.bat_lowest_rescue
+            and self.v.LowestVoltage > config.bat_lowest_voltage
+            and self.v.SOC >= config.bat_SOC_min_rescue
+            and self.v.SOC >= config.bat_SOC_min then
+                self.rescue_charge = false
+                return true
+        else
+                return false
         end
     end
     return nil
@@ -464,7 +488,8 @@ function AntBMS:_printValuesNotProtected()
 
     util:log("Temperatures:")
     for i = 1,6,2 do
-        util:log(string.format("[%d] = %3d°C", i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
+        util:log(string.format("[%d] = %3d°C",
+            i, self.v.Temperature[i]), string.format("%d = %3d°C", i, self.v.Temperature[i+1]))
     end
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
