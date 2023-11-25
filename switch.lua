@@ -90,7 +90,7 @@ function Switch:getPower()
     local Power = self.decoded and self.decoded.StatusSNS and
         self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Power or (0/0)
 
-    if Power then
+    if Power and Power > 50 then
         local weight = 0.1
         self.max_power = self.max_power * ( 1 - weight) + Power * weight
     end
@@ -114,7 +114,7 @@ function Switch:getPowerState()
     end
 
     self.power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
-    util:log(self.power_state)
+--    util:log(self.power_state)
     if self.power_state == 0 then
         return "off"
     elseif self.power_state == 1 then

@@ -38,6 +38,7 @@ local configuration = {
     bat_SOC_max = 90, -- Percent
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
+    max_cell_diff = 0.100,
 
     bat_hysteresis = 2,
 

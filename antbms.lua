@@ -9,6 +9,8 @@ local util = require("util")
 local config = require("configuration")
 
 local READ_DATA_SIZE = 140
+local ESP32_HARD_RESET_COMMAND =
+    "esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -111,7 +113,9 @@ function AntBMS:setAutoBalance(on)
         on = true
     end
 
+    self:clearDataAge()
     self:evaluateParameters()
+    self:clearDataAge()
 
     util:log("Balancer status was ",
         self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
@@ -136,49 +140,21 @@ function AntBMS:setAutoBalance(on)
 end
 
 function AntBMS:toggleAutoBalance()
-    local auto_balance = 252 -- adress of auto balance
-    local write_data_hex = "A5A5".. string.format("%02x", auto_balance) .. "00"
-        .. "00" .. string.format("%02x", auto_balance)
-
-    print("xxx setAutoBalance", os.date(), write_data_hex)
-
     local url = string.format("http://%s/balance.toggle", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
     end
 
-    self.answer = {}
-    for n = 1, #self.body do
-        table.insert(self.answer, self.body:byte(n))
-    end
-
-
-    for i = 1, #self.answer do
-        print("xxx", string.format("x%02x", self.answer[i]))
-    end
-    return #self.answer
 end
 
 function AntBMS:readAutoBalance()
-    local auto_balance = 252 -- adress of auto balance
-    local read_data_hex = "5A5A" .. string.format("%02x", auto_balance) .. "00"
-        .. "00" .. string.format("%02x", auto_balance)
-    print("xxx ReadAutoBalance", read_data_hex)
-
+    print("readAutoBalance not implemented yet")
     local url = string.format("http://%s/balance.read", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
         return false
     end
-
-
-    self.answer = {}
-    for n = 1, #self.body do
-        table.insert(self.answer, self.body:byte(n))
-    end
-
-    return #self.answer
 end
 
 function AntBMS:reboot()
@@ -253,6 +229,8 @@ function AntBMS:evaluateParameters()
         local url = string.format("http://%s/bms.data", self.host)
         self.body, self.code, self.headers, self.status = http.request(url)
         if not self.body then
+            -- maybe the BMS has lost internet connection, so reset the ESP32
+            os.execute(ESP32_HARD_RESET_COMMAND)
             return false
         end
         self.answer = {}
@@ -361,6 +339,10 @@ function AntBMS:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
+function AntBMS:clearDataAge()
+    self.timeOfLastRequiredData = 0
+end
+
 function AntBMS:printValues()
     self:evaluateParameters()
     local success, err = pcall(self._printValuesNotProtected, self)
@@ -373,13 +355,13 @@ end
 function AntBMS:readyToCharge()
     self:evaluateParameters()
     if self.v.CellDiff then
-        if self.v.CellDiff > config.max_cell_diff then
+        if self.v.CellDiff >= config.max_cell_diff then
             self:setAutoBalance(true)
             return false
-        elseif self.v.HighestVoltage > config.bat_highest_voltage then
+        elseif self.v.HighestVoltage >= config.bat_highest_voltage then
             self:setAutoBalance(true)
             return false
-        elseif self.v.SOC > config.bat_SOC_max then
+        elseif self.v.SOC >= config.bat_SOC_max then
             self:setAutoBalance(true)
             return false
         else
@@ -431,6 +413,26 @@ end
 
 function AntBMS:requestRescueCharge()
     return self.rescue_charge
+end
+
+function AntBMS:recoverFromRescueCharge()
+    if not self.rescue_charge then
+        return
+    end
+
+    self:evaluateParameters()
+    if self.v.CellDiff then
+        if self.v.LowestVoltage > config.bat_lowest_rescue
+            and self.v.LowestVoltage > config.bat_lowest_voltage
+            and self.v.SOC >= config.bat_SOC_min_rescue
+            and self.v.SOC >= config.bat_SOC_min then
+                self.rescue_charge = false
+                return true
+        else
+                return false
+        end
+    end
+    return nil
 end
 
 function AntBMS:_printValuesNotProtected()

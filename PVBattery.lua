@@ -53,7 +53,7 @@ function PVBattery:init()
 		local inv = InverterClass:new {
 			inverter_host = config.Device[i].inverter_switch,
 			inverter_min_power = config.Device[i].inverter_min_power,
-			skip = config.Device[i].inverter_skip,
+			skip = config.Device[i].skip,
 			BMS = BMS,
 		}
 		table.insert(self.Inverter, inv)
@@ -158,7 +158,7 @@ end
 
 function PVBattery:isDischarging()
 	for _, inverter in pairs(self.Inverter) do
-		if not inverter.inverter_skip and inverter:getPowerState() == "on" then
+		if not inverter.skip and inverter:getPowerState() == "on" then
 			return true
 		end
 	end
@@ -197,6 +197,7 @@ function PVBattery:main()
 		last_date.hour, last_date.min, last_date.sec)
 
 		util:log(date_string)
+--		print(date_string)
 
         -- Do the sun set and rise calculations if necessary
         if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
@@ -249,6 +250,20 @@ function PVBattery:main()
 					if charger.BMS:requestRescueCharge() then
 						charger:startCharge()
 					end
+					if charger.BMS:recoverFromRescueCharge() then
+						-- We come here if state == lowBattery and recoverFromRescueCharge()
+						charger.BMS:stopCharge()
+						self:isStateIdle(true)
+						skip_loop = true
+					end
+				end
+			end
+
+			for _,bms in pairs(self.BMS) do
+				bms:evaluateParameters()
+				if bms.v.Current and bms.v.Current < 0.99 then
+					bms:readyToCharge() -- do balancing if necessary
+					print("autobalance ???")
 				end
 			end
 		end
@@ -259,11 +274,11 @@ function PVBattery:main()
 					short_sleep = 5
 					for _, chg in pairs(self.Charger) do
 						chg:stopCharge()
+						self:isStateIdle(true)
 					end
-					self:isStateIdle(true)
 				else
 					inverter_num, inverter_power = self:findBestInverter(P_Grid)
-					print("xxx activate inverter:", inverter_num, inverter_power)
+--					print("xxx activate additional inverter:", inverter_num, inverter_power)
 					util:log(string.format("Activate inverter: %s with %5.2f W",
 							inverter_num, inverter_power))
 					if inverter_num > 0 then
@@ -277,11 +292,11 @@ function PVBattery:main()
 					short_sleep = 5
 					for _, inv in pairs(self.Inverter) do
 						inv:stopDischarge()
+						self:isStateIdle(true)
 					end
-					self:isStateIdle(true)
 				else
 					charger_num, charger_power = self:findBestCharger(-P_Grid)
-					print("xxx activate Charger:", charger_num, charger_power)
+--					print("xxx activate additional charger:", charger_num, charger_power)
 					util:log(string.format("Activate charger: %s with %5.2f W",
 							charger_num, charger_power))
 					if charger_num > 0 then
