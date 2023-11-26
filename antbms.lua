@@ -230,7 +230,9 @@ function AntBMS:evaluateParameters()
         self.body, self.code, self.headers, self.status = http.request(url)
         if not self.body then
             -- maybe the BMS has lost internet connection, so reset the ESP32
-            os.execute(ESP32_HARD_RESET_COMMAND)
+            -- no need any more, as bsm will reset itself now.
+            --os.execute(ESP32_HARD_RESET_COMMAND)
+
             return false
         end
         self.answer = {}

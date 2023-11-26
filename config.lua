@@ -48,7 +48,7 @@ sleep_time = 15 -- seconds to sleep per iteration
 
 update_interval = 10 -- oldage time
 
-guard_time = 5 * 60 -- every 5 minutes
+guard_time = 1 * 60 -- every minute
 
 FRONIUS_ADR = "192.168.0.49"
 

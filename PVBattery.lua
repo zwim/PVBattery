@@ -278,10 +278,10 @@ function PVBattery:main()
 					end
 				else
 					inverter_num, inverter_power = self:findBestInverter(P_Grid)
---					print("xxx activate additional inverter:", inverter_num, inverter_power)
-					util:log(string.format("Activate inverter: %s with %5.2f W",
-							inverter_num, inverter_power))
 					if inverter_num > 0 then
+--						print("xxx activate additional inverter:", inverter_num, inverter_power)
+						util:log(string.format("Activate inverter: %s with %5.2f W",
+								inverter_num, inverter_power))
 						self.Inverter[inverter_num]:startDischarge(P_Grid)
 						short_sleep = 10  -- inverters are slower than chargers
 						self:isStateDischarging()
@@ -296,10 +296,10 @@ function PVBattery:main()
 					end
 				else
 					charger_num, charger_power = self:findBestCharger(-P_Grid)
---					print("xxx activate additional charger:", charger_num, charger_power)
-					util:log(string.format("Activate charger: %s with %5.2f W",
-							charger_num, charger_power))
 					if charger_num > 0 then
+--						print("xxx activate additional charger:", charger_num, charger_power)
+						util:log(string.format("Activate charger: %s with %5.2f W",
+								charger_num, charger_power))
 						self.Charger[charger_num]:startCharge()
 						short_sleep = 10  -- inverters are slower than chargers
 						self:isStateCharging(true)

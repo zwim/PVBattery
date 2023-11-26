@@ -40,6 +40,7 @@ local function readConfig()
     return false
 end
 
+--[[
 while true do
     local old_guard_time = config.guard_time
     readConfig()
@@ -69,4 +70,14 @@ while true do
     end
 
     util.sleep_time(config.guard_time or 5*60)
+end
+]]
+
+while true do
+
+    -- This will just start it in background, but kills it if this script is stopped
+    print("Execute PVBattery script")
+    os.execute("lua PVBattery.lua")
+
+    util.sleep_time(1)
 end
