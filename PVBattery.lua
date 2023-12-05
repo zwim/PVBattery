@@ -22,7 +22,7 @@ local PVBattery = {
 
 function PVBattery:init()
     config:read()
-    util:setLog(config.log_file_name or "config.lua")
+    util:setLog(config.log_file_name or "PVBattery.log")
 
     util:log("\n#############################################")
     util:log("PV-Control started.")
@@ -237,6 +237,8 @@ function PVBattery:main()
 
         if not skip_loop then
 			-- Do the test again, as the need of a rescue charge is checked here, too.
+
+			-- Check which battery is on low power; stop discharge for it.
 			for _,inv in pairs(self.Inverter) do
 				if inv.BMS:isLowChargedOrNeedsRescue() then
 					skip_loop = true
@@ -245,25 +247,31 @@ function PVBattery:main()
 				end
 			end
 
+			-- If there is at least one low power battery; check if a battery needs a rescue charge
 			if self:isStateLowBattery() then
 				for _,charger in pairs(self.Charger) do
-					if charger.BMS:requestRescueCharge() then
+					if charger.BMS:needsRescueCharge() then
 						charger:startCharge()
 					end
-					if charger.BMS:recoverFromRescueCharge() then
+					if charger.BMS:recoveredFromRescueCharge() then
 						-- We come here if state == lowBattery and recoverFromRescueCharge()
-						charger.BMS:stopCharge()
+						charger:stopCharge()
 						self:isStateIdle(true)
-						skip_loop = true
 					end
 				end
 			end
 
+			-- Check which battery need balancing (on the high side only)
 			for _,bms in pairs(self.BMS) do
-				bms:evaluateParameters()
-				if bms.v.Current and bms.v.Current < 0.99 then
-					bms:readyToCharge() -- do balancing if necessary
-					print("autobalance ???")
+				bms:evaluateParameters(true)
+				if bms.v.Current and bms.v.Current < 0.99 and bms.v.SOC > 80 then
+				    if bms.v.HighestVoltage >= config.bat_highest_voltage then
+						bms:setAutoBalance(true)
+					elseif bms.v.CellDiff >= config.max_cell_diff then
+						bms:setAutoBalance(true)
+					elseif bms.v.SOC >= config.bat_SOC_max then
+						bms:setAutoBalance(true)
+					end
 				end
 			end
 		end
@@ -272,8 +280,8 @@ function PVBattery:main()
 			if P_Grid > 0 and not self:isStateLowBattery() then
 				if self:isCharging() then
 					short_sleep = 5
-					for _, chg in pairs(self.Charger) do
-						chg:stopCharge()
+					for _, charger in pairs(self.Charger) do
+						charger:stopCharge()
 						self:isStateIdle(true)
 					end
 				else
@@ -284,7 +292,7 @@ function PVBattery:main()
 								inverter_num, inverter_power))
 						self.Inverter[inverter_num]:startDischarge(P_Grid)
 						short_sleep = 10  -- inverters are slower than chargers
-						self:isStateDischarging()
+						self:isStateDischarging(true)
 					end
 				end
 			elseif P_Grid < 0 then
@@ -361,7 +369,7 @@ function PVBattery:generateHTML(P_Grid, P_Load, P_PV)
 	}
 
 	local sinks = 0
-	for _, chg in pairs(self.Charger) do
+	for _,chg in pairs(self.Charger) do
 		local x = chg:getCurrentPower()
 		sinks = sinks + (x or 0)
 	end
@@ -369,7 +377,7 @@ function PVBattery:generateHTML(P_Grid, P_Load, P_PV)
 			string.format("%7.2f", sinks)})
 
 	local sources = 0
-	for _, inv in pairs(self.Inverter) do
+	for _,inv in pairs(self.Inverter) do
 		local x = inv:getCurrentPower()
 		sources = sources + (x or 0)
 	end

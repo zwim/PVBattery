@@ -113,9 +113,7 @@ function AntBMS:setAutoBalance(on)
         on = true
     end
 
-    self:clearDataAge()
-    self:evaluateParameters()
-    self:clearDataAge()
+    self:evaluateParameters(true)
 
     util:log("Balancer status was ",
         self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
@@ -145,7 +143,14 @@ function AntBMS:toggleAutoBalance()
     if not self.body then
         return false
     end
+end
 
+function AntBMS:enableBluetooth()
+    local url = string.format("http://%s/set?bluetooth=1", self.host)
+    self.body, self.code, self.headers, self.status = http.request(url)
+    if not self.body then
+        return false
+    end
 end
 
 function AntBMS:readAutoBalance()
@@ -158,10 +163,6 @@ function AntBMS:readAutoBalance()
 end
 
 function AntBMS:reboot()
-    local reboot = 254 -- adress of reboot
-    local write_data_hex = "A5A5".. string.format("%02x", reboot) .. "00" .. "00" .. string.format("%02x", reboot)
-    print("xxx write reboot", write_data_hex)
-
     local url = string.format("http://%s/reboot", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
 end
@@ -211,12 +212,13 @@ function AntBMS:isChecksumOk()
 end
 
 -- This is the usual way of reading new parameters
-function AntBMS:evaluateParameters()
+function AntBMS:evaluateParameters(force)
     if not self.host or self.host == "" then
         return false
     end
+
     -- Require Data only, if the last require was at least a second ago
-    if self:getDataAge() < config.update_interval then
+    if not force and self:getDataAge() < config.update_interval then
         return true
     end
 
@@ -248,6 +250,7 @@ function AntBMS:evaluateParameters()
     end
 
     if not checksum then
+        self:enableBluetooth()
         return false
     end
 
@@ -353,18 +356,14 @@ function AntBMS:printValues()
     end
 end
 
--- Todo: RescueDischarge ????
 function AntBMS:readyToCharge()
     self:evaluateParameters()
     if self.v.CellDiff then
-        if self.v.CellDiff >= config.max_cell_diff then
-            self:setAutoBalance(true)
+        if self.v.HighestVoltage >= config.bat_highest_voltage then
             return false
-        elseif self.v.HighestVoltage >= config.bat_highest_voltage then
-            self:setAutoBalance(true)
+        elseif self.v.CellDiff >= config.max_cell_diff then
             return false
         elseif self.v.SOC >= config.bat_SOC_max then
-            self:setAutoBalance(true)
             return false
         else
             return true
@@ -376,16 +375,13 @@ end
 function AntBMS:readyToDischarge()
     self:evaluateParameters()
     if self.v.CellDiff then
-        if self.v.CellDiff > config.max_cell_diff then
-            self:setAutoBalance(true)
+        if self.v.LowestVoltage < config.bat_lowest_voltage then
             return false
-        elseif self.v.LowestVoltage < config.bat_lowest_voltage then
-            self.rescue_charge = true
+        elseif self.v.CellDiff > config.max_cell_diff then
             return false
-        elseif self.v.SOC <= config.bat_SOC_min + config.bat_hysteresis then
+        elseif self.v.SOC < config.bat_SOC_min + config.bat_hysteresis then
             return false
         else
-            self.rescue_charge = false
             return true
         end
     end
@@ -395,15 +391,10 @@ end
 function AntBMS:isLowChargedOrNeedsRescue()
     self:evaluateParameters()
     if self.v.CellDiff then
-        if self.v.LowestVoltage < config.bat_lowest_rescue then
+        if self.v.LowestVoltage < config.bat_lowest_rescue or self.v.SOC < config.bat_SOC_min_rescue then
             self.rescue_charge = true
             return true
-        elseif self.v.SOC < config.bat_SOC_min_rescue then
-            self.rescue_charge = true
-            return true
-        elseif self.v.LowestVoltage < config.bat_lowest_voltage then
-            return true
-        elseif self.v.SOC <= config.bat_SOC_min then
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage or self.v.SOC <= config.bat_SOC_min then
             return true
         else
             self.rescue_charge = false
@@ -413,21 +404,21 @@ function AntBMS:isLowChargedOrNeedsRescue()
     return nil
 end
 
-function AntBMS:requestRescueCharge()
+function AntBMS:needsRescueCharge()
     return self.rescue_charge
 end
 
-function AntBMS:recoverFromRescueCharge()
+function AntBMS:recoveredFromRescueCharge()
     if not self.rescue_charge then
-        return
+        return true
     end
 
-    self:evaluateParameters()
+    self:evaluateParameters(true)
     if self.v.CellDiff then
         if self.v.LowestVoltage > config.bat_lowest_rescue
             and self.v.LowestVoltage > config.bat_lowest_voltage
-            and self.v.SOC >= config.bat_SOC_min_rescue
-            and self.v.SOC >= config.bat_SOC_min then
+            and self.v.SOC > config.bat_SOC_min_rescue
+            and self.v.SOC > config.bat_SOC_min then
                 self.rescue_charge = false
                 return true
         else

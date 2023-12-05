@@ -116,9 +116,9 @@ function util:cleanLogs()
     local result = handle:read("*a")
     handle:close()
     if result:find("btrfs") then
-        os.execute("btrfs filesystem defragment -r -v -czstd " .. self.log_file_name)
+        os.execute("date; btrfs filesystem defragment -r -v -czstd " .. self.log_file_name)
     else
-        print("todo log file compression") -- todos
+        print("todo log file compression") -- todo
     end
 end
 

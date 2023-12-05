@@ -78,6 +78,8 @@ while true do
     -- This will just start it in background, but kills it if this script is stopped
     print("Execute PVBattery script")
     os.execute("lua PVBattery.lua")
+    print("Crash happend at:")
+    os.execute("date")
 
     util.sleep_time(1)
 end
