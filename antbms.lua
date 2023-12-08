@@ -55,7 +55,6 @@ local AntBMS = {
         "14", -- 14
         "Manually closed",
     },
---    MOSFETChargeStatusFlag[0] = "Off",
 
     MOSFETDischargeStatusFlag = {
         [0] = "Off",
@@ -75,7 +74,6 @@ local AntBMS = {
         "Start exception",
         "Manually closed",
     },
---    MOSFETDischargeStatusFlag[0] = "Off",
 
     BalancedStatusText = {
         [0] = "Off",
@@ -167,10 +165,28 @@ function AntBMS:reboot()
     self.body, self.code, self.headers, self.status = http.request(url)
 end
 
+-- set power and en/disable bms discharge mos
 function AntBMS:setPower(power)
+    local url
+
+    if power > 0 then
+        url = string.format("http://%s/set?bms_discharge=1", self.host)
+        self.body, self.code, self.headers, self.status = http.request(url)
+        util.sleep_time(1)
+    end
+
     -- we may use `http://ip.ip.ip.ip/set?power=<value>` here
-    local url = string.format("http://%s/set?power=%d", self.host, power)
-self.body, self.code, self.headers, self.status = http.request(url)
+    url = string.format("http://%s/set?power=%d", self.host, power)
+    self.body, self.code, self.headers, self.status = http.request(url)
+
+
+    if power == 0 then
+        util.sleep_time(1)
+        url = string.format("http://%s/set?bms_discharge=0", self.host)
+        self.body, self.code, self.headers, self.status = http.request(url)
+    end
+
+
 end
 
 function AntBMS:isChecksumOk()
