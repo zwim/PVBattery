@@ -13,9 +13,9 @@ local configuration = {
     -- Can be used to chain load another config file at startup.
     -- But be aware, the last file is the one to be checked continually
     -- during PVBattery run.
-    config_file_name = "config.lua", -- load this file
+    config_file_name = "config.lua", -- the config file
 
-    host = "battery-control.lan",
+    host = util.hostname(),
 
     position = {
         name = "Kirchbichl",
@@ -29,22 +29,20 @@ local configuration = {
     html_main = "/var/www/localhost/htdocs/index.html",
     html_battery = "/var/www/localhost/htdocs/battery.html",
 
-    bat_max_feed_in = -350, -- Watt
-    bat_max_feed_in2 = -350, -- Watt
-    bat_max_take_out = 160, -- Watt
-    exceed_factor = -0.15, -- Shift the bat_max_xxx values by -10%
-
     bat_SOC_min = 20, -- Percent
     bat_SOC_max = 90, -- Percent
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell
+    bat_lowest_rescue = 2.801, -- start rescue charge
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
     max_cell_diff = 0.100,
 
     bat_hysteresis = 2,
 
-    load_full_time = 2, -- hour before sun set
+    load_full_time_h = 2, -- time before sun set, to load battery at maximum
 
     sleep_time = 5, -- seconds to sleep per iteration
+
+    update_interval = 10, -- time to keep old data before an update
 
     guard_time = 5 * 60, -- 5 minutes
 
@@ -53,7 +51,8 @@ local configuration = {
     Device = {
         { -- Device[1]
             name = "Battery Pack",
-            charger_switch = {
+            BMS = "battery-bms.lan",
+            charger_switches = {
                 "battery-charger.lan",
                 "battery-charger2.lan",
             },
@@ -61,26 +60,25 @@ local configuration = {
             inverter_control = nil,
             inverter_min_power = 110,
             inverter_skip = false,
-            BMS = "batter-bms.ln",
         },
         { -- Device[2]
             name = "Garage Inverter",
-            charger_switch = {},
+            BMS = nil,
+            charger_switches = {},
             inverter_switch = "192.168.1.30",
             inverter_control = nil,
             inverter_skip = true,
-            BMS = nil,
         },
         { -- Device[3]
             name = "Moped",
-            charger_switch = {
+            BMS = "192.168.0.13",
+            charger_switches = {
                 "moped-charger",
             },
             inverter_switch = "moped-inverter",
             inverter_control = "192.168.0.13",
             inverter_min_power = 10,
             inverter_skip = false,
-            BMS = "192.168.0.13",
         },
     }
 }

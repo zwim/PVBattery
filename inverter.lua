@@ -7,11 +7,13 @@ local util = require("util")
 
 local Inverter = {
     skip = false,
-    inverter_host = "",
+    host = "",
     bms_host = "",
-    Switch = nil,
     dynamic_load = false,
     static_load = 0,
+
+    -- will get initialized by new
+    Switch = nil,
     BMS = nil,
 }
 
@@ -20,8 +22,8 @@ function Inverter:new(o)
     setmetatable(o, self)
     self.__index = self
 
-    if o.inverter_host and o.inverter_host ~= "" then
-        o.Switch = Switch:new{host = o.inverter_host}
+    if o.host and o.host ~= "" then
+        o.Switch = Switch:new{host = o.host}
     end
     if o.bms_host and o.bms_host ~= "" then
         o.BMS = AntBMS:new{host = o.bms_host}

@@ -9,8 +9,10 @@ local util = require("util")
 local config = require("configuration")
 
 local READ_DATA_SIZE = 140
+--[[ -- command to hard reset a connected ESP32 device
 local ESP32_HARD_RESET_COMMAND =
     "esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
+]]
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -179,13 +181,11 @@ function AntBMS:setPower(power)
     url = string.format("http://%s/set?power=%d", self.host, power)
     self.body, self.code, self.headers, self.status = http.request(url)
 
-
     if power == 0 then
         util.sleep_time(1)
         url = string.format("http://%s/set?bms_discharge=0", self.host)
         self.body, self.code, self.headers, self.status = http.request(url)
     end
-
 
 end
 

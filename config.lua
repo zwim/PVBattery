@@ -9,9 +9,10 @@
 -- The globals here are locals after ``chunk, err = loadfile(file, "t", configuration)` so:
 -- luacheck: ignore 111
 
+-- Times are in seconds if no other extension is used (time_m, time_h ...)
+
 log_file_name = "/var/log/PVBattery.log"
 
-host = "battery-control.lan"
 -- html_main = "/var/www/localhost/htdocs/index.html"
 html_main = "/tmp/index.html"
 --html_battery = "/var/www/localhost/htdocs/battery.html"
@@ -25,12 +26,6 @@ position = {
     timezone = nil,
 }
 
-
-bat_max_feed_in = -350 -- Watt
-bat_max_feed_in2 = -350 -- Watt
-bat_max_take_out = 158 -- Watt
-exceed_factor = -0.15 -- shift the above values 10% down
-
 bat_SOC_min = 18 -- Percent
 bat_SOC_max = 100 -- Percent
 bat_SOC_min_rescue = 10 -- start rescue charge
@@ -42,11 +37,11 @@ bat_lowest_rescue = 2.801 -- start rescue charge
 bat_hightest_voltage = 3.53 -- lowest allowed voltage
 max_cell_diff = 0.100 -- maximum allowed cell diff
 
-load_full_time = 2.5 -- hour before sun set
+load_full_time_h = 2.5 -- time before sun set, to load battery at maximum
 
 sleep_time = 15 -- seconds to sleep per iteration
 
-update_interval = 10 -- oldage time
+update_interval = 12 -- time to keep old data before an update
 
 guard_time = 1 * 60 -- every minute
 
@@ -55,7 +50,8 @@ FRONIUS_ADR = "192.168.0.49"
 Device = {
     { -- Device[1]
         name = "Battery Pack",
-        charger_switch = {
+        BMS = "battery-bms.lan",
+        charger_switches = {
             "battery-charger.lan",
             "battery-charger2.lan",
         },
@@ -63,25 +59,24 @@ Device = {
         inverter_control = nil,
         inverter_min_power = 110,
         inverter_skip = false,
-        BMS = "battery-bms.lan",
     },
     { -- Device[2]
         name = "Garage Inverter",
-        charger_switch = {},
+        BMS = nil,
+        charger_switches = {},
         inverter_switch = "192.168.1.30",
         inverter_control = nil,
         inverter_skip = true,
-        BMS = nil,
     },
     { -- Device[3]
         name = "Moped",
-        charger_switch = {
+        BMS = "", -- fehlt noch
+        charger_switches = {
             "192.168.1.100",
         },
         inverter_switch = "192.168.1.50",
         inverter_control = "fehltnoch",
         inverter_min_power = 10,
         inverter_skip = false,
-        BMS = "", -- fehlt noch
     },
 }

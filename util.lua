@@ -79,8 +79,8 @@ end
 function util.printTime(str)
     local date = os.date("*t")
 
-	local date_time_string = string.format("%d/%d/%d-%02d:%02d:%02d",
-		date.year, date.month, date.day, date.hour, date.min, date.sec)
+    local date_time_string = string.format("%d/%d/%d-%02d:%02d:%02d",
+        date.year, date.month, date.day, date.hour, date.min, date.sec)
 
     print("Zeitstempel: " .. str .. "----" .. date_time_string)
 end
@@ -131,6 +131,13 @@ function util.hourToTime(h)
     h = (h - min) * 60
     sec = math.floor(h + 0.5)
     return hour, min, sec
+end
+
+function util.hostname()
+    local file = assert(io.popen("hostname"))
+    local output = file:read('*all')
+    file:close()
+    return output
 end
 
 return util
