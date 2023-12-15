@@ -5,11 +5,14 @@
 description="Start control of a PV Battery"
 command="/usr/bin/lua"
 pidfile="/run/${RC_SVCNAME}.pid"
-command_args="/opt/PVBattery/PVBattery.lua"
+command_args="/opt/PVBattery/PVBatteryGuard.lua"
 
 command_background=true
 command_user="root:root"
 
 directory="/opt/PVBattery/"
 
-echo "PVBattery is starting up ..." > /tmp/index.html
+ln -sf "/tmp/index.html" "/var/www/localhost/htdocs/index.html"
+
+date > /tmp/index.html
+echo "PVBattery is starting up ..." >> /tmp/index.html

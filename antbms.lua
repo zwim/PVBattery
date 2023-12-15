@@ -388,20 +388,30 @@ function AntBMS:readyToCharge()
     return nil
 end
 
+
 function AntBMS:readyToDischarge()
     self:evaluateParameters()
+
+    local start_discharge, continue_discharge
     if self.v.CellDiff then
-        if self.v.LowestVoltage < config.bat_lowest_voltage then
-            return false
-        elseif self.v.CellDiff > config.max_cell_diff then
-            return false
-        elseif self.v.SOC < config.bat_SOC_min + config.bat_hysteresis then
-            return false
+        if self.v.CellDiff > config.max_cell_diff then
+            start_discharge = false
+            continue_discharge = false
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage then
+            start_discharge = false
+            continue_discharge = false
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage + config.bat_voltage_hysteresis then
+            start_discharge = false
+            continue_discharge = true
+        elseif self.v.SOC < config.bat_SOC_min + config.bat_SOC_hysteresis then
+            start_discharge = false
+            continue_discharge = false
         else
-            return true
+            start_discharge = true
+            continue_discharge = true
         end
     end
-    return nil
+    return start_discharge, continue_discharge
 end
 
 function AntBMS:isLowChargedOrNeedsRescue()

@@ -248,7 +248,6 @@ function PVBattery:main()
             -- Check which battery is on low power; stop discharge for it.
             for _,inv in pairs(self.Inverter) do
                 if inv.BMS:isLowChargedOrNeedsRescue() then
-                    skip_loop = true
                     if not inv.skip then
                         inv:stopDischarge()
                         self:isStateLowBattery(true)
@@ -261,6 +260,7 @@ function PVBattery:main()
                 for _,charger in pairs(self.Charger) do
                     if charger.BMS:needsRescueCharge() then
                         charger:startCharge()
+                        skip_loop = true
                     end
                     if charger.BMS:recoveredFromRescueCharge() then
                         -- We come here if state == lowBattery and recoverFromRescueCharge()

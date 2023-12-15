@@ -61,11 +61,11 @@ end
 function Inverter:readyToDischarge()
     if self.skip then return true end
 
-    local ready = self.BMS:readyToDischarge()
-    if ready == false then
+    local start_discharge, continue_discharge = self.BMS:readyToDischarge()
+    if not continue_discharge then
         self:stopDischarge()
     end
-    return ready
+    return start_discharge
 end
 
 return Inverter

@@ -36,7 +36,8 @@ local configuration = {
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
     max_cell_diff = 0.100,
 
-    bat_hysteresis = 2,
+    bat_SOC_hysteresis = 2,
+    bat_voltage_hysteresis = 0.050,
 
     load_full_time_h = 2, -- time before sun set, to load battery at maximum
 
