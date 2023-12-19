@@ -37,13 +37,18 @@ function Switch:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
+local getstat = 1
 function Switch:_getStatus()
+    print("xxx getstat:", getstat, "host", self.host)
     if not self.host then
         return false
     end
     if self:getDataAge() < config.update_interval then
         return true
     end
+
+    getstat = getstat + 1
+
     local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     self.decoded = json.decode(self.body)

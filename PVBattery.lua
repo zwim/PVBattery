@@ -60,7 +60,7 @@ function PVBattery:init()
         local Inverter = InverterClass:new {
             host = Device.inverter_switch,
             min_power = Device.inverter_min_power,
-            skip = Device.inverter_skip,
+            time_controlled = Device.inverter_time_controlled,
             BMS = BMS,
         }
         table.insert(self.Inverter, Inverter)
@@ -165,7 +165,7 @@ end
 
 function PVBattery:isDischarging()
     for _, inverter in pairs(self.Inverter) do
-        if not inverter.skip and inverter:getPowerState() == "on" then
+        if not inverter.time_controlled and inverter:getPowerState() == "on" then
             return true
         end
     end
@@ -247,8 +247,17 @@ function PVBattery:main()
 
             -- Check which battery is on low power; stop discharge for it.
             for _,inv in pairs(self.Inverter) do
-                if inv.BMS:isLowChargedOrNeedsRescue() then
-                    if not inv.skip then
+                if inv.time_controlled then
+                    local curr_hour = date.hour + date.min/60 + date.sec/3600
+                    if curr_hour > SunTime.times[inv.time_controlled.off] then
+                        inv:stopDischarge()
+                    elseif curr_hour > SunTime.times[inv.time_controlled.on] then
+                        inv:startDischarge(10) -- just any power > 0
+                    else
+                        inv:stopDischarge()
+                    end
+                else
+                    if inv.BMS:isLowChargedOrNeedsRescue() then
                         inv:stopDischarge()
                         self:isStateLowBattery(true)
                     end
@@ -306,7 +315,7 @@ function PVBattery:main()
                 if self:isDischarging() then
                     short_sleep = 5
                     for _, inv in pairs(self.Inverter) do
-                        if not inv.skip then
+                        if not inv.time_controlled then
                             inv:stopDischarge()
                             self:isStateIdle(true)
                         end

@@ -45,8 +45,6 @@ local configuration = {
 
     update_interval = 10, -- time to keep old data before an update
 
-    guard_time = 5 * 60, -- 5 minutes
-
     FRONIUS_ADR = "192.168.0.49",
 
     Device = {
@@ -60,7 +58,7 @@ local configuration = {
             inverter_switch = "battery-inverter.lan",
             inverter_control = nil,
             inverter_min_power = 110,
-            inverter_skip = false,
+            inverter_time_controlled = nil,
         },
         { -- Device[2]
             name = "Garage Inverter",
@@ -68,7 +66,7 @@ local configuration = {
             charger_switches = {},
             inverter_switch = "192.168.1.30",
             inverter_control = nil,
-            inverter_skip = true,
+            inverter_time_controlled = {off = nil, on = nil},
         },
         { -- Device[3]
             name = "Moped",
@@ -79,7 +77,7 @@ local configuration = {
             inverter_switch = "moped-inverter",
             inverter_control = "192.168.0.13",
             inverter_min_power = 10,
-            inverter_skip = false,
+            inverter_time_controlled = nil,
         },
     }
 }

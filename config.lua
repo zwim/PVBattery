@@ -18,6 +18,18 @@ html_main = "/tmp/index.html"
 --html_battery = "/var/www/localhost/htdocs/battery.html"
 html_battery = "/tmp/battery.html"
 
+MIDNIGHT_LAST = 1
+DAWN_ASTRONOMICAL = 2
+DAWN_NAUTICAL = 3
+DAWN_CIVIL = 4
+SUN_RISE = 5
+NOON = 6
+SUN_SET = 7
+DUSK_CIVIL = 8
+DUSK_NAUTICAL = 9
+DUSK_ASTRONOMICAL = 10
+MIDNIGHT = 11
+
 position = {
     name = "Kirchbichl",
     latitude = 47.5109083,
@@ -44,8 +56,6 @@ sleep_time = 15 -- seconds to sleep per iteration
 
 update_interval = 12 -- time to keep old data before an update
 
-guard_time = 1 * 60 -- every minute
-
 FRONIUS_ADR = "192.168.0.49"
 
 Device = {
@@ -59,7 +69,7 @@ Device = {
         inverter_switch = "battery-inverter.lan",
         inverter_control = nil,
         inverter_min_power = 110,
-        inverter_skip = false,
+        inverter_time_controlled = nil,
     },
     { -- Device[2]
         name = "Garage Inverter",
@@ -67,7 +77,7 @@ Device = {
         charger_switches = {},
         inverter_switch = "192.168.1.30",
         inverter_control = nil,
-        inverter_skip = true,
+        inverter_time_controlled = {off = DUSK_CIVIL, on = SUN_RISE},
     },
     { -- Device[3]
         name = "Moped",
@@ -78,6 +88,6 @@ Device = {
         inverter_switch = "192.168.1.50",
         inverter_control = "fehltnoch",
         inverter_min_power = 10,
-        inverter_skip = false,
+        inverter_time_controlled = nil,
     },
 }
