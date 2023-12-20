@@ -42,14 +42,27 @@ function Fronius:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
+function Fronius:setDataAge()
+    self.timeOfLastRequiredData = util.getCurrentTime()
+end
+
 function Fronius:getInverterRealtimeData()
+    if self:getDataAge() < config.update_interval then
+        return
+    end
+
     self.url = string.format("http://%s%s%s%s", host, port, urlPath, GetInverterRealtimeData_cmd)
     --print(url)
     self.body, self.code, self.headers, self.status = http.request(self.url)
     self.Data.GetInverterRealtimeData = json.decode(self.body)
+    self:setDataAge()
 end
 
 function Fronius:getPowerFlowRealtimeData()
+    if self:getDataAge() < config.update_interval then
+        return
+    end
+
     self.url = string.format("http://%s%s%s", host, urlPath, GetPowerFlowRealtimeData_cmd)
     -- print(url)
     self.body, self.code, self.headers, self.status = http.request(self.url)
@@ -59,6 +72,7 @@ function Fronius:getPowerFlowRealtimeData()
     else
         self.Data.GetPowerFlowRealtimeData = {}
     end
+    self:setDataAge()
 end
 
 function Fronius:getMeterRealtimeData()
@@ -71,7 +85,7 @@ function Fronius:getMeterRealtimeData()
     else
         self.Data.GetMeterRealtimeData = {}
     end
-    self.timeOfLastRequiredData = util.getCurrentTime()
+    self:setDataAge()
 end
 
 function Fronius:gotValidRealtimeData()
@@ -81,9 +95,8 @@ end
 
 -- todo add a getter if neccessary
 function Fronius:getGridLoadPV()
-    if self:getDataAge() > config.update_interval then
-        self:getPowerFlowRealtimeData()
-    end
+    self:getPowerFlowRealtimeData()
+
     if self:gotValidRealtimeData() then
         return Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid,
                Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load,

@@ -38,7 +38,7 @@ position = {
     timezone = nil,
 }
 
-bat_SOC_min = 18 -- Percent
+bat_SOC_min = 25 -- Percent
 bat_SOC_max = 100 -- Percent
 bat_SOC_min_rescue = 10 -- start rescue charge
 

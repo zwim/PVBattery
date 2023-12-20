@@ -109,6 +109,7 @@ function AntBMS:new(o)
 end
 
 function AntBMS:setAutoBalance(on)
+    if not self.host or self.host == "" then return end
     if on == nil then
         on = true
     end
@@ -138,6 +139,8 @@ function AntBMS:setAutoBalance(on)
 end
 
 function AntBMS:toggleAutoBalance()
+    if not self.host or self.host == "" then return end
+
     local url = string.format("http://%s/balance.toggle", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
@@ -146,6 +149,8 @@ function AntBMS:toggleAutoBalance()
 end
 
 function AntBMS:enableBluetooth()
+    if not self.host or self.host == "" then return end
+
     local url = string.format("http://%s/set?bluetooth=1", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
@@ -155,6 +160,8 @@ end
 
 function AntBMS:readAutoBalance()
     print("readAutoBalance not implemented yet")
+    if not self.host or self.host == "" then return end
+
     local url = string.format("http://%s/balance.read", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
     if not self.body then
@@ -163,12 +170,16 @@ function AntBMS:readAutoBalance()
 end
 
 function AntBMS:reboot()
+    if not self.host or self.host == "" then return end
+
     local url = string.format("http://%s/reboot", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
 end
 
 -- set power and en/disable bms discharge mos
 function AntBMS:setPower(power)
+    if not self.host or self.host == "" then return end
+
     local url
 
     if power > 0 then
@@ -186,7 +197,6 @@ function AntBMS:setPower(power)
         url = string.format("http://%s/set?bms_discharge=0", self.host)
         self.body, self.code, self.headers, self.status = http.request(url)
     end
-
 end
 
 function AntBMS:isChecksumOk()
@@ -233,7 +243,7 @@ function AntBMS:evaluateParameters(force)
         return false
     end
 
-    -- Require Data only, if the last require was at least a second ago
+    -- Require Data only, if the last require was at least update_interval seconds ago.
     if not force and self:getDataAge() < config.update_interval then
         return true
     end
@@ -351,8 +361,8 @@ function AntBMS:evaluateParameters(force)
     _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries)
 
     self.answer = {} -- clear old received bytes
-    self.timeOfLastRequiredData = util.getCurrentTime()
 
+    self:setDataAge()
     return true
 end
 
@@ -360,8 +370,8 @@ function AntBMS:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
-function AntBMS:clearDataAge()
-    self.timeOfLastRequiredData = 0
+function AntBMS:setDataAge()
+    self.timeOfLastRequiredData = util.getCurrentTime()
 end
 
 function AntBMS:printValues()
@@ -373,6 +383,8 @@ function AntBMS:printValues()
 end
 
 function AntBMS:readyToCharge()
+    if not self.host or self.host == "" then return end
+
     self:evaluateParameters()
     if self.v.CellDiff then
         if self.v.HighestVoltage >= config.bat_highest_voltage then
@@ -390,6 +402,8 @@ end
 
 
 function AntBMS:readyToDischarge()
+    if not self.host or self.host == "" then return end
+
     self:evaluateParameters()
 
     local start_discharge, continue_discharge
@@ -415,6 +429,8 @@ function AntBMS:readyToDischarge()
 end
 
 function AntBMS:isLowChargedOrNeedsRescue()
+    if not self.host or self.host == "" then return end
+
     self:evaluateParameters()
     if self.v.CellDiff then
         if self.v.LowestVoltage < config.bat_lowest_rescue or self.v.SOC < config.bat_SOC_min_rescue then
@@ -435,6 +451,8 @@ function AntBMS:needsRescueCharge()
 end
 
 function AntBMS:recoveredFromRescueCharge()
+    if not self.host or self.host == "" then return end
+
     if not self.rescue_charge then
         return true
     end

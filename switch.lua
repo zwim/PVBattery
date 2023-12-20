@@ -15,6 +15,22 @@ function json.decode(data)
     end
 end
 
+
+DEBUG = true
+if DEBUG then
+    local oldhttprequest = http.request
+    function http.request(url)
+        if url:find("http:///cm") then
+            print("xxx emptry url: '" ..  url .. "  '")
+            return "", "", ""
+        else
+            return oldhttprequest(url)
+        end
+    end
+end
+
+
+
 local Switch = {
     timeOfLastRequiredData = 0, -- no data requiered yet
     host = nil,
@@ -37,6 +53,10 @@ function Switch:getDataAge()
     return util.getCurrentTime() - self.timeOfLastRequiredData
 end
 
+function Switch:setDataAge()
+    self.timeOfLastRequiredData = util.getCurrentTime()
+end
+
 local getstat = 1
 function Switch:_getStatus()
     print("xxx getstat:", getstat, "host", self.host)
@@ -53,7 +73,7 @@ function Switch:_getStatus()
     self.body, self.code, self.headers, self.status = http.request(url)
     self.decoded = json.decode(self.body)
 
-    self.timeOfLastRequiredData = util.getCurrentTime()
+    self:setDataAge()
     return true
 end
 
@@ -140,6 +160,8 @@ function Switch:toggle(on)
     self.body, self.code, self.headers, self.status = http.request(url)
     local decoded = json.decode(self.body)
     self.Result = decoded.POWER
+
+    self:setDataAge()
     return self.Result or ""
 end
 
