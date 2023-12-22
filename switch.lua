@@ -15,8 +15,7 @@ function json.decode(data)
     end
 end
 
-
-DEBUG = true
+DEBUG = false
 if DEBUG then
     local oldhttprequest = http.request
     function http.request(url)
@@ -28,8 +27,6 @@ if DEBUG then
         end
     end
 end
-
-
 
 local Switch = {
     timeOfLastRequiredData = 0, -- no data requiered yet
@@ -57,17 +54,24 @@ function Switch:setDataAge()
     self.timeOfLastRequiredData = util.getCurrentTime()
 end
 
-local getstat = 1
+function Switch:clearDataAge()
+    self.timeOfLastRequiredData = 0
+end
+
+local getstat = 0
 function Switch:_getStatus()
-    print("xxx getstat:", getstat, "host", self.host)
     if not self.host then
         return false
     end
     if self:getDataAge() < config.update_interval then
+        if DEBUG then print("xxx getstat:", getstat, "host", self.host, "cached!") end
         return true
     end
 
-    getstat = getstat + 1
+    if DEBUG then
+        getstat = getstat + 1
+        print("xxx getstat:", getstat, "host", self.host)
+    end
 
     local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
     self.body, self.code, self.headers, self.status = http.request(url)
@@ -139,7 +143,6 @@ function Switch:getPowerState()
     end
 
     self.power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
---    util:log(self.power_state)
     if self.power_state == 0 then
         return "off"
     elseif self.power_state == 1 then
@@ -155,7 +158,6 @@ function Switch:toggle(on)
     if not on then
         on = "2"
     end
-    util:log(self.host)
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
     self.body, self.code, self.headers, self.status = http.request(url)
     local decoded = json.decode(self.body)

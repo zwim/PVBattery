@@ -1,4 +1,20 @@
 return function(self, config, P_Grid, P_Load, P_PV)
+    local ChargerPowerCache = {}
+    local InverterPowerCache = {}
+
+
+    local sinks = 0
+    for i = 1, #self.Charger do
+        ChargerPowerCache[i] = self.Charger[i]:getCurrentPower()
+        sinks = sinks + (ChargerPowerCache[i] or 0)
+    end
+
+    local sources = P_PV
+    for  i = 1, #self.Inverter do
+        InverterPowerCache[i] = self.Inverter[i]:getCurrentPower()
+        sources = sources + (InverterPowerCache[i] or 0)
+    end
+
     local TEMPLATE_PARSER = {
         {"_$DATE", ""},
         {"_$SUNRISE", self.sunrise},
@@ -14,38 +30,28 @@ return function(self, config, P_Grid, P_Load, P_PV)
         {"_$BMS1_BALANCE", "http://" .. self.BMS[1].host .. "/balance.toggle"},
 
         {"_$BATTERY_CHARGER1_POWER",
-            string.format("%7.2f", self.Charger[1]:getCurrentPower())},
+            string.format("%7.2f", ChargerPowerCache[1])},
         {"_$BATTERY_CHARGER1", self.Charger[1].switch_host},
         {"_$BATTERY_CHARGER2_POWER",
-            string.format("%7.2f", self.Charger[2]:getCurrentPower())},
+            string.format("%7.2f", ChargerPowerCache[2])},
         {"_$BATTERY_CHARGER2", self.Charger[2].switch_host},
         {"_$BATTERY_INVERTER_POWER",
-            string.format("%7.2f", self.Inverter[1]:getCurrentPower())},
+            string.format("%7.2f", InverterPowerCache[1])},
         {"_$BATTERY_INVERTER", self.Inverter[1].host},
         {"_$GARAGE_INVERTER_POWER",
-            string.format("%7.2f", self.Inverter[2]:getCurrentPower())},
+            string.format("%7.2f", InverterPowerCache[2])},
         {"_$GARAGE_INVERTER", self.Inverter[2].host},
         {"_$MOPED_CHARGER_POWER",
-            string.format("%7.2f", self.Charger[3]:getCurrentPower())},
+            string.format("%7.2f", ChargerPowerCache[3])},
         {"_$MOPED_CHARGER", self.Charger[3].switch_host},
         {"_$MOPED_INVERTER_POWER",
-            string.format("%7.2f", self.Inverter[3]:getCurrentPower())},
+            string.format("%7.2f", InverterPowerCache[3])},
         {"_$MOPED_INVERTER", self.Inverter[3].host},
     }
 
-    local sinks = 0
-    for _,chg in pairs(self.Charger) do
-        local x = chg:getCurrentPower()
-        sinks = sinks + (x or 0)
-    end
     table.insert(TEMPLATE_PARSER, {"_$POWER_SINKS",
             string.format("%7.2f", sinks)})
 
-    local sources = P_PV
-    for _,inv in pairs(self.Inverter) do
-        local x = inv:getCurrentPower()
-        sources = sources + (x or 0)
-    end
     table.insert(TEMPLATE_PARSER, {"_$POWER_SOURCES",
             string.format("%7.2f", sources)})
 

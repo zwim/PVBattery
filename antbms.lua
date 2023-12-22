@@ -374,6 +374,10 @@ function AntBMS:setDataAge()
     self.timeOfLastRequiredData = util.getCurrentTime()
 end
 
+function AntBMS:clearDataAge()
+    self.timeOfLastRequiredData = 0
+end
+
 function AntBMS:printValues()
     self:evaluateParameters()
     local success, err = pcall(self._printValuesNotProtected, self)

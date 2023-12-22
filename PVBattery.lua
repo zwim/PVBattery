@@ -65,20 +65,14 @@ function PVBattery:init()
         }
         table.insert(self.Inverter, Inverter)
 
-        for _, ChargerNb in pairs(Device.charger_switches) do
+        for i = 1, #Device.charger_switches do
             local Charger = ChargerClass:new{
-                switch_host = ChargerNb,
+                switch_host = Device.charger_switches[i],
+                max_power = Device.charger_max_power[i],
                 BMS = BMS,
             }
             table.insert(self.Charger, Charger)
         end
-    end
-
-    -- set max_power to a small value, will get updated during run
-    -- Todo make this persistant; maybe even depending on the BMS state
-    -- Todo in the far far future, if anything else is done ;-)
-    for _, chg in pairs (self.Charger) do
-        chg.Switch.max_power = 50
     end
 end
 
@@ -219,6 +213,19 @@ function PVBattery:main()
             self.sunset = string.format("%02d:%02d:%02d", h, m, s)
             util:log("Sun set at " .. self.sunset)
             short_sleep = 1
+        end
+
+        -- Delete all cached values
+        for _, BMS in pairs(self.BMS) do
+            BMS:clearDataAge()
+        end
+
+        for _, Charger in pairs(self.Charger) do
+            Charger.Switch:clearDataAge()
+        end
+
+        for _, Inverter in pairs(self.Inverter) do
+            Inverter.Switch:clearDataAge()
         end
 
         -- Update Fronius

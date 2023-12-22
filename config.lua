@@ -66,6 +66,10 @@ Device = {
             "battery-charger.lan",
             "battery-charger2.lan",
         },
+        charger_max_power = {
+            300,
+            300,
+        },
         inverter_switch = "battery-inverter.lan",
         inverter_control = nil,
         inverter_min_power = 110,
@@ -84,6 +88,9 @@ Device = {
         BMS = "", -- fehlt noch
         charger_switches = {
             "192.168.1.100",
+        },
+        charger_max_power = {
+            500,
         },
         inverter_switch = "192.168.1.50",
         inverter_control = "fehltnoch",

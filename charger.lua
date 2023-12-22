@@ -7,7 +7,7 @@ local AntBMS = require("antbms")
 local Charger = {
     switch_host = "",
     bms_host = "",
-
+    max_power = 0,
     -- will get initialized by new
     Switch = nil,
     BMS = nil,
@@ -19,7 +19,7 @@ function Charger:new(o)
     self.__index = self
 
     if o.switch_host and o.switch_host ~= "" then
-        o.Switch = Switch:new{host = o.switch_host}
+        o.Switch = Switch:new{host = o.switch_host, max_power = o.max_power}
     end
     if o.bms_host and o.bms_host ~= "" then
         o.BMS = AntBMS:new{host = o.bms_host}

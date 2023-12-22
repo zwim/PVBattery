@@ -55,6 +55,10 @@ local configuration = {
                 "battery-charger.lan",
                 "battery-charger2.lan",
             },
+            charger_max_power = {
+                300,
+                300,
+            },
             inverter_switch = "battery-inverter.lan",
             inverter_control = nil,
             inverter_min_power = 110,
@@ -73,6 +77,9 @@ local configuration = {
             BMS = "192.168.0.13",
             charger_switches = {
                 "moped-charger",
+            },
+            charger_max_power = {
+                500,
             },
             inverter_switch = "moped-inverter",
             inverter_control = "192.168.0.13",
