@@ -9,10 +9,10 @@ local util = require("util")
 local config = require("configuration")
 
 local READ_DATA_SIZE = 140
---[[ -- command to hard reset a connected ESP32 device
+-- command to hard reset a connected ESP32 device
 local ESP32_HARD_RESET_COMMAND =
     "esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
-]]
+
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -428,6 +428,8 @@ function AntBMS:readyToDischarge()
             start_discharge = true
             continue_discharge = true
         end
+    else
+        os.execute(ESP32_HARD_RESET_COMMAND)
     end
     return start_discharge, continue_discharge
 end
@@ -446,6 +448,8 @@ function AntBMS:isLowChargedOrNeedsRescue()
             self.rescue_charge = false
             return false
         end
+    else
+        os.execute(ESP32_HARD_RESET_COMMAND)
     end
     return nil
 end
@@ -472,6 +476,8 @@ function AntBMS:recoveredFromRescueCharge()
         else
                 return false
         end
+    else
+        os.execute(ESP32_HARD_RESET_COMMAND)
     end
     return nil
 end

@@ -41,6 +41,9 @@ local Switch = {
 
 function Switch:new(o)
     o = o or {}   -- create object if user does not provide one
+    if not o.timeOfLastRequiredData then
+        o.timeOfLastRequiredData = 0
+    end
     setmetatable(o, self)
     self.__index = self
     return o
@@ -56,6 +59,7 @@ end
 
 function Switch:clearDataAge()
     self.timeOfLastRequiredData = 0
+    self.decoded = nil
 end
 
 local getstat = 0
@@ -63,7 +67,8 @@ function Switch:_getStatus()
     if not self.host then
         return false
     end
-    if self:getDataAge() < config.update_interval then
+
+    if self:getDataAge() < config.update_interval and self.decoded then
         if DEBUG then print("xxx getstat:", getstat, "host", self.host, "cached!") end
         return true
     end
@@ -121,11 +126,8 @@ function Switch:getPower()
 
     if Power and Power > 50 then
         local weight = 0.1
-        self.max_power = self.max_power * ( 1 - weight) + Power * weight
+        self.max_power = self.max_power * (1 - weight) + Power * weight
     end
---[[    if Power > self.max_power then
-        self.max_power = Power
-    end ]]
     return Power
 end
 
@@ -159,12 +161,12 @@ function Switch:toggle(on)
         on = "2"
     end
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
-    self.body, self.code, self.headers, self.status = http.request(url)
-    local decoded = json.decode(self.body)
-    self.Result = decoded.POWER
+    local body, code, headers, status = http.request(url)
+    local decoded = json.decode(body)
+    local Result = decoded.POWER or ""
 
     self:setDataAge()
-    return self.Result or ""
+    return Result
 end
 
 return Switch
