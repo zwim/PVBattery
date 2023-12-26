@@ -154,6 +154,11 @@ function Switch:getPowerState()
     end
 end
 
+
+--- toggles switch:
+-- on: 0 ... off
+-- on: 1 ... on
+-- on: 2 ... toggle
 function Switch:toggle(on)
     if not self.host then return end
 

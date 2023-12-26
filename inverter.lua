@@ -33,11 +33,6 @@ function Inverter:new(o)
 end
 
 function Inverter:startDischarge(req_power)
-    if self.time_controlled then
-        self.Switch:toggle("on")
-        return
-    end
-
     if self.BMS:readyToDischarge() then
         self.BMS:setPower(req_power)
         util.sleep_time(1)
@@ -46,11 +41,6 @@ function Inverter:startDischarge(req_power)
 end
 
 function Inverter:stopDischarge()
-    if self.time_controlled then
-        self.Switch:toggle("off")
-        return
-    end
-
     self.BMS:setPower(0)
     util.sleep_time(1)
     self.Switch:toggle("off")
