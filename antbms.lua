@@ -260,6 +260,8 @@ function AntBMS:evaluateParameters(force)
             -- maybe the BMS has lost internet connection, so reset the ESP32
             -- no need any more, as bsm will reset itself now.
             --os.execute(ESP32_HARD_RESET_COMMAND)
+            os.execute(ESP32_HARD_RESET_COMMAND)
+            os.execute(date)
 
             return false
         end
@@ -428,8 +430,6 @@ function AntBMS:readyToDischarge()
             start_discharge = true
             continue_discharge = true
         end
-    else
-        os.execute(ESP32_HARD_RESET_COMMAND)
     end
     return start_discharge, continue_discharge
 end
@@ -448,8 +448,6 @@ function AntBMS:isLowChargedOrNeedsRescue()
             self.rescue_charge = false
             return false
         end
-    else
-        os.execute(ESP32_HARD_RESET_COMMAND)
     end
     return nil
 end
@@ -476,8 +474,6 @@ function AntBMS:recoveredFromRescueCharge()
         else
                 return false
         end
-    else
-        os.execute(ESP32_HARD_RESET_COMMAND)
     end
     return nil
 end

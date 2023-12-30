@@ -286,6 +286,21 @@ function PVBattery:main()
                 end
             end
 
+            -- Check which battery need balancing
+            for _,bms in pairs(self.BMS) do
+                bms:evaluateParameters(true)
+                if next(bms.v) then -- check for non empty array
+                    if bms.v.CellDiff >= config.max_cell_diff
+                            or bms.v.HighestVoltage >= config.bat_highest_voltage
+                            or bms.v.SOC >= config.bat_SOC_max then
+                        bms:enableDischarge()
+                        util.sleep_time(1)
+                        bms:setAutoBalance(true)
+                    end
+                end
+            end
+
+--[[
             -- Check which battery need balancing (on the high side only)
             for _,bms in pairs(self.BMS) do
                 bms:evaluateParameters(true)
@@ -297,6 +312,8 @@ function PVBattery:main()
                     end
                 end
             end
+--]]
+
         end
 
         if not skip_loop then
@@ -338,6 +355,8 @@ function PVBattery:main()
                         self:isStateCharging(true)
                     end
                 end
+            else
+                -- disable discharge MOS here ???
             end
         end -- if skip__loop
 
