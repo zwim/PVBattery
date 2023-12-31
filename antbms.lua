@@ -151,6 +151,10 @@ function AntBMS:_sendCommand(cmd)
     end
 end
 
+function AntBMS:reboot()
+    return self:_sendCommand("reboot")
+end
+
 function AntBMS:toggleAutoBalance()
     return self:_sendCommand("balance.toggle")
 end
@@ -162,10 +166,6 @@ end
 
 function AntBMS:enableBluetooth()
     return self:_sendCommand("set?bluetooth=1")
-end
-
-function AntBMS:reboot()
-    return self:_sendCommand("reboot")
 end
 
 -- todo check result
@@ -356,8 +356,8 @@ function AntBMS:evaluateParameters(force)
 
     self.v.BalancingFlags = getInt32(self.answer, 132)
 
-    local _ -- _ is a table of the bits ;-)
-    _, self.v.ActiveBalancers = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries)
+    self.v.ActiveBalancersBits, self.v.ActiveBalancers
+        = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries)
 
     self.answer = {} -- clear old received bytes
 
@@ -508,9 +508,15 @@ function AntBMS:_printValuesNotProtected()
 
     util:log(string.format("Active Balancers: %s", self.v.ActiveBalancers))
 
+    local separator = {}
+    for i = 1, self.v.NumberOfBatteries do
+        separator[i] = tonumber(self.v.ActiveBalancersBits[i]) == 0 and "=" or "x"
+    end
+
     for i = 1, self.v.NumberOfBatteries, 2 do
-        util:log(string.format("[%2d] = %2.3f V", i, self.v.Voltage[i]),
-            i+1 <= self.v.NumberOfBatteries and string.format("[%2d] = %2.3f V", i+1, self.v.Voltage[i+1]) or "")
+        util:log(string.format("[%2d] %s %2.3f V", i, separator[i], self.v.Voltage[i]),
+            i+1 <= self.v.NumberOfBatteries and
+                 string.format("[%2d] %s %2.3f V", i+1, separator[i+1], self.v.Voltage[i+1]) or "")
     end
     util:log(string.format("TotalVoltage    = %3.1f V", self.v.TotalVoltage))
     util:log(string.format("Voltage sum     = %3.3f V", self.v.VoltageSum))
