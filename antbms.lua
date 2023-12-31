@@ -187,16 +187,7 @@ function AntBMS:setPower(power)
         util.sleep_time(1)
     end
 
-    -- we may use `http://ip.ip.ip.ip/set?power=<value>` here
-    local url = string.format("http://%s/set?power=%d", self.host, power)
-    local body, code = http.request(url)
-    code = tonumber(code)
-    if code < 200 or code >= 300 or not body then
-        print("xxx error in setPower")
-    end
---- xxx
-    -- self:_sendCommand(string.format("set?power=%d", power))
-
+    self:_sendCommand(string.format("set?power=%d", power))
 
     if power == 0 then
         util.sleep_time(1)
