@@ -79,8 +79,12 @@ function Switch:_getStatus()
     end
 
     local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
-    self.body, self.code, self.headers, self.status = http.request(url)
-    self.decoded = json.decode(self.body)
+    local body, code = http.request(url)
+    code = tonumber(code)
+    if code < 200 or code >= 300 then
+        return false
+    end
+    self.decoded = json.decode(body)
 
     self:setDataAge()
     return true
@@ -166,7 +170,11 @@ function Switch:toggle(on)
         on = "2"
     end
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
-    local body, code, headers, status = http.request(url)
+    local body, code = http.request(url)
+    code = tonumber(code)
+    if code < 200 or code >= 300 then
+        return ""
+    end
     local decoded = json.decode(body)
     local Result = decoded.POWER or ""
 

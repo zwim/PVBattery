@@ -138,64 +138,69 @@ function AntBMS:setAutoBalance(on)
     end
 end
 
-function AntBMS:toggleAutoBalance()
+function AntBMS:_sendCommand(cmd)
     if not self.host or self.host == "" then return end
 
-    local url = string.format("http://%s/balance.toggle", self.host)
-    self.body, self.code, self.headers, self.status = http.request(url)
-    if not self.body then
+    local url = string.format("http://%s/%s", self.host, cmd)
+    local body, code = http.request(url)
+    code = tonumber(code)
+    if code < 200 or code >=300 or not body then
         return false
+    else
+        return body
     end
 end
 
-function AntBMS:enableBluetooth()
-    if not self.host or self.host == "" then return end
-
-    local url = string.format("http://%s/set?bluetooth=1", self.host)
-    self.body, self.code, self.headers, self.status = http.request(url)
-    if not self.body then
-        return false
-    end
+function AntBMS:toggleAutoBalance()
+    return self:_sendCommand("balance.toggle")
 end
 
 function AntBMS:readAutoBalance()
     print("readAutoBalance not implemented yet")
-    if not self.host or self.host == "" then return end
+    return self:_sendCommand("balance.read")
+end
 
-    local url = string.format("http://%s/balance.read", self.host)
-    self.body, self.code, self.headers, self.status = http.request(url)
-    if not self.body then
-        return false
-    end
+function AntBMS:enableBluetooth()
+    return self:_sendCommand("set?bluetooth=1")
 end
 
 function AntBMS:reboot()
-    if not self.host or self.host == "" then return end
+    return self:_sendCommand("reboot")
+end
 
-    local url = string.format("http://%s/reboot", self.host)
-    self.body, self.code, self.headers, self.status = http.request(url)
+-- todo check result
+function AntBMS:enableDischarge()
+    return self:_sendCommand("set?bms_discharge=1")
+end
+
+-- todo check result
+function AntBMS:disableDischarge()
+    return self:_sendCommand("set?bms_discharge=0")
 end
 
 -- set power and en/disable bms discharge mos
 function AntBMS:setPower(power)
     if not self.host or self.host == "" then return end
 
-    local url
-
     if power > 0 then
-        url = string.format("http://%s/set?bms_discharge=1", self.host)
-        self.body, self.code, self.headers, self.status = http.request(url)
+        self:enableDischarge()
         util.sleep_time(1)
     end
 
     -- we may use `http://ip.ip.ip.ip/set?power=<value>` here
-    url = string.format("http://%s/set?power=%d", self.host, power)
-    self.body, self.code, self.headers, self.status = http.request(url)
+    local url = string.format("http://%s/set?power=%d", self.host, power)
+    local body, code = http.request(url)
+    code = tonumber(code)
+    if code < 200 or code >= 300 or not body then
+        print("xxx error in setPower")
+    end
+--- xxx
+    -- self:_sendCommand(string.format("set?power=%d", power))
+
 
     if power == 0 then
         util.sleep_time(1)
-        url = string.format("http://%s/set?bms_discharge=0", self.host)
-        self.body, self.code, self.headers, self.status = http.request(url)
+        self:disableDischarge()
     end
 end
 
@@ -255,19 +260,20 @@ function AntBMS:evaluateParameters(force)
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
         local url = string.format("http://%s/bms.data", self.host)
-        self.body, self.code, self.headers, self.status = http.request(url)
-        if not self.body then
+        local body, code = http.request(url)
+        code = tonumber(code)
+        if code < 200 or code >= 300 or not body then
             -- maybe the BMS has lost internet connection, so reset the ESP32
             -- no need any more, as bsm will reset itself now.
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
-            os.execute(date)
+            os.execute("date")
 
             return false
         end
         self.answer = {}
-        for n = 1, #self.body do
-            table.insert(self.answer, self.body:byte(n))
+        for n = 1, #body do
+            table.insert(self.answer, body:byte(n))
         end
 
         checksum = self:isChecksumOk()

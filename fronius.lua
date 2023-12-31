@@ -25,6 +25,8 @@ local GetMeterRealtimeData_cmd = "GetMeterRealtimeData.cgi?Scope=Device&DeviceId
 
 local Fronius = {
     host = host,
+    port = port,
+    urlPath = urlPath,
     url = "",
     Data = {},
     Request = {},
@@ -46,45 +48,35 @@ function Fronius:setDataAge()
     self.timeOfLastRequiredData = util.getCurrentTime()
 end
 
-function Fronius:getInverterRealtimeData()
-    if self:getDataAge() < config.update_interval then
-        return
+function Fronius:_get_RealtimeData(cmd)
+    local url = string.format("http://%s%s%s%s", self.host, self.port, self.urlPath, cmd)
+    local body, code = http.request(url)
+    code = tonumber(code)
+    if code >= 200 and code < 300 and body then
+        return json.decode(body)
+    else
+        return {}
     end
+end
 
-    self.url = string.format("http://%s%s%s%s", host, port, urlPath, GetInverterRealtimeData_cmd)
-    --print(url)
-    self.body, self.code, self.headers, self.status = http.request(self.url)
-    self.Data.GetInverterRealtimeData = json.decode(self.body)
+function Fronius:getInverterRealtimeData()
+    if self:getDataAge() < config.update_interval then return end
+
+    self.Data.GetInverterRealtimeData = self:_get_RealtimeData(GetInverterRealtimeData_cmd)
     self:setDataAge()
 end
 
 function Fronius:getPowerFlowRealtimeData()
-    if self:getDataAge() < config.update_interval then
-        return
-    end
+    if self:getDataAge() < config.update_interval then return end
 
-    self.url = string.format("http://%s%s%s", host, urlPath, GetPowerFlowRealtimeData_cmd)
-    -- print(url)
-    self.body, self.code, self.headers, self.status = http.request(self.url)
-    -- print(body, code, headers, status)
-    if self.body then
-        self.Data.GetPowerFlowRealtimeData = json.decode(self.body)
-    else
-        self.Data.GetPowerFlowRealtimeData = {}
-    end
+    self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData(GetPowerFlowRealtimeData_cmd)
     self:setDataAge()
 end
 
 function Fronius:getMeterRealtimeData()
-    self.url = string.format("http://%s%s%s", host, urlPath, GetMeterRealtimeData_cmd)
-    -- print(url)
-    self.body, self.code, self.headers, self.status = http.request(self.url)
-    -- print(body, code, headers, status)
-    if self.body then
-        self.Data.GetMeterRealtimeData = json.decode(self.body)
-    else
-        self.Data.GetMeterRealtimeData = {}
-    end
+    if self:getDataAge() < config.update_interval then return end
+
+    self.Data.GetMeterRealtimeData = self:_get_RealtimeData(GetMeterRealtimeData_cmd)
     self:setDataAge()
 end
 
