@@ -52,7 +52,7 @@ function Fronius:_get_RealtimeData(cmd)
     local url = string.format("http://%s%s%s%s", self.host, self.port, self.urlPath, cmd)
     local body, code = http.request(url)
     code = tonumber(code)
-    if code >= 200 and code < 300 and body then
+    if code and code >= 200 and code < 300 and body then
         return json.decode(body)
     else
         return {}

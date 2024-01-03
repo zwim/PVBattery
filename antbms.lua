@@ -144,8 +144,8 @@ function AntBMS:_sendCommand(cmd)
     local url = string.format("http://%s/%s", self.host, cmd)
     local body, code = http.request(url)
     code = tonumber(code)
-    if code < 200 or code >=300 or not body then
-        return false
+    if not code or code < 200 or code >=300 or not body then
+        return nil
     else
         return body
     end
@@ -253,7 +253,7 @@ function AntBMS:evaluateParameters(force)
         local url = string.format("http://%s/bms.data", self.host)
         local body, code = http.request(url)
         code = tonumber(code)
-        if code < 200 or code >= 300 or not body then
+        if not code or not body then
             -- maybe the BMS has lost internet connection, so reset the ESP32
             -- no need any more, as bsm will reset itself now.
             --os.execute(ESP32_HARD_RESET_COMMAND)
