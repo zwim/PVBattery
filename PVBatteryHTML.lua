@@ -15,12 +15,19 @@ return function(self, config, P_Grid, P_Load, P_PV)
         sources = sources + (InverterPowerCache[i] or 0)
     end
 
+    local SOC_string = "<br>SOC:"
+    for  i = 1, #self.BMS do
+        if self.BMS[i].v.SOC then
+            SOC_string = SOC_string .. " " .. self.BMS[i].host .. " " .. self.BMS[i].v.SOC .. "%%<br>"
+        end
+    end
+
     local TEMPLATE_PARSER = {
         {"_$DATE", ""},
         {"_$SUNRISE", self.sunrise},
         {"_$SUNSET", self.sunset},
         {"_$FRONIUS_ADR", config.FRONIUS_ADR},
-        {"_$STATE_OF_OPERATION", self:getState()},
+        {"_$STATE_OF_OPERATION", self:getState() .. SOC_string},
         {"_$P_GRID", string.format("%7.2f", P_Grid)},
         {"_$P_SELL_GRID", P_Grid < 0 and string.format("%7.2f", P_Grid) or "0.00"},
         {"_$P_BUY_GRID", P_Grid > 0 and string.format("%7.2f", P_Grid) or "0.00"},

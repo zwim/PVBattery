@@ -68,7 +68,7 @@ Device = {
         },
         charger_max_power = {
             300,
-            300,
+            150,
         },
         inverter_switch = "battery-inverter.lan",
         inverter_control = nil,

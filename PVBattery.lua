@@ -287,15 +287,15 @@ function PVBattery:main()
             end
 
             -- Check which battery need balancing
-            for _,bms in pairs(self.BMS) do
-                bms:evaluateParameters(true)
-                if next(bms.v) then -- check for non empty array
-                    if bms.v.CellDiff >= config.max_cell_diff
-                            or bms.v.HighestVoltage >= config.bat_highest_voltage
-                            or bms.v.SOC >= config.bat_SOC_max then
-                        bms:enableDischarge()
+            for _,BMS in pairs(self.BMS) do
+                BMS:evaluateParameters(true)
+                if next(BMS.v) then -- check for non empty array
+                    if BMS.v.CellDiff >= config.max_cell_diff
+                            or BMS.v.HighestVoltage >= config.bat_highest_voltage
+                            or BMS.v.SOC >= config.bat_SOC_max then
+                        BMS:enableDischarge()
                         util.sleep_time(1)
-                        bms:setAutoBalance(true)
+                        BMS:setAutoBalance(true)
                     end
                 end
             end
