@@ -109,7 +109,6 @@ function AntBMS:new(o)
 end
 
 function AntBMS:setAutoBalance(on)
-    if not self.host or self.host == "" then return end
     if on == nil then
         on = true
     end
@@ -123,18 +122,13 @@ function AntBMS:setAutoBalance(on)
         util:log("xxxx error self.v.BalancedStatusText is nil")
         return
     end
+
     if on then
-        if string.find(string.lower(self.v.BalancedStatusText), "on") then
-            return -- already on
-        else
-            self:toggleAutoBalance()
+        if next(self.v) and self.v.CellDiff >= 0.005 then
+            self:turnAutoBalanceOn()
         end
     else
-        if string.find(string.lower(self.v.BalancedStatusText), "off") then
-            return -- already off
-        else
-            self:toggleAutoBalance()
-        end
+        self:turnAutoBalanceOff()
     end
 end
 
@@ -159,9 +153,16 @@ function AntBMS:toggleAutoBalance()
     return self:_sendCommand("balance.toggle")
 end
 
+function AntBMS:turnAutoBalanceOn()
+    return self:_sendCommand("balance.on")
+end
+
+function AntBMS:turnAutoBalanceOff()
+    return self:_sendCommand("balance.off")
+end
+
 function AntBMS:readAutoBalance()
-    print("readAutoBalance not implemented yet")
-    return self:_sendCommand("balance.read")
+    return self:_sendCommand("balance.get")
 end
 
 function AntBMS:enableBluetooth()
@@ -176,6 +177,12 @@ end
 -- todo check result
 function AntBMS:disableDischarge()
     return self:_sendCommand("set?bms_discharge=0")
+end
+
+function AntBMS:getDischargeState()
+    if self:evaluateParameters() then
+        return (self.v.DischargeMos == 1) and "on" or "off"
+    end
 end
 
 -- set power and en/disable bms discharge mos
@@ -251,15 +258,21 @@ function AntBMS:evaluateParameters(force)
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
         local url = string.format("http://%s/bms.data", self.host)
-        local body, code = http.request(url)
-        code = tonumber(code)
+        local body, code
+        for _ = 1, 5 do -- try to read a few times
+            body, code = http.request(url)
+            code = tonumber(code)
+            if code and body then break end
+            util.sleep_time(0.5)
+        end
         if not code or not body then
             -- maybe the BMS has lost internet connection, so reset the ESP32
             -- no need any more, as bsm will reset itself now.
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute("date")
-
+            os.execute("echo sleeping " .. config.sleep_time)
+            util.sleep_time(config.sleep_time)
             return false
         end
         self.answer = {}
@@ -386,10 +399,7 @@ function AntBMS:printValues()
 end
 
 function AntBMS:readyToCharge()
-    if not self.host or self.host == "" then return end
-
-    self:evaluateParameters()
-    if self.v.CellDiff then
+    if self:evaluateParameters() then
         if self.v.HighestVoltage >= config.bat_highest_voltage then
             return false
         elseif self.v.CellDiff >= config.max_cell_diff then
@@ -405,15 +415,16 @@ end
 
 
 function AntBMS:readyToDischarge()
-    if not self.host or self.host == "" then return end
-
-    self:evaluateParameters()
-
     local start_discharge, continue_discharge
-    if self.v.CellDiff then
+
+    if self:evaluateParameters() then
         if self.v.CellDiff > config.max_cell_diff then
             start_discharge = false
-            continue_discharge = false
+            if -1.0 <= self.v.Current and self.v.Current < 1.0 then
+                continue_discharge = true
+            else
+                continue_discharge = false
+            end
         elseif self.v.LowestVoltage < config.bat_lowest_voltage then
             start_discharge = false
             continue_discharge = false
@@ -432,10 +443,7 @@ function AntBMS:readyToDischarge()
 end
 
 function AntBMS:isLowChargedOrNeedsRescue()
-    if not self.host or self.host == "" then return end
-
-    self:evaluateParameters()
-    if self.v.CellDiff then
+    if self:evaluateParameters() then
         if self.v.LowestVoltage < config.bat_lowest_rescue or self.v.SOC < config.bat_SOC_min_rescue then
             self.rescue_charge = true
             return true
@@ -446,7 +454,7 @@ function AntBMS:isLowChargedOrNeedsRescue()
             return false
         end
     end
-    return nil
+    return
 end
 
 function AntBMS:needsRescueCharge()
@@ -454,14 +462,12 @@ function AntBMS:needsRescueCharge()
 end
 
 function AntBMS:recoveredFromRescueCharge()
-    if not self.host or self.host == "" then return end
 
     if not self.rescue_charge then
         return true
     end
 
-    self:evaluateParameters(true)
-    if self.v.CellDiff then
+    if self:evaluateParameters(true) then
         if self.v.LowestVoltage > config.bat_lowest_rescue
             and self.v.LowestVoltage > config.bat_lowest_voltage
             and self.v.SOC > config.bat_SOC_min_rescue
@@ -472,7 +478,23 @@ function AntBMS:recoveredFromRescueCharge()
                 return false
         end
     end
-    return nil
+    return
+end
+
+function AntBMS:needsBalancing()
+    if self:evaluateParameters(true) then
+        if self.v.CellDiff >= config.max_cell_diff
+                or self.v.HighestVoltage >= config.bat_highest_voltage
+                or self.v.SOC >= config.bat_SOC_max then
+            self:enableDischarge()
+            self:setAutoBalance(true)
+        elseif -1.0 <= self.v.Current and self.v.Current < 1.0 then
+            if not self:getDischargeState() then
+                self:enableDischarge()
+                self:setAutoBalance(true)
+            end
+        end
+    end
 end
 
 function AntBMS:_printValuesNotProtected()

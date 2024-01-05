@@ -27,6 +27,10 @@ function Charger:new(o)
     return o
 end
 
+function Charger:clearDataAge()
+    self.Switch:clearDataAge()
+end
+
 function Charger:getCurrentPower()
    return self.Switch:getPower()
 end

@@ -110,9 +110,35 @@ function PVBattery:isStateLowBattery(set)
     return self._state == "lowBattery"
 end
 
-function PVBattery:findBestCharger(req_power)
+-- find an activated charger which is charging with more than req_power
+-- or find the activated charger with the highest power.
+function PVBattery:findBestChargerToTurnOff(req_power)
     local pos = 0
     local avail_power = 0
+
+    if req_power <= 0 then print("Error 1") end
+
+    for i, Charger in pairs(self.Charger) do
+        if Charger:getPowerState() == "on" then
+            -- process only activated chargers
+            local charging_power = Charger:getCurrentPower() or math.huge
+            if charging_power > req_power or charging_power > avail_power then
+                -- either one charging power that is larger than requested power (✓)
+                -- or the largest charging power (✓)
+                pos = i
+                avail_power = charging_power
+            end
+        end
+    end
+
+    return pos, avail_power
+end
+
+function PVBattery:findBestChargerToTurnOn(req_power)
+    local pos = 0
+    local avail_power = 0
+
+    if req_power <= 0 then print("Error 2") end
 
     for i, chg in pairs(self.Charger) do
         local max_power = chg:getMaxPower() or 0
@@ -132,6 +158,8 @@ end
 function PVBattery:findBestInverter(req_power)
     local pos = 0
     local avail_power = 0
+
+    if req_power <= 0 then print("Error 3") end
 
     for i, inv in pairs(self.Inverter) do
         local min_power = inv.min_power or math.huge
@@ -253,19 +281,19 @@ function PVBattery:main()
             -- Do the test again, as the need of a rescue charge is checked here, too.
 
             -- Check which battery is on low power; stop discharge for it.
-            for _,inv in pairs(self.Inverter) do
-                if inv.time_controlled then
+            for _, Inverter in pairs(self.Inverter) do
+                if Inverter.time_controlled then
                     local curr_hour = date.hour + date.min/60 + date.sec/3600
-                    if curr_hour > SunTime.times[inv.time_controlled.off] then
-                        inv:stopDischarge()
-                    elseif curr_hour > SunTime.times[inv.time_controlled.on] then
-                        inv:startDischarge(10) -- just any power > 0
+                    if curr_hour > SunTime.times[Inverter.time_controlled.off] then
+                        Inverter:stopDischarge()
+                    elseif curr_hour > SunTime.times[Inverter.time_controlled.on] then
+                        Inverter:startDischarge() -- discharge with minimal power
                     else
-                        inv:stopDischarge()
+                        Inverter:stopDischarge()
                     end
                 else
-                    if inv.BMS:isLowChargedOrNeedsRescue() then
-                        inv:stopDischarge()
+                    if Inverter.BMS:isLowChargedOrNeedsRescue() then
+                        Inverter:stopDischarge()
                         self:isStateLowBattery(true)
                     end
                 end
@@ -273,30 +301,25 @@ function PVBattery:main()
 
             -- If there is at least one low power battery; check if a battery needs a rescue charge
             if self:isStateLowBattery() then
-                for _,charger in pairs(self.Charger) do
-                    if charger.BMS:needsRescueCharge() then
-                        charger:startCharge()
+                for _, Charger in pairs(self.Charger) do
+                    if Charger.BMS:needsRescueCharge() then
+                        Charger:startCharge()
                         skip_loop = true
                     end
-                    if charger.BMS:recoveredFromRescueCharge() then
+                    if Charger:getPowerState() == "on"
+                        and Charger.BMS:recoveredFromRescueCharge() then
                         -- We come here if state == lowBattery and recoverFromRescueCharge()
-                        charger:stopCharge()
+                        Charger:stopCharge()
                         self:isStateIdle(true)
                     end
                 end
             end
 
             -- Check which battery need balancing
-            for _,BMS in pairs(self.BMS) do
-                BMS:evaluateParameters(true)
-                if next(BMS.v) then -- check for non empty array
-                    if BMS.v.CellDiff >= config.max_cell_diff
-                            or BMS.v.HighestVoltage >= config.bat_highest_voltage
-                            or BMS.v.SOC >= config.bat_SOC_max then
-                        BMS:enableDischarge()
-                        util.sleep_time(1)
-                        BMS:setAutoBalance(true)
-                    end
+            for _, BMS in pairs(self.BMS) do
+                if BMS:needsBalancing() then
+                    BMS:enableDischarge()
+                    BMS:setAutoBalance(true)
                 end
             end
 
@@ -317,17 +340,21 @@ function PVBattery:main()
         end
 
         if not skip_loop then
-            if P_Grid > 0 and not self:isStateLowBattery() then
+            if P_Grid > 30 and not self:isStateLowBattery() then
                 if self:isCharging() then
-                    short_sleep = 5
-                    for _, charger in pairs(self.Charger) do
-                        charger:stopCharge()
-                        self:isStateIdle(true)
+                    short_sleep = 0.1
+                    charger_num, charger_power = self:findBestChargerToTurnOff(P_Grid)
+                    -- Only activate one charger, as the current is only estimated.
+                    if charger_num > 0 then
+                        print("off", charger_num)
+                        self.Charger[charger_num]:stopCharge()
+                        self.Charger[charger_num]:clearDataAge()
                     end
+                    self:isStateIdle(self:isCharging())
                 else
                     inverter_num, inverter_power = self:findBestInverter(P_Grid)
+                    -- Only activate one inverter, as the current is only estimated-
                     if inverter_num > 0 then
---                        print("xxx activate additional inverter:", inverter_num, inverter_power)
                         util:log(string.format("Activate inverter: %s with %5.2f W",
                                 inverter_num, inverter_power))
                         self.Inverter[inverter_num]:startDischarge(P_Grid)
@@ -335,9 +362,10 @@ function PVBattery:main()
                         self:isStateDischarging(true)
                     end
                 end
-            elseif P_Grid < 0 then
+            elseif P_Grid < 30 then
+                -- allow a small power buy instead of a bigger power sell.
                 if self:isDischarging() then
-                    short_sleep = 5
+                    short_sleep = 1
                     for _, inv in pairs(self.Inverter) do
                         if not inv.time_controlled then
                             inv:stopDischarge()
@@ -345,20 +373,20 @@ function PVBattery:main()
                         end
                     end
                 else
-                    charger_num, charger_power = self:findBestCharger(-P_Grid)
+                    charger_num, charger_power = self:findBestChargerToTurnOn(math.max(-P_Grid, 10))
+                    -- Only activate one charger, as the current is only estimated.
                     if charger_num > 0 then
---                        print("xxx activate additional charger:", charger_num, charger_power)
                         util:log(string.format("Activate charger: %s with %5.2f W",
                                 charger_num, charger_power))
                         self.Charger[charger_num]:startCharge()
-                        short_sleep = 10  -- inverters are slower than chargers
+                        short_sleep = 5  -- inverters are slower than chargers
                         self:isStateCharging(true)
                     end
                 end
             else
                 -- disable discharge MOS here ???
             end
-        end -- if skip__loop
+        end -- if skip_loop
 
         for _, bms in pairs(self.BMS) do
             bms:printValues()

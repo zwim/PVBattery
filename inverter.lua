@@ -34,7 +34,7 @@ end
 
 function Inverter:startDischarge(req_power)
     if self.BMS:readyToDischarge() then
-        self.BMS:setPower(req_power)
+        self.BMS:setPower(req_power or 10) -- if no power requested, start with minimal power
         util.sleep_time(1)
         self.Switch:toggle("on")
     end
@@ -42,7 +42,7 @@ end
 
 function Inverter:stopDischarge()
     self.BMS:setPower(0)
-    util.sleep_time(1)
+    util.sleep_time(0.5)
     self.Switch:toggle("off")
 end
 
