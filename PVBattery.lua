@@ -22,6 +22,7 @@ local PVBattery = {
 
 -------------------- extend functions from this file
 PVBattery.generateHTML = require("PVBatteryHTML")
+PVBattery.serverCommands = require("servercommands")
 --------------------
 
 function PVBattery:init()
@@ -71,6 +72,9 @@ function PVBattery:init()
                 max_power = Device.charger_max_power[i],
                 BMS = BMS,
             }
+            BMS.wakeup = function()
+                Charger:startCharge()
+            end
             table.insert(self.Charger, Charger)
         end
     end
@@ -322,21 +326,6 @@ function PVBattery:main()
                     BMS:setAutoBalance(true)
                 end
             end
-
---[[
-            -- Check which battery need balancing (on the high side only)
-            for _,bms in pairs(self.BMS) do
-                bms:evaluateParameters(true)
-                if bms.v.Current and bms.v.Current < 0.99 and bms.v.SOC > 80 then
-                    if bms.v.HighestVoltage >= config.bat_highest_voltage
-                            or bms.v.CellDiff >= config.max_cell_diff
-                            or bms.v.SOC >= config.bat_SOC_max then
-                        bms:setAutoBalance(true)
-                    end
-                end
-            end
---]]
-
         end
 
         if not skip_loop then
@@ -388,9 +377,11 @@ function PVBattery:main()
             end
         end -- if skip_loop
 
-        for _, bms in pairs(self.BMS) do
-            bms:printValues()
+        for _, BMS in pairs(self.BMS) do
+            BMS:printValues()
         end
+
+        self:serverCommands(config)
 
         util:log("New state: " .. self:getState())
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")

@@ -10,7 +10,7 @@ local config = require("configuration")
 
 local READ_DATA_SIZE = 140
 -- command to hard reset a connected ESP32 device
-local ESP32_HARD_RESET_COMMAND =
+local ESP32_HARD_RESET_COMMAND = "killall minicom; killall tio; " ..
     "esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
 
 
@@ -113,7 +113,7 @@ function AntBMS:setAutoBalance(on)
         on = true
     end
 
-    self:evaluateParameters(true)
+    self:evaluateData(true)
 
     util:log("Balancer status was ",
         self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
@@ -180,7 +180,7 @@ function AntBMS:disableDischarge()
 end
 
 function AntBMS:getDischargeState()
-    if self:evaluateParameters() then
+    if self:evaluateData() then
         return (self.v.DischargeMos == 1) and "on" or "off"
     end
 end
@@ -241,7 +241,7 @@ function AntBMS:isChecksumOk()
 end
 
 -- This is the usual way of reading new parameters
-function AntBMS:evaluateParameters(force)
+function AntBMS:evaluateData(force)
     if not self.host or self.host == "" then
         return false
     end
@@ -251,19 +251,29 @@ function AntBMS:evaluateParameters(force)
         return true
     end
 
-    -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
-    self.v = {} -- clear old values
+    -- If we get here, make invalidate the last data aquisition date.
+    -- Will be updated when new correct data are read.
+    self:clearDataAge()
 
     local checksum = false
     local retries = 10
     while #self.answer < READ_DATA_SIZE and retries > 0 do
-        local url = string.format("http://%s/bms.data", self.host)
+        local url = string.format("http://%s/live.data", self.host)
         local body, code
-        for _ = 1, 5 do -- try to read a few times
-            body, code = http.request(url)
-            code = tonumber(code)
+        for i = 1, 2 do -- try to wake up BT-Module by starting a short charge
+            for _ = 1, 4 do -- try to read a few times
+                body, code = http.request(url)
+                code = tonumber(code)
+                if code and body then break end
+                os.execute("date")
+                os.execute("echo Could not read bms.data -> try again.")
+                util.sleep_time(1)
+            end
             if code and body then break end
-            util.sleep_time(0.5)
+            os.execute("date")
+            os.execute("echo Could not get bms.data -> starting a wakup charge.")
+            self.wakeup()
+            util.sleep_time(config.sleep_time)
         end
         if not code or not body then
             -- maybe the BMS has lost internet connection, so reset the ESP32
@@ -271,7 +281,7 @@ function AntBMS:evaluateParameters(force)
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute("date")
-            os.execute("echo sleeping " .. config.sleep_time)
+            os.execute("Could not read bsm.data -> reboot ESP32 -> echo sleeping " .. config.sleep_time)
             util.sleep_time(config.sleep_time)
             return false
         end
@@ -291,6 +301,9 @@ function AntBMS:evaluateParameters(force)
         self:enableBluetooth()
         return false
     end
+
+    -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
+    self.v = {} -- clear old values
 
     self.v.TotalVoltage = getInt16(self.answer, 4) * 0.1
 
@@ -374,7 +387,67 @@ function AntBMS:evaluateParameters(force)
 
     self.answer = {} -- clear old received bytes
 
+    -- Now we store the new aquisition time.
     self:setDataAge()
+    return true
+end
+
+-- This is the usual way of reading new parameters
+function AntBMS:getParameters()
+    if not self.host or self.host == "" then
+        return false
+    end
+
+    local retries = 10
+    while #self.answer < READ_DATA_SIZE and retries > 0 do
+        local url = string.format("http://%s/parameters.backup", self.host)
+        local body, code
+        for _ = 1, 5 do -- try to read a few times
+            body, code = http.request(url)
+            code = tonumber(code)
+            if code and body then break end
+            os.execute("date")
+            os.execute("echo Could not get bms parameters")
+            util.sleep_time(1)
+        end
+        if not code or not body then
+            -- maybe the BMS has lost internet connection, so reset the ESP32
+            -- no need any more, as bsm will reset itself now.
+            --os.execute(ESP32_HARD_RESET_COMMAND)
+            os.execute(ESP32_HARD_RESET_COMMAND)
+            os.execute("date")
+            os.execute("echo sleeping " .. config.sleep_time)
+            util.sleep_time(config.sleep_time)
+            return false
+        end
+        self.answer = {}
+        for n = 1, #body do
+            table.insert(self.answer, body:byte(n))
+        end
+
+        if #self.answer == 256*2 then
+            break
+        end
+        retries = retries - 1
+    end
+
+    if #self.answer ~= 256*2 then
+        return false
+    end
+
+    -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
+    self.Parameters = {} -- clear old values
+    for n = 1, 256 do
+        self.Parameter[n] = self.answer[n*2] * 256 + self.answer[n*2-1]
+    end
+
+    self.answer = {} -- clear old received bytes
+
+    for n = 1, 256 do
+        print(string:format("%3d: 0x%X", n, self.Parameter[n]))
+    end
+
+
     return true
 end
 
@@ -391,7 +464,7 @@ function AntBMS:clearDataAge()
 end
 
 function AntBMS:printValues()
-    self:evaluateParameters()
+    self:evaluateData()
     local success, err = pcall(self._printValuesNotProtected, self)
     if not success then
         util:log("BMS reported no values; Error: ", tostring(err))
@@ -399,7 +472,7 @@ function AntBMS:printValues()
 end
 
 function AntBMS:readyToCharge()
-    if self:evaluateParameters() then
+    if self:evaluateData() then
         if self.v.HighestVoltage >= config.bat_highest_voltage then
             return false
         elseif self.v.CellDiff >= config.max_cell_diff then
@@ -413,11 +486,9 @@ function AntBMS:readyToCharge()
     return nil
 end
 
-
 function AntBMS:readyToDischarge()
-    local start_discharge, continue_discharge
-
-    if self:evaluateParameters() then
+    if self:evaluateData() then
+        local start_discharge, continue_discharge
         if self.v.CellDiff > config.max_cell_diff then
             start_discharge = false
             if -1.0 <= self.v.Current and self.v.Current < 1.0 then
@@ -438,12 +509,12 @@ function AntBMS:readyToDischarge()
             start_discharge = true
             continue_discharge = true
         end
+        return start_discharge, continue_discharge
     end
-    return start_discharge, continue_discharge
 end
 
 function AntBMS:isLowChargedOrNeedsRescue()
-    if self:evaluateParameters() then
+    if self:evaluateData() then
         if self.v.LowestVoltage < config.bat_lowest_rescue or self.v.SOC < config.bat_SOC_min_rescue then
             self.rescue_charge = true
             return true
@@ -467,7 +538,7 @@ function AntBMS:recoveredFromRescueCharge()
         return true
     end
 
-    if self:evaluateParameters(true) then
+    if self:evaluateData(true) then
         if self.v.LowestVoltage > config.bat_lowest_rescue
             and self.v.LowestVoltage > config.bat_lowest_voltage
             and self.v.SOC > config.bat_SOC_min_rescue
@@ -482,7 +553,7 @@ function AntBMS:recoveredFromRescueCharge()
 end
 
 function AntBMS:needsBalancing()
-    if self:evaluateParameters(true) then
+    if self:evaluateData() then
         if self.v.CellDiff >= config.max_cell_diff
                 or self.v.HighestVoltage >= config.bat_highest_voltage
                 or self.v.SOC >= config.bat_SOC_max then
@@ -505,13 +576,13 @@ function AntBMS:_printValuesNotProtected()
 
     util:log(string.format("BMS: %s", self.host))
     util:log(string.format("SOC = %3d%%", self.v.SOC))
-    util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -666))
+    util:log(string.format("calc.SOC = %3.2f%%", self.v.CalculatedSOC or -6.66))
 
     local charging_text = ""
     if self.v.CurrentPower then
         if self.v.CurrentPower < 0 then
             charging_text = "charge"
-        else
+        elseif self.v.CurrentPower > 0 then
             charging_text = "discharge"
         end
     end
@@ -562,6 +633,9 @@ function AntBMS:_printValuesNotProtected()
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
     return true
+end
+
+function AntBMS:wakeup()
 end
 
 return AntBMS

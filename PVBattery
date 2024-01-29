@@ -12,7 +12,9 @@ command_user="root:root"
 
 directory="/opt/PVBattery/"
 
+rm -f "/tmp/index.html"
 ln -sf "/tmp/index.html" "/var/www/localhost/htdocs/index.html"
 
 date > /tmp/index.html
-echo "PVBattery is starting up ..." >> /tmp/index.html
+echo -e "\nPVBattery is starting up ..." >> /tmp/index.html
+sync

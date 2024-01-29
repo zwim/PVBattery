@@ -60,8 +60,4 @@ function Charger:readyToCharge()
     end
 end
 
-function Charger:setAutoBalance(on)
-    self.BSM:setAutoBalance(on)
-end
-
 return Charger

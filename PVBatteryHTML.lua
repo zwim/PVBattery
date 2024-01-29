@@ -34,7 +34,9 @@ return function(self, config, P_Grid, P_Load, P_PV)
         {"_$P_LOAD", string.format("%7.2f", P_Load)},
         {"_$P_ROOF", string.format("%7.2f", P_PV)},
         {"_$BMS1_INFO", "http://" .. self.BMS[1].host .. "/show"},
-        {"_$BMS1_BALANCE", "http://" .. self.BMS[1].host .. "/balance.toggle"},
+        {"_$BMS1_BALANCE_OFF", "http://" .. self.BMS[1].host .. "/balance.off"},
+        {"_$BMS1_BALANCE_ON", "http://" .. self.BMS[1].host .. "/balance.on"},
+        {"_$BMS1_BALANCE_TOGGLE", "http://" .. self.BMS[1].host .. "/balance.toggle"},
 
         {"_$BATTERY_CHARGER1_POWER",
             string.format("%7.2f", ChargerPowerCache[1])},

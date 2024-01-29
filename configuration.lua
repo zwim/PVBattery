@@ -15,6 +15,8 @@ local configuration = {
     -- during PVBattery run.
     config_file_name = "config.lua", -- the config file
 
+    command_file_name = "/tmp/PVCommands", -- a file containing commands for PVBattery
+
     host = util.hostname(),
 
     position = {
@@ -94,7 +96,7 @@ function configuration:read()
     local file = configuration.config_file_name or "config.lua"
 
     local chunk, config_time, err
-    config_time, err = lfs.attributes(file, 'modification')
+    config_time, err = lfs.attributes(file, "modification")
 
     if err then
         util:log("Error opening config file: " .. configuration.config_file_name, "Err: " .. err)
