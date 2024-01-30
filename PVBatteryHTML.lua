@@ -2,7 +2,6 @@ return function(self, config, P_Grid, P_Load, P_PV)
     local ChargerPowerCache = {}
     local InverterPowerCache = {}
 
-
     local sinks = 0
     for i = 1, #self.Charger do
         ChargerPowerCache[i] = self.Charger[i]:getCurrentPower()

@@ -475,9 +475,9 @@ function AntBMS:readyToCharge()
     if self:evaluateData() then
         if self.v.HighestVoltage >= config.bat_highest_voltage then
             return false
-        elseif self.v.CellDiff >= config.max_cell_diff then
+        elseif self.v.SOC > config.bat_SOC_full and self.v.CellDiff >= config.max_cell_diff then
             return false
-        elseif self.v.SOC >= config.bat_SOC_max then
+        elseif self.v.SOC > config.bat_SOC_max then
             return false
         else
             return true
@@ -559,7 +559,7 @@ function AntBMS:needsBalancing()
                 or self.v.SOC >= config.bat_SOC_max then
             self:enableDischarge()
             self:setAutoBalance(true)
-        elseif -1.0 <= self.v.Current and self.v.Current < 1.0 then
+        elseif -1.0 <= self.v.Current and self.v.Current <= 1.0 then
             if not self:getDischargeState() then
                 self:enableDischarge()
                 self:setAutoBalance(true)

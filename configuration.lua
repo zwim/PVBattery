@@ -32,11 +32,12 @@ local configuration = {
     html_battery = "/var/www/localhost/htdocs/battery.html",
 
     bat_SOC_min = 20, -- Percent
-    bat_SOC_max = 90, -- Percent
+    bat_SOC_max = 101, -- Percent
+    bat_SOC_full = 80, -- Percent
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell
     bat_lowest_rescue = 2.801, -- start rescue charge
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
-    max_cell_diff = 0.100,
+    max_cell_diff = 0.105,
 
     bat_SOC_hysteresis = 2,
     bat_voltage_hysteresis = 0.050,
@@ -58,6 +59,7 @@ local configuration = {
                 "battery-charger2.lan",
             },
             charger_max_power = {
+                300,
                 300,
                 300,
             },

@@ -40,6 +40,7 @@ position = {
 
 bat_SOC_min = 23 -- Percent
 bat_SOC_max = 101 -- Percent
+bat_SOC_full = 80
 bat_SOC_min_rescue = 10 -- start rescue charge
 
 bat_SOC_hysteresis = 2
@@ -48,7 +49,7 @@ bat_voltage_hysteresis = 0.100
 bat_lowest_voltage = 2.901 -- lowest allowed voltage
 bat_lowest_rescue = 2.801 -- start rescue charge
 bat_hightest_voltage = 3.53 -- highest allowed voltage
-max_cell_diff = 0.060 -- maximum allowed cell diff
+max_cell_diff = 0.150 -- maximum allowed cell diff
 
 load_full_time_h = 2.5 -- time before sun set, to load battery at maximum
 
@@ -67,8 +68,9 @@ Device = {
             "battery-charger2.lan",
         },
         charger_max_power = {
-            300,
-            150,
+            200,
+            200,
+            200,
         },
         inverter_switch = "battery-inverter.lan",
         inverter_control = nil,

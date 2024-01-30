@@ -1,3 +1,11 @@
+
+-- profiler from https://github.com/charlesmallah/lua-profiler
+--local Profiler = require("suntime/profiler")
+if Profiler then
+	Profiler.start()
+end
+
+
 local AntBMS = require("antbms")
 local Fronius = require("fronius")
 local SunTime = require("suntime/suntime")
@@ -198,7 +206,7 @@ function PVBattery:isDischarging()
     return false
 end
 
-function PVBattery:main()
+function PVBattery:main(profiling_runs)
     local last_date, date
     -- optain a date in the past
     date = os.date("*t")
@@ -206,7 +214,10 @@ function PVBattery:main()
 
     self:isStateIdle(true)
 
-    while true do
+    while type(profiling_runs) ~= "number" or profiling_runs > 0 do
+        if type(profiling_runs) == "number" then
+            profiling_runs = profiling_runs - 1
+        end
         local skip_loop = false
         local short_sleep = nil -- a number here will shorten the sleep time
         local _start_time = util.getCurrentTime()
@@ -409,8 +420,14 @@ local MyBatteries = PVBattery
 
 MyBatteries:init()
 
--- this is the outer loop, a safety-net if the inner loop is broken with `break`
-while true do
-    util:cleanLogs()
-    MyBatteries:main()
+if not Profiler then
+    -- this is the outer loop, a safety-net if the inner loop is broken with `break`
+    while true do
+        util:cleanLogs()
+        MyBatteries:main()
+    end
+else -- if Profiler
+    MyBatteries:main(1)
+	Profiler.stop()
+	Profiler.report("test-profiler.log")
 end

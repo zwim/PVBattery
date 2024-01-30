@@ -37,7 +37,7 @@ local Switch = {
     code = nil,
     max_power = 0,
     power_state = 0,
-    }
+}
 
 function Switch:new(o)
     o = o or {}   -- create object if user does not provide one
@@ -130,7 +130,7 @@ function Switch:getPower()
         self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Power or (0/0)
 
     if Power and Power > 50 then
-        local weight = 0.1
+        local weight = 0.2
         self.max_power = self.max_power * (1 - weight) + Power * weight
     end
     return Power
