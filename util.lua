@@ -140,4 +140,9 @@ function util.hostname()
     return output
 end
 
+-- runtTo(123.4567, 2) -> 123.46
+function util.roundTo(num, places)  
+    return math.floor(num * 10^(-places) + 0.5) * (10^places)
+end
+
 return util

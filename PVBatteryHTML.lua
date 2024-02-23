@@ -18,9 +18,10 @@ return function(self, config, P_Grid, P_Load, P_PV)
     for  i = 1, #self.BMS do
         if self.BMS[i].v.SOC then
             SOC_string = SOC_string .. " " .. self.BMS[i].host .. " " .. self.BMS[i].v.SOC .. "%%<br>"
+            SOC_string = SOC_string .. os.date("%c", self.BMS[i].timeOfLastFullBalancing) .. "<br>"
         end
     end
-
+    
     local TEMPLATE_PARSER = {
         {"_$DATE", ""},
         {"_$SUNRISE", self.sunrise},
@@ -43,6 +44,9 @@ return function(self, config, P_Grid, P_Load, P_PV)
         {"_$BATTERY_CHARGER2_POWER",
             string.format("%7.2f", ChargerPowerCache[2])},
         {"_$BATTERY_CHARGER2", self.Charger[2].switch_host},
+        {"_$BATTERY_CHARGER3_POWER",
+            string.format("%7.2f", ChargerPowerCache[3])},
+        {"_$BATTERY_CHARGER3", self.Charger[3].switch_host},
         {"_$BATTERY_INVERTER_POWER",
             string.format("%7.2f", InverterPowerCache[1])},
         {"_$BATTERY_INVERTER", self.Inverter[1].host},

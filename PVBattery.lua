@@ -5,7 +5,6 @@ if Profiler then
 	Profiler.start()
 end
 
-
 local AntBMS = require("antbms")
 local Fronius = require("fronius")
 local SunTime = require("suntime/suntime")
@@ -63,7 +62,12 @@ function PVBattery:init()
     self.Charger = {}
     self.Inverter = {}
     for _, Device in pairs(config.Device) do
-        local BMS = AntBMS:new{host = Device.BMS}
+        local BMS = AntBMS:new{
+			host = Device.BMS,
+			lastFullPeriod = config.lastFullPeriod,
+			minCellDiff = config.minCellDiff,
+			minPower = config.minPower,
+		}
         table.insert(self.BMS, BMS)
 
         local Inverter = InverterClass:new {
@@ -228,9 +232,11 @@ function PVBattery:main(profiling_runs)
         local inverter_power
 
         -- if config has changed, reload it
-        if config:read() ~= nil then
-            short_sleep = 1
-        end
+		if config:needUpdate() then
+			if config:read(true) then
+				short_sleep = 1
+			end
+		end
 
         last_date = date
         date = os.date("*t")
@@ -347,7 +353,7 @@ function PVBattery:main(profiling_runs)
                     -- Only activate one charger, as the current is only estimated.
                     if charger_num > 0 then
                         print("off", charger_num)
-                        self.Charger[charger_num]:stopCharge()
+                        self.Charger[charger_num]:stopCharge(charger_power)
                         self.Charger[charger_num]:clearDataAge()
                     end
                     self:isStateIdle(self:isCharging())

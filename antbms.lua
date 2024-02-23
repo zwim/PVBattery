@@ -38,6 +38,7 @@ local AntBMS = {
     host = "",
     v = {},
     timeOfLastRequiredData = 0, -- no data yet
+    timeOfLastFullBalancing = 0, -- no data yet
 
     MOSFETChargeStatusFlag = {
         [0] = "Off",
@@ -103,6 +104,9 @@ local AntBMS = {
 
 function AntBMS:new(o)
     o = o or {}   -- create object if user does not provide one
+    o.lastFullPeriod = o.lastFullPeriod or 2*24*3600 -- two days for now xxx
+    o.minCellDiff = o.minCellDiff or 0.03
+    o.minPower = o.minPower or 50
     setmetatable(o, self)
     self.__index = self
     return o
@@ -124,7 +128,7 @@ function AntBMS:setAutoBalance(on)
     end
 
     if on then
-        if next(self.v) and self.v.CellDiff >= 0.005 then
+        if next(self.v) and self.v.CellDiff >= self.minCellDiff then
             self:turnAutoBalanceOn()
         end
     else
@@ -260,7 +264,7 @@ function AntBMS:evaluateData(force)
     while #self.answer < READ_DATA_SIZE and retries > 0 do
         local url = string.format("http://%s/live.data", self.host)
         local body, code
-        for i = 1, 2 do -- try to wake up BT-Module by starting a short charge
+        for _ = 1, 2 do -- try to wake up BT-Module by starting a short charge
             for _ = 1, 4 do -- try to read a few times
                 body, code = http.request(url)
                 code = tonumber(code)
@@ -326,7 +330,7 @@ function AntBMS:evaluateData(force)
 
     self.v.PhysicalCapacity = getInt32(self.answer, 75) * 1e-6
     self.v.RemainingCapacity = getInt32(self.answer, 79) * 1e-6
-    self.v.CalculatedSOC = self.v.RemainingCapacity / self.v.PhysicalCapacity * 100
+    self.v.CalculatedSOC = util.roundTo(self.v.RemainingCapacity / self.v.PhysicalCapacity * 100, -2)
 
     self.v.CycleCapacity = getInt32(self.answer, 83) * 1e-6
 
@@ -365,7 +369,7 @@ function AntBMS:evaluateData(force)
     self.v.LowestMonomer = getInt8(self.answer, 118)
     self.v.LowestVoltage = getInt16(self.answer, 119) * 1e-3
 
-    self.v.CellDiff = self.v.HighestVoltage - self.v.LowestVoltage
+    self.v.CellDiff = util.roundTo(self.v.HighestVoltage - self.v.LowestVoltage, -3)
 
     self.v.AverageVoltage = getInt16(self.answer, 121)* 1e-3
 
@@ -386,6 +390,18 @@ function AntBMS:evaluateData(force)
         = util.numToBits(self.v.BalancingFlags, self.v.NumberOfBatteries)
 
     self.answer = {} -- clear old received bytes
+
+print(os.time())
+    if util.getCurrentTime() >= self.timeOfLastFullBalancing + config.lastFullPeriod then
+        config.bat_SOC_max = 101
+    end
+    
+    if self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff 
+        and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower then
+
+        self.timeOfLastFullBalancing = util.getCurrentTime()
+        config.bat_SOC_max = config.bat_SOC_full
+    end
 
     -- Now we store the new aquisition time.
     self:setDataAge()
@@ -475,7 +491,7 @@ function AntBMS:readyToCharge()
     if self:evaluateData() then
         if self.v.HighestVoltage >= config.bat_highest_voltage then
             return false
-        elseif self.v.SOC > config.bat_SOC_full and self.v.CellDiff >= config.max_cell_diff then
+        elseif self.v.SOC > config.bat_SOC_max and self.v.CellDiff >= config.max_cell_diff then
             return false
         elseif self.v.SOC > config.bat_SOC_max then
             return false
@@ -555,8 +571,7 @@ end
 function AntBMS:needsBalancing()
     if self:evaluateData() then
         if self.v.CellDiff >= config.max_cell_diff
-                or self.v.HighestVoltage >= config.bat_highest_voltage
-                or self.v.SOC >= config.bat_SOC_max then
+                or self.v.HighestVoltage >= config.bat_highest_voltage then
             self:enableDischarge()
             self:setAutoBalance(true)
         elseif -1.0 <= self.v.Current and self.v.Current <= 1.0 then
@@ -632,6 +647,8 @@ function AntBMS:_printValuesNotProtected()
     end
 
     util:log(string.format("Age of data = %6.3f s", self:getDataAge()))
+    util:log(os.date("%c", self.timeOfLastFullBalancing))
+
     return true
 end
 

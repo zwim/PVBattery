@@ -4,9 +4,9 @@ local util = require("util")
 
 local configuration = {
     -- Don't change this in a config file.
-    -- Use a config file only if it is younger than ---v
+    -- Use a config file only if it is younger than
     config_file_date = 1689399515,             -- 20230715090000
-
+    
     -- add defaults here!
     -- will be overwritten and extended by config.lua's content
 
@@ -32,13 +32,18 @@ local configuration = {
     html_battery = "/var/www/localhost/htdocs/battery.html",
 
     bat_SOC_min = 20, -- Percent
+    bat_SOC_full = 85, -- Percent
     bat_SOC_max = 101, -- Percent
-    bat_SOC_full = 80, -- Percent
+    bat_SOC_min_rescue = 10, -- start rescue charge
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell
     bat_lowest_rescue = 2.801, -- start rescue charge
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
     max_cell_diff = 0.105,
 
+    lastFullPeriod = 5*24*3600, -- two days
+    minCellDiff = 0.003,
+    minPower = 30,
+    
     bat_SOC_hysteresis = 2,
     bat_voltage_hysteresis = 0.050,
 
@@ -57,11 +62,12 @@ local configuration = {
             charger_switches = {
                 "battery-charger.lan",
                 "battery-charger2.lan",
+                "battery-charger3.lan",
             },
             charger_max_power = {
+                350,
                 300,
-                300,
-                300,
+                200,
             },
             inverter_switch = "battery-inverter.lan",
             inverter_control = nil,
@@ -93,11 +99,10 @@ local configuration = {
     }
 }
 
--- Todo honor self.validConfig
-function configuration:read()
+function configuration:needUpdate()
     local file = configuration.config_file_name or "config.lua"
 
-    local chunk, config_time, err
+    local config_time, err
     config_time, err = lfs.attributes(file, "modification")
 
     if err then
@@ -106,9 +111,19 @@ function configuration:read()
     end
 
     if config_time == configuration.config_file_date then
-        return nil -- no need to reload
+        return false -- no need to reload
     end
+    return true
+end
 
+-- Todo honor self.validConfig
+function configuration:read(force)
+    if force and not self:needUpdate() then 
+        return false
+    end
+    local file = configuration.config_file_name or "config.lua"
+
+    local chunk, config_time, err
     chunk, err = loadfile(file, "t", configuration)
 
     if chunk then
@@ -117,12 +132,13 @@ function configuration:read()
         configuration.config_file_date = config_time
         self.validConfig = true
         -- ToDo: print the new config
-        return nil
+        return true
     else
         util:log("Error loading config file: " .. configuration.config_file_name, "Err:" .. err)
         self.validConfig = false
+        return false
     end
-    return false
+    return 
 end
 
 return configuration
