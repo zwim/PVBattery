@@ -146,7 +146,9 @@ function util.roundTo(num, places)
 end
 
 function util.httpRequest(url)
-    local command = string.format("wget -nv --server-response '%s'  -o /tmp/code -O /tmp/body", url)
+    local command = string.format("wget -nv --timeout=2 --server-response '%s'  -o /tmp/code -O /tmp/body", url)
+
+    os.execute("rm -f /tmp/code /tmp/body")
 
     -- depending on what lua version there are two possibilities
     -- luajit and lua 5.1: retval = os.execute( ... )
