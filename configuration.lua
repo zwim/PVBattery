@@ -6,7 +6,7 @@ local configuration = {
     -- Don't change this in a config file.
     -- Use a config file only if it is younger than
     config_file_date = 1689399515,             -- 20230715090000
-    
+
     -- add defaults here!
     -- will be overwritten and extended by config.lua's content
 
@@ -16,6 +16,8 @@ local configuration = {
     config_file_name = "config.lua", -- the config file
 
     command_file_name = "/tmp/PVCommands", -- a file containing commands for PVBattery
+
+    use_wget = true,
 
     host = util.hostname(),
 
@@ -43,7 +45,7 @@ local configuration = {
     lastFullPeriod = 5*24*3600, -- two days
     minCellDiff = 0.003,
     minPower = 30,
-    
+
     bat_SOC_hysteresis = 2,
     bat_voltage_hysteresis = 0.050,
 
@@ -118,7 +120,7 @@ end
 
 -- Todo honor self.validConfig
 function configuration:read(force)
-    if force and not self:needUpdate() then 
+    if force and not self:needUpdate() then
         return false
     end
     local file = configuration.config_file_name or "config.lua"
@@ -138,7 +140,6 @@ function configuration:read(force)
         self.validConfig = false
         return false
     end
-    return 
 end
 
 return configuration

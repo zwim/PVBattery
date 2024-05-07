@@ -21,7 +21,7 @@ return function(self, config, P_Grid, P_Load, P_PV)
             SOC_string = SOC_string .. os.date("%c", self.BMS[i].timeOfLastFullBalancing) .. "<br>"
         end
     end
-    
+
     local TEMPLATE_PARSER = {
         {"_$DATE", ""},
         {"_$SUNRISE", self.sunrise},
@@ -98,4 +98,3 @@ return function(self, config, P_Grid, P_Load, P_PV)
     index_descriptor:write(content)
     index_descriptor:close()
 end
-

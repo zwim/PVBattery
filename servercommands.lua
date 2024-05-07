@@ -13,7 +13,7 @@ return function(self, config)
         return
     end
 
-        util:log("Opening command file: " .. file_name)
+    util:log("Opening command file: " .. file_name)
 
     local commands={}
     while true do

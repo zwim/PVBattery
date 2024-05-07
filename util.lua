@@ -140,9 +140,51 @@ function util.hostname()
     return output
 end
 
--- runtTo(123.4567, 2) -> 123.46
-function util.roundTo(num, places)  
+-- roundTo(123.4567, 2) -> 123.46
+function util.roundTo(num, places)
     return math.floor(num * 10^(-places) + 0.5) * (10^places)
+end
+
+function util.httpRequest(url)
+    local command = string.format("wget -nv --server-response '%s'  -o /tmp/code -O /tmp/body", url)
+
+    -- depending on what lua version there are two possibilities
+    -- luajit and lua 5.1: retval = os.execute( ... )
+    --           retval it the return value
+    -- lua >= 5.2: success, reason, code = os.execute( ... )
+    --           if reason == "exit" then code = retval
+    local a, b, retval = os.execute(command)
+
+    if not b and not retval then
+        retval = a
+    end
+
+    if retval ~= 0 then
+        return "", -retval
+    end
+
+    local body, code
+    local f
+
+    f = io.open("/tmp/body", "r")
+    if f then
+        body = f:read("*all")
+        f:close()
+    else
+        body = ""
+    end
+
+    f = io.open("/tmp/code", "r")
+    if f then
+        code = f:read("*all")
+        f:close()
+        code = code:gsub("^ *HTTP[^ ]* +", "")
+        code = code:gsub(" +.*", "")
+    else
+        code = 999
+    end
+
+    return body, code
 end
 
 return util

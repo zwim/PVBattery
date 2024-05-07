@@ -119,6 +119,7 @@ function PVBattery:isStateDischarging(set)
     end
     return self._state == "discharging"
 end
+
 function PVBattery:isStateLowBattery(set)
     if set then
         self._state = "lowBattery"
@@ -156,11 +157,11 @@ function PVBattery:findBestChargerToTurnOn(req_power)
 
     if req_power <= 0 then print("Error 2") end
 
-    for i, chg in pairs(self.Charger) do
-        local max_power = chg:getMaxPower() or 0
+    for i, Charger in pairs(self.Charger) do
+        local max_power = Charger:getMaxPower() or 0
         if max_power < req_power and max_power > avail_power then
-            if chg:readyToCharge() then
-                if chg:getPowerState() == "off" then
+            if Charger:readyToCharge() then
+                if Charger:getPowerState() == "off" then
                     pos = i
                     avail_power = max_power
                 end
@@ -175,7 +176,9 @@ function PVBattery:findBestInverter(req_power)
     local pos = 0
     local avail_power = 0
 
-    if req_power <= 0 then print("Error 3") end
+    if req_power <= 0 then
+		req_power = 0
+	end
 
     for i, inv in pairs(self.Inverter) do
         local min_power = inv.min_power or math.huge
@@ -199,6 +202,15 @@ function PVBattery:isCharging()
         end
     end
     return false
+end
+
+function PVBattery:chargeThreshold(date)
+	local curr_hour = date.hour + date.min/60 + date.sec/3600
+	if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
+		return -30
+	else
+		return 0
+	end
 end
 
 function PVBattery:isDischarging()
@@ -336,17 +348,22 @@ function PVBattery:main(profiling_runs)
                 end
             end
 
-            -- Check which battery need balancing
+            -- Check which battery need balancing or is full
             for _, BMS in pairs(self.BMS) do
                 if BMS:needsBalancing() then
                     BMS:enableDischarge()
                     BMS:setAutoBalance(true)
+				elseif BMS:isBatteryFull() then
+--                    BMS:disableDischarge()
+                    BMS:setAutoBalance(true)
                 end
             end
+
         end
 
         if not skip_loop then
-            if P_Grid > 30 and not self:isStateLowBattery() then
+            if P_Grid > self:chargeThreshold(date) and not self:isStateLowBattery() then
+				-- charge
                 if self:isCharging() then
                     short_sleep = 0.1
                     charger_num, charger_power = self:findBestChargerToTurnOff(P_Grid)
@@ -368,7 +385,7 @@ function PVBattery:main(profiling_runs)
                         self:isStateDischarging(true)
                     end
                 end
-            elseif P_Grid < 30 then
+            elseif P_Grid < self:chargeThreshold(date) then
                 -- allow a small power buy instead of a bigger power sell.
                 if self:isDischarging() then
                     short_sleep = 1

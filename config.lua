@@ -13,6 +13,8 @@
 
 log_file_name = "/var/log/PVBattery.log"
 
+use_wget = true
+
 -- html_main = "/var/www/localhost/htdocs/index.html"
 html_main = "/tmp/index.html"
 --html_battery = "/var/www/localhost/htdocs/battery.html"
@@ -40,7 +42,7 @@ position = {
 
 bat_SOC_min = 20 -- Percent
 bat_SOC_full = 85
-bat_SOC_max = 101 -- Percent
+bat_SOC_max = 85 -- Percent
 bat_SOC_min_rescue = 10 -- start rescue charge
 
 bat_SOC_hysteresis = 2
@@ -56,9 +58,9 @@ minPower = 30
 
 load_full_time_h = 2.5 -- time before sun set, to load battery at maximum
 
-sleep_time = 15 -- seconds to sleep per iteration
+sleep_time = 20 -- seconds to sleep per iteration
 
-update_interval = 12 -- time to keep old data before an update
+update_interval = sleep_time - 5 -- time to keep old data before an update
 
 FRONIUS_ADR = "192.168.0.49"
 
@@ -69,12 +71,12 @@ Device = {
         charger_switches = {
             "battery-charger.lan",
             "battery-charger2.lan",
-            "battery-charger3.lan",
+---            "battery-charger3.lan",
         },
         charger_max_power = {
             350,
             300,
-            200,
+--            200,
         },
         inverter_switch = "battery-inverter.lan",
         inverter_control = nil,

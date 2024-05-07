@@ -1,10 +1,17 @@
--- loads the HTTP module and any libraries it requires
-local http = require("socket.http")
--- json module
-local json = require ("dkjson")
 
 local config = require("configuration")
+local json = require ("dkjson")
 local util = require("util")
+
+local http = {}
+if config.use_wget then
+    function http.request(url)
+        return util.httpRequest(url)
+    end
+else
+    -- loads the HTTP module and any libraries it requires
+    http = require("socket.http")
+end
 
 local decode_unchecked = json.decode
 function json.decode(data)
@@ -14,6 +21,8 @@ function json.decode(data)
         return {}
     end
 end
+
+http.TIMEOUT = 20
 
 DEBUG = false
 if DEBUG then
@@ -27,6 +36,7 @@ if DEBUG then
         end
     end
 end
+
 
 local Switch = {
     timeOfLastRequiredData = 0, -- no data requiered yet

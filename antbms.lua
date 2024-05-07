@@ -4,15 +4,22 @@
 -- https://github.com/syssi/esphome-ant-bms
 -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
 
-local http = require("socket.http")
-local util = require("util")
 local config = require("configuration")
+local util = require("util")
+
+local http = {}
+if config.use_wget then
+    function http.request(url)
+        return util.httpRequest(url)
+    end
+else
+    http = require("socket.http")
+end
 
 local READ_DATA_SIZE = 140
 -- command to hard reset a connected ESP32 device
 local ESP32_HARD_RESET_COMMAND = "killall minicom; killall tio; " ..
     "esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
-
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -38,7 +45,7 @@ local AntBMS = {
     host = "",
     v = {},
     timeOfLastRequiredData = 0, -- no data yet
-    timeOfLastFullBalancing = 0, -- no data yet
+    timeOfLastFullBalancing = 1709465939, -- no data yet
 
     MOSFETChargeStatusFlag = {
         [0] = "Off",
@@ -391,12 +398,11 @@ function AntBMS:evaluateData(force)
 
     self.answer = {} -- clear old received bytes
 
-print(os.time())
     if util.getCurrentTime() >= self.timeOfLastFullBalancing + config.lastFullPeriod then
         config.bat_SOC_max = 101
     end
-    
-    if self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff 
+
+    if self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff
         and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower then
 
         self.timeOfLastFullBalancing = util.getCurrentTime()
@@ -406,6 +412,15 @@ print(os.time())
     -- Now we store the new aquisition time.
     self:setDataAge()
     return true
+end
+
+function AntBMS:isBatteryFull()
+    if next(self.v) then
+        return self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff
+            and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower
+    end
+
+    return false
 end
 
 -- This is the usual way of reading new parameters
