@@ -115,17 +115,18 @@ function configuration:needUpdate()
     if config_time == configuration.config_file_date then
         return false -- no need to reload
     end
-    return true
+    return true, config_time
 end
 
 -- Todo honor self.validConfig
 function configuration:read(force)
-    if force and not self:needUpdate() then
+    local needs_update, config_time = self:needUpdate()
+    if force and not needs_update then
         return false
     end
     local file = configuration.config_file_name or "config.lua"
 
-    local chunk, config_time, err
+    local chunk, err
     chunk, err = loadfile(file, "t", configuration)
 
     if chunk then

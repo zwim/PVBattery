@@ -91,6 +91,7 @@ Device = {
         inverter_control = nil,
         inverter_time_controlled = {off = DUSK_CIVIL, on = SUN_RISE},
     },
+--[[
     { -- Device[3]
         name = "Moped",
         BMS = "", -- fehlt noch
@@ -105,4 +106,5 @@ Device = {
         inverter_min_power = 10,
         inverter_time_controlled = nil,
     },
+    ]]
 }
