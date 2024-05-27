@@ -22,8 +22,10 @@ return function(self, config, P_Grid, P_Load, P_PV)
         end
     end
 
+
+
     local TEMPLATE_PARSER = {
-        {"_$DATE$", ""},
+        {"_$DATE$", os.date()},
         {"_$SUNRISE$", self.sunrise},
         {"_$SUNSET$", self.sunset},
         {"_$FRONIUS_ADR$", config.FRONIUS_ADR},

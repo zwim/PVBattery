@@ -301,14 +301,14 @@ function PVBattery:main(profiling_runs)
             P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         end
 
-        if not P_Grid then
+        if not P_Grid or not P_Load or not P_PV then
             short_sleep = 1
             skip_loop = true
-        end
-
-        util:log(string.format("Grid %8.2f W", P_Grid))
-        util:log(string.format("Load %8.2f W", P_Load))
-        util:log(string.format("Roof %8.2f W", P_PV))
+        else
+			util:log(string.format("Grid %8.2f W", P_Grid))
+			util:log(string.format("Load %8.2f W", P_Load))
+			util:log(string.format("Roof %8.2f W", P_PV))
+		end
 
         if not skip_loop then
             -- Do the test again, as the need of a rescue charge is checked here, too.
