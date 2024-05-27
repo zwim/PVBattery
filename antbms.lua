@@ -21,6 +21,8 @@ local READ_DATA_SIZE = 140
 local ESP32_HARD_RESET_COMMAND = "killall minicom; killall tio; " ..
     "esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
 
+ESP32_HARD_RESET_COMMAND = "uhubctl -l 1-1 -p 2 -a cycle"
+
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
 local function getInt8(ans, pos)

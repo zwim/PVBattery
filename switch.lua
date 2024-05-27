@@ -160,12 +160,12 @@ function Switch:getPowerState()
     end
 
     self.power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
-    if self.power_state == 0 then
+    if self.power_state == 0 or self.power_state == "0" then
         return "off"
-    elseif self.power_state == 1 then
+    elseif self.power_state == 1 or self.power_state == "1" then
         return "on"
     else
-        return ""
+        return self.power_state
     end
 end
 
