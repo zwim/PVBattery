@@ -443,6 +443,8 @@ local MyBatteries = PVBattery
 
 MyBatteries:init()
 
+os.execute("date; echo Init done")
+
 if not Profiler then
     -- this is the outer loop, a safety-net if the inner loop is broken with `break`
     while true do

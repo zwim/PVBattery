@@ -22,8 +22,6 @@ return function(self, config, P_Grid, P_Load, P_PV)
         end
     end
 
-
-
     local TEMPLATE_PARSER = {
         {"_$DATE$", os.date()},
         {"_$SUNRISE$", self.sunrise},
