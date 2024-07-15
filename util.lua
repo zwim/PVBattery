@@ -85,7 +85,7 @@ function util.printTime(str)
     print("Zeitstempel: " .. str .. "----" .. date_time_string)
 end
 
-
+-- sleeps 'time' seconds
 function util.sleep_time(time)
     if time <= 0 then return end
     local sec = math.floor(time)
