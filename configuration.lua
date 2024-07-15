@@ -33,8 +33,8 @@ local configuration = {
     html_main = "/var/www/localhost/htdocs/index.html",
     html_battery = "/var/www/localhost/htdocs/battery.html",
 
-    bat_SOC_min = 20, -- Percent
-    bat_SOC_full = 85, -- Percent
+    bat_SOC_min = 15, -- Percent
+    bat_SOC_full = 90, -- Percent
     bat_SOC_max = 101, -- Percent
     bat_SOC_min_rescue = 10, -- start rescue charge
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell

@@ -187,7 +187,10 @@ function Switch:toggle(on)
         return ""
     end
     local decoded = json.decode(body)
-    local Result = decoded.POWER or ""
+    local Result = ""
+    if decoded then
+        Result = decoded.power or ""
+    end
 
     self:setDataAge()
     return Result

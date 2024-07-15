@@ -2,6 +2,7 @@
 
 local Switch = require("switch")
 local AntBMS = require("antbms")
+local util = require("util")
 
 
 local Charger = {
@@ -47,8 +48,11 @@ function Charger:stopCharge()
     self.Switch:toggle("off")
 end
 
-function Charger:startCharge()
+function Charger:startCharge(time_s)
     self.Switch:toggle("on")
+    if time_s then
+        util.sleep_time(15)
+    end
 end
 
 function Charger:readyToCharge()
