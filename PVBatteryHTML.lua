@@ -11,7 +11,9 @@ return function(self, config, P_Grid, P_Load, P_PV)
     local sources = P_PV
     for  i = 1, #self.Inverter do
         InverterPowerCache[i] = self.Inverter[i]:getCurrentPower()
-        sources = sources + (InverterPowerCache[i] or 0)
+        if sources then
+            sources = sources + (InverterPowerCache[i] or 0)
+        end
     end
 
     local SOC_string = "<br>SOC:"

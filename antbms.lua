@@ -25,9 +25,12 @@ local RESET_COMMAND_ARGS = " --chip esp32 --port /dev/ttyUSB0 --baud 460800 --be
 if os.execute(RESET_COMMAND .. " version 2> /dev/null") ~= 0 then
     RESET_COMMAND = "python /usr/lib/python-exec/python3.12/esptool.py"
     if os.execute(RESET_COMMAND .. " version 2> /dev/null") ~= 0 then
-        RESET_COMMAND = "uhubctl"
-        RESET_COMMAND_ARGS = " -l 1-1 -d 10 -p 2 -a cycle"
-        --                               ^------------------ delay 10s
+        RESET_COMMAND = "python /usr/share/esp-idf/components/esptool_py/esptool/esptool.py"
+        if os.execute(RESET_COMMAND .. " version 2> /dev/null") ~= 0 then
+            RESET_COMMAND = "uhubctl"
+            RESET_COMMAND_ARGS = " -l 1-1 -d 10 -p 2 -a cycle"
+        --                                   ^------------------ delay 10s
+        end
     end
 end
 
@@ -285,18 +288,18 @@ function AntBMS:evaluateData(force)
     while #self.answer < READ_DATA_SIZE and retries > 0 do
         local url = string.format("http://%s/live.data", self.host)
         local body, code
-        for _ = 1, 2 do -- try to wake up BT-Module by starting a short charge
-            for _ = 1, 4 do -- try to read a few times
+        for wake = 1, 2 do -- try to wake up BT-Module by starting a short charge
+            for try = 1, 4 do -- try to read a few times
                 body, code = http.request(url)
                 code = tonumber(code)
                 if code and body then break end
                 os.execute("date")
-                os.execute("echo 'Could not read bms.data -> try again.'")
-                util.sleep_time(1)
+                os.execute("echo 'Could not read bms.data -> try again (" .. try .. "/4).'")
+                util.sleep_time(1) -- wait
             end
             if code and body then break end
             os.execute("date")
-            os.execute("echo 'Could not get bms.data -> starting a wakup charge.'")
+            os.execute("echo 'Could not get bms.data -> starting a wakup charge (" .. wake .."/2).'")
             self.wakeup()
             util.sleep_time(config.sleep_time)
         end
@@ -681,7 +684,7 @@ function AntBMS:_printValuesNotProtected()
     return true
 end
 
-function AntBMS:wakeup()
-end
+-- will get overwritten
+AntBMS.wakeup = function() end
 
 return AntBMS

@@ -24,7 +24,7 @@ end
 
 http.TIMEOUT = 20
 
-DEBUG = false
+local DEBUG = false
 if DEBUG then
     local oldhttprequest = http.request
     function http.request(url)

@@ -1,4 +1,5 @@
 
+local lfs = require("lfs")
 local posix = require("posix")
 
 local util = {
@@ -116,9 +117,23 @@ function util:cleanLogs()
     local result = handle:read("*a")
     handle:close()
     if result:find("btrfs") then
-        os.execute("date; btrfs filesystem defragment -r -v -czstd " .. self.log_file_name)
+        if os.execute("date; btrfs filesystem defragment -r -v -czstd " .. self.log_file_name) ~= 0 then
+            print("Error compressing " .. self.log_file_name)
+        end
     else
         print("todo log file compression") -- todo
+    end
+
+    if lfs.attributes(self.log_file_name, "size") > 1024*1024 then
+        local log_file_name_rotated = self.log_file_name:sub(1, self.log_file_name:find(".log$") - 1)
+        if os.execute("mv "..self.log_file_name.." "..log_file_name_rotated..os.date("-%Y%m%d-%H%M%S")..".log") ~= 0 then
+            print("Error in rotating log file")
+        end
+        -- close the old log and open a new one
+        util:setLog(self.log_file_name)
+        util:log("Logfile rotated at " .. os.date())
+    else
+        util:log("Logfile NOT rotated at " .. os.date())
     end
 end
 
@@ -148,17 +163,19 @@ end
 function util.httpRequest(url)
     local command = string.format("wget -nv --timeout=2 --server-response '%s'  -o /tmp/code -O /tmp/body", url)
 
+--    local command = string.format("curl  '%s' --tcp-nodelay --connect-timeout 2 -o /tmp/body --dump-header /tmp/code --silent --tcp-fastopen", url)
+
     os.execute("rm -f /tmp/code /tmp/body")
 
     -- depending on what lua version there are two possibilities
     -- luajit and lua 5.1: retval = os.execute( ... )
-    --           retval it the return value
+    --           retval is the return value
     -- lua >= 5.2: success, reason, code = os.execute( ... )
     --           if reason == "exit" then code = retval
-    local a, b, retval = os.execute(command)
+    local success, reason, retval = os.execute(command)
 
-    if not b and not retval then
-        retval = a
+    if not reason and not retval then
+        retval = success
     end
 
     if retval ~= 0 then
