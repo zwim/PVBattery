@@ -1,4 +1,5 @@
 
+local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
 --local Profiler = require("suntime/profiler")
 if Profiler then
@@ -133,7 +134,7 @@ function PVBattery:findBestChargerToTurnOff(req_power)
     local pos = 0
     local avail_power = 0
 
-    if req_power <= 0 then print("Error 1") end
+    if req_power <= 0 then print("Error: req_power " .. req_power .. "<0") end
 
     for i, Charger in pairs(self.Charger) do
         if Charger:getPowerState() == "on" then
@@ -408,6 +409,7 @@ function PVBattery:main(profiling_runs)
                 end
             else
                 -- disable discharge MOS here ???
+				print("What the hell, we should not get here!")
             end
         end -- if skip_loop
 
