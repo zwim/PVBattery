@@ -152,9 +152,7 @@ function AntBMS:setAutoBalance(on)
     end
 
     if on then
-        if next(self.v) and self.v.CellDiff >= self.minCellDiff then
-            self:turnAutoBalanceOn()
-        end
+        self:turnAutoBalanceOn()
     else
         self:turnAutoBalanceOff()
     end
@@ -433,7 +431,7 @@ end
 
 function AntBMS:isBatteryFull()
     if next(self.v) then
-        return self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff
+        return self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff - 0.002
             and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower
     end
 
@@ -602,14 +600,13 @@ end
 
 function AntBMS:needsBalancing()
     if self:evaluateData() then
-        if self.v.CellDiff >= config.max_cell_diff
-                or self.v.HighestVoltage >= config.bat_highest_voltage then
-            self:enableDischarge()
-            self:setAutoBalance(true)
+        if self.v.CellDiff >= config.max_cell_diff or self.v.HighestVoltage >= config.bat_highest_voltage then
+            return true
         elseif -1.0 <= self.v.Current and self.v.Current <= 1.0 then
-            if not self:getDischargeState() then
-                self:enableDischarge()
-                self:setAutoBalance(true)
+            if next(self.v) and self.v.CellDiff >= self.minCellDiff then
+                return true
+            elseif not self:getDischargeState() then
+                return true
             end
         end
     end

@@ -17,7 +17,7 @@ local configuration = {
 
     command_file_name = "/tmp/PVCommands", -- a file containing commands for PVBattery
 
-    use_wget = true,
+    use_wget = false,
 
     host = util.hostname(),
 

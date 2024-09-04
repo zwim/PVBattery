@@ -4,6 +4,7 @@ local json = require ("dkjson")
 local util = require("util")
 
 local http = {}
+-- config.use_wget = nil
 if config.use_wget then
     function http.request(url)
         return util.httpRequest(url)
@@ -11,6 +12,16 @@ if config.use_wget then
 else
     -- loads the HTTP module and any libraries it requires
     http = require("socket.http")
+    http.TIMEOUT=3
+
+    http.PROXY = "http://127.0.0.1:3128"
+    local body, code = http.request("http://127.0.0.1")
+    code = tonumber(code)
+    if not code or code < 200 or code >= 300 then
+        http.PROXY = nil
+    end
+
+    print("Using http-proxy", tostring(http.PROXY))
 end
 
 local decode_unchecked = json.decode
@@ -24,7 +35,7 @@ end
 
 http.TIMEOUT = 20
 
-local DEBUG = false
+local DEBUG = true
 if DEBUG then
     local oldhttprequest = http.request
     function http.request(url)
@@ -182,18 +193,18 @@ function Switch:toggle(on)
     end
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
     local body, code = http.request(url)
-    code = tonumber(code)
+--[[    code = tonumber(code)
     if not code or code < 200 or code >= 300 then
-        return ""
+        return
     end
     local decoded = json.decode(body)
-    local Result = ""
+    local Result =
     if decoded then
-        Result = decoded.power or ""
+        Result = decoded.power
     end
 
     self:setDataAge()
-    return Result
+    return Result ]]
 end
 
 return Switch

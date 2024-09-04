@@ -13,8 +13,6 @@
 
 log_file_name = "/var/log/PVBattery.log"
 
-use_wget = true
-
 -- html_main = "/var/www/localhost/htdocs/index.html"
 html_main = "/tmp/index.html"
 --html_battery = "/var/www/localhost/htdocs/battery.html"
