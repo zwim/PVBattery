@@ -177,7 +177,7 @@ function PVBattery:findBestInverter(req_power)
     local pos = 0
     local avail_power = 0
 
-    if req_power <= 0 then
+    if req_power < 0 then
 		req_power = 0
 	end
 
@@ -351,15 +351,14 @@ function PVBattery:main(profiling_runs)
 
             -- Check which battery need balancing or is full
             for _, BMS in pairs(self.BMS) do
-                if BMS:needsBalancing() then
+				local needs_balancing = BMS:needsBalancing()
+                if needs_balancing then
                     BMS:enableDischarge()
                     BMS:setAutoBalance(true)
 				elseif BMS:isBatteryFull() then
---                    BMS:disableDischarge()
-                    BMS:setAutoBalance(true)
+                    BMS:disableDischarge()
                 end
             end
-
         end
 
         if not skip_loop then
