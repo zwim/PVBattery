@@ -599,7 +599,9 @@ function AntBMS:recoveredFromRescueCharge()
 end
 
 function AntBMS:needsBalancing()
-    if self:evaluateData() then
+    if not self:evaluateData() then return end
+
+    if self.v.SOC > 50 then
         if self.v.CellDiff >= config.max_cell_diff or self.v.HighestVoltage >= config.bat_highest_voltage then
             return true
         elseif -1.0 <= self.v.Current and self.v.Current <= 1.0 then
