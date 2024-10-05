@@ -417,12 +417,14 @@ function PVBattery:main(profiling_runs)
         end
 
 		for _, Inverter in pairs(self.Inverter) do
-			if self:isStateIdle() or self:isStateLowBattery() then
-				Inverter.BMS:disableDischarge()
-				Inverter.Switch:toggle(0)
-			else
-				Inverter.Switch:toggle(1)
-				Inverter.BMS:enableDischarge()
+			if not Inverter.time_controlled then
+				if self:isStateIdle() or self:isStateLowBattery() then
+					Inverter.BMS:disableDischarge()
+					Inverter.Switch:toggle(0)
+				else
+					Inverter.Switch:toggle(1)
+					Inverter.BMS:enableDischarge()
+				end
 			end
 		end
 
