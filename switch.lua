@@ -35,7 +35,7 @@ end
 
 http.TIMEOUT = 20
 
-local DEBUG = true
+local DEBUG = false
 if DEBUG then
     local oldhttprequest = http.request
     function http.request(url)
@@ -192,8 +192,10 @@ function Switch:toggle(on)
         on = "2"
     end
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
+    http.request(url)
+--[[
     local body, code = http.request(url)
---[[    code = tonumber(code)
+    code = tonumber(code)
     if not code or code < 200 or code >= 300 then
         return
     end

@@ -13,6 +13,11 @@ function util:setLogNewLine(nl)
     self.nl = nl and "\n" or ""
 end
 
+function util:setCompressor(compressor)
+    self.compressor = compressor
+end
+
+
 function util:setLog(log_file_name)
     if self.log_file and self.log_file_name ~= log_file_name then
         self.log_file:close()
@@ -120,18 +125,23 @@ function util:cleanLogs()
         if os.execute("date; btrfs filesystem defragment -r -v -czstd " .. self.log_file_name) ~= 0 then
             print("Error compressing " .. self.log_file_name)
         end
-    else
-        print("todo log file compression") -- todo
     end
 
     if lfs.attributes(self.log_file_name, "size") > 1024*1024 then
-        local log_file_name_rotated = self.log_file_name:sub(1, self.log_file_name:find(".log$") - 1)
-        if os.execute("mv "..self.log_file_name.." "..log_file_name_rotated..os.date("-%Y%m%d-%H%M%S")..".log") ~= 0 then
+        local log_file_name_rotated = self.log_file_name:sub(1, self.log_file_name:find(".log$") - 1)..os.date("-%Y%m%d-%H%M%S")..".log"
+        if os.execute("mv "..self.log_file_name.." "..log_file_name_rotated) ~= 0 then
             print("Error in rotating log file")
         end
         -- close the old log and open a new one
         util:setLog(self.log_file_name)
         util:log("Logfile rotated at " .. os.date())
+
+        -- compress old log file
+        if self.compressor then
+            if os.execute(self.compressor.." "..log_file_name_rotated) ~= 0 then
+                print("Error compressing old log file:", log_file_name_rotated)
+            end
+        end
     else
         util:log("Logfile NOT rotated at " .. os.date())
     end

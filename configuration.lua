@@ -44,6 +44,7 @@ local configuration = {
 
     lastFullPeriod = 5*24*3600, -- two days
     minCellDiff = 0.003,
+    CellDiffHysteresis = 0.003,
     minPower = 30,
 
     bat_SOC_hysteresis = 2,
@@ -98,21 +99,24 @@ local configuration = {
             inverter_min_power = 10,
             inverter_time_controlled = nil,
         },
-    }
+    },
+
+    -- compressor = "bzip2 -6",
+    compressor = "zstd -8 --rm -T3",
 }
 
 function configuration:needUpdate()
-    local file = configuration.config_file_name or "config.lua"
+    local file = self.config_file_name or "config.lua"
 
     local config_time, err
     config_time, err = lfs.attributes(file, "modification")
 
     if err then
-        util:log("Error opening config file: " .. configuration.config_file_name, "Err: " .. err)
+        util:log("Error opening config file: " .. self.config_file_name, "Err: " .. err)
         return false
     end
 
-    if config_time == configuration.config_file_date then
+    if config_time == self.config_file_date then
         return false -- no need to reload
     end
     return true, config_time
