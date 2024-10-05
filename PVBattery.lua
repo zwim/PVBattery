@@ -36,6 +36,7 @@ PVBattery.serverCommands = require("servercommands")
 function PVBattery:init()
     config:read()
     util:setLog(config.log_file_name or "PVBattery.log")
+	util:setCompressor(config.compressor)
 
     util:log("\n#############################################")
     util:log("PV-Control started.")
@@ -185,7 +186,7 @@ function PVBattery:findBestInverter(req_power)
         local min_power = inv.min_power or math.huge
         if min_power < req_power and min_power > avail_power then
             if inv:readyToDischarge() then
-                if inv:getPowerState() ~= "on" then
+                if inv.BMS:getDischargeState() ~= "on" or inv:getPowerState() ~= "on" then
                     pos = i
                     avail_power = min_power
                 end
@@ -208,7 +209,7 @@ end
 function PVBattery:chargeThreshold(date)
 	local curr_hour = date.hour + date.min/60 + date.sec/3600
 	if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
-		return -30
+		return -10
 	else
 		return 0
 	end
@@ -351,12 +352,11 @@ function PVBattery:main(profiling_runs)
 
             -- Check which battery need balancing or is full
             for _, BMS in pairs(self.BMS) do
-				local needs_balancing = BMS:needsBalancing()
-                if needs_balancing then
+				if BMS:isBatteryFull() then
+                    BMS:disableDischarge()
+                elseif BMS:needsBalancing() then
                     BMS:enableDischarge()
                     BMS:setAutoBalance(true)
-				elseif BMS:isBatteryFull() then
-                    BMS:disableDischarge()
                 end
             end
         end
@@ -389,9 +389,9 @@ function PVBattery:main(profiling_runs)
                 -- allow a small power buy instead of a bigger power sell.
                 if self:isDischarging() then
                     short_sleep = 1
-                    for _, inv in pairs(self.Inverter) do
-                        if not inv.time_controlled then
-                            inv:stopDischarge()
+                    for _, Inverter in pairs(self.Inverter) do
+                        if not Inverter.time_controlled then
+                            Inverter:stopDischarge()
                             self:isStateIdle(true)
                         end
                     end
@@ -407,14 +407,24 @@ function PVBattery:main(profiling_runs)
                     end
                 end
             else
-                -- disable discharge MOS here ???
-				print("What the hell, we should not get here!")
+				-- disable discharge MOS here ???
+				util:log("Battery low: ", tostring(self:isStateLowBattery()))
             end
         end -- if skip_loop
 
         for _, BMS in pairs(self.BMS) do
             BMS:printValues()
         end
+
+		for _, Inverter in pairs(self.Inverter) do
+			if self:isStateIdle() or self:isStateLowBattery() then
+				Inverter.BMS:disableDischarge()
+				Inverter.Switch:toggle(0)
+			else
+				Inverter.Switch:toggle(1)
+				Inverter.BMS:enableDischarge()
+			end
+		end
 
         self:serverCommands(config)
 

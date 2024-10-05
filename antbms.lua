@@ -21,7 +21,8 @@ local READ_DATA_SIZE = 140
 
 -- quick and dirty, as the python-esptool interactin in gentoo as of 2024/06/26 seems broken
 local RESET_COMMAND = "esptool.py"
-local RESET_COMMAND_ARGS = " --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
+local RESET_COMMAND_ARGS =
+    " --chip esp32 --port /dev/ttyUSB0 --baud 460800 --before default_reset --after hard_reset run"
 if os.execute(RESET_COMMAND .. " version 2> /dev/null") ~= 0 then
     RESET_COMMAND = "python /usr/lib/python-exec/python3.12/esptool.py"
     if os.execute(RESET_COMMAND .. " version 2> /dev/null") ~= 0 then
@@ -197,12 +198,16 @@ end
 
 -- todo check result
 function AntBMS:enableDischarge()
-    return self:_sendCommand("set?bms_discharge=1")
+    if self:getDischargeState() ~= "on" then
+        return self:_sendCommand("set?bms_discharge=1")
+    end
 end
 
 -- todo check result
 function AntBMS:disableDischarge()
-    return self:_sendCommand("set?bms_discharge=0")
+    if self:getDischargeState() ~= "off" then
+        return self:_sendCommand("set?bms_discharge=0")
+    end
 end
 
 function AntBMS:getDischargeState()
@@ -431,8 +436,15 @@ end
 
 function AntBMS:isBatteryFull()
     if next(self.v) then
-        return self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff - 0.002
+        local is_full = self.v.SOC >= 100 and self.v.CalculatedSOC >= 100
+            and self.v.CellDiff <= self.minCellDiff
             and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower
+
+        if is_full then
+            self.minCellDiff = config.minCellDiff + config.CellDiffHysteresis
+        else
+            self.minCellDiff = config.minCellDiff
+        end
     end
 
     return false

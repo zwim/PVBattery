@@ -39,7 +39,7 @@ position = {
 }
 
 bat_SOC_min = 15 -- Percent
-bat_SOC_full = 90
+bat_SOC_full = 96
 bat_SOC_max = 101 -- Percent
 bat_SOC_min_rescue = 10 -- start rescue charge
 
@@ -52,6 +52,7 @@ bat_hightest_voltage = 3.540 -- highest allowed voltage
 max_cell_diff = 0.150 -- maximum allowed cell diff
 
 minCellDiff = 0.003
+CellDiffHysteresis = 0.003
 minPower = 30
 
 load_full_time_h = 2.5 -- time before sun set, to load battery at maximum
@@ -106,3 +107,6 @@ Device = {
     },
     ]]
 }
+
+-- compressor = "bzip2 -6"
+compressor = "zstd -8 --rm -T3"

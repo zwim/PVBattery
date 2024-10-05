@@ -47,6 +47,4 @@ return function(self, config)
 
     print(config.command_file_name)
 
-
-
 end
