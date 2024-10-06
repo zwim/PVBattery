@@ -233,6 +233,13 @@ function AntBMS:setPower(power)
     end
 end
 
+function AntBMS:getPower()
+    if self:evaluateData() then
+        return self.v.CurrentPower
+    else
+        return 0
+    end
+end
 function AntBMS:isChecksumOk()
     if #self.answer < READ_DATA_SIZE then
         return false
