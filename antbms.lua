@@ -237,7 +237,7 @@ function AntBMS:getPower()
     if self:evaluateData() then
         return self.v.CurrentPower
     else
-        return 0
+        return math.huge
     end
 end
 function AntBMS:isChecksumOk()
