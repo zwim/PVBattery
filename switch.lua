@@ -12,16 +12,7 @@ if config.use_wget then
 else
     -- loads the HTTP module and any libraries it requires
     http = require("socket.http")
-    http.TIMEOUT=3
-
-    http.PROXY = "http://127.0.0.1:3128"
-    local body, code = http.request("http://127.0.0.1")
-    code = tonumber(code)
-    if not code or code < 200 or code >= 300 then
-        http.PROXY = nil
-    end
-
-    print("Using http-proxy", tostring(http.PROXY))
+    http.TIMEOUT=5
 end
 
 local decode_unchecked = json.decode
@@ -32,8 +23,6 @@ function json.decode(data)
         return {}
     end
 end
-
-http.TIMEOUT = 20
 
 local DEBUG = false
 if DEBUG then

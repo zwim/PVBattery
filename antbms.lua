@@ -567,9 +567,12 @@ function AntBMS:readyToDischarge()
         elseif self.v.LowestVoltage < config.bat_lowest_voltage + config.bat_voltage_hysteresis then
             start_discharge = false
             continue_discharge = true
-        elseif self.v.SOC < config.bat_SOC_min + config.bat_SOC_hysteresis then
+        elseif self.v.SOC < config.bat_SOC_min then
             start_discharge = false
             continue_discharge = false
+        elseif self.v.SOC < config.bat_SOC_min + config.bat_SOC_hysteresis then
+            start_discharge = false
+            continue_discharge = true
         else
             start_discharge = true
             continue_discharge = true
@@ -590,7 +593,6 @@ function AntBMS:isLowChargedOrNeedsRescue()
             return false
         end
     end
-    return
 end
 
 function AntBMS:needsRescueCharge()
