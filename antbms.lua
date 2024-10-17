@@ -127,6 +127,9 @@ local AntBMS = {
     rescue_charge = false, -- flag if battery is to low
 }
 
+-- will get overwritten
+AntBMS.wakeup = function() end
+
 function AntBMS:new(o)
     o = o or {}   -- create object if user does not provide one
     o.lastFullPeriod = o.lastFullPeriod or 2*24*3600 -- two days for now xxx
@@ -703,8 +706,5 @@ function AntBMS:_printValuesNotProtected()
 
     return true
 end
-
--- will get overwritten
-AntBMS.wakeup = function() end
 
 return AntBMS
