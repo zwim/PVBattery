@@ -43,7 +43,7 @@ bat_SOC_full = 96
 bat_SOC_max = 101 -- Percent
 bat_SOC_min_rescue = 10 -- start rescue charge
 
-bat_SOC_hysteresis = 2
+bat_SOC_hysteresis = 3
 bat_voltage_hysteresis = 0.100
 
 bat_lowest_voltage = 2.900 -- lowest allowed voltage
