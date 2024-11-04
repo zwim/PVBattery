@@ -289,7 +289,10 @@ function AntBMS:evaluateData(force)
 
     -- Require Data only, if the last require was at least update_interval seconds ago.
     if not force and self:getDataAge() < config.update_interval then
-        return true
+        -- and the last value was read correct
+        if self.v and self.v.Current then
+            return true
+        end
     end
 
     -- If we get here, make invalidate the last data aquisition date.
@@ -541,17 +544,31 @@ end
 
 function AntBMS:readyToCharge()
     if self:evaluateData() then
+        local start_charge, continue_charge
         if self.v.HighestVoltage >= config.bat_highest_voltage then
-            return false
-        elseif self.v.SOC > config.bat_SOC_max and self.v.CellDiff >= config.max_cell_diff then
-            return false
+            start_charge = false
+            continue_charge = false
+        elseif self.v.HighestVoltage >= config.bat_highest_voltage - config.bat_high_voltage_hysteresis then
+            start_charge = false
+            continue_charge = true
+        elseif self.v.CellDiff >= config.max_cell_diff then
+            if self.v.SOC > 50 then
+                start_charge = false
+                continue_charge = false
+            else
+                start_charge = true
+                continue_charge = true
+            end
         elseif self.v.SOC > config.bat_SOC_max then
-            return false
+            start_charge = false
+            continue_charge = false
         else
-            return true
+            start_charge = true
+            continue_charge = true
         end
+        return start_charge, continue_charge
     end
-    return nil
+
 end
 
 function AntBMS:readyToDischarge()
@@ -559,7 +576,7 @@ function AntBMS:readyToDischarge()
         local start_discharge, continue_discharge
         if self.v.CellDiff > config.max_cell_diff then
             start_discharge = false
-            if -1.0 <= self.v.Current and self.v.Current < 1.0 then
+            if math.abs(self.v.Current) <= 1.0 then
                 continue_discharge = true
             else
                 continue_discharge = false
@@ -576,6 +593,14 @@ function AntBMS:readyToDischarge()
         elseif self.v.SOC < config.bat_SOC_min + config.bat_SOC_hysteresis then
             start_discharge = false
             continue_discharge = true
+        elseif self.v.CellDiff >= config.max_cell_diff then
+            if self.v.SOC < 50 then
+                start_discharge = false
+                continue_discharge = false
+            else
+                start_discharge = true
+                continue_discharge = true
+            end
         else
             start_discharge = true
             continue_discharge = true
@@ -628,8 +653,8 @@ function AntBMS:needsBalancing()
     if self.v.SOC > 50 then
         if self.v.CellDiff >= config.max_cell_diff or self.v.HighestVoltage >= config.bat_highest_voltage then
             return true
-        elseif -1.0 <= self.v.Current and self.v.Current <= 1.0 then
-            if next(self.v) and self.v.CellDiff >= self.minCellDiff then
+        elseif math.abs(self.v.Current) <= 1.0 then
+            if self.v.CellDiff >= self.minCellDiff then
                 return true
             elseif not self:getDischargeState() then
                 return true

@@ -422,8 +422,10 @@ function PVBattery:main(profiling_runs)
 				if self:isStateIdle() or self:isStateLowBattery() then
 					local curr_power = Inverter.BMS:getPower()
 					if math.abs(curr_power) < 20 then
-						Inverter.BMS:disableDischarge()
-						Inverter.Switch:toggle(0)
+						if not Inverter.BMS:needsBalancing() then
+							Inverter.BMS:disableDischarge()
+							Inverter.Switch:toggle(0)
+						end
 					end
 				elseif not self:isStateCharging() then
 					Inverter.Switch:toggle(1)

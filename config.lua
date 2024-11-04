@@ -47,8 +47,9 @@ bat_SOC_hysteresis = 3
 bat_voltage_hysteresis = 0.100
 
 bat_lowest_voltage = 2.900 -- lowest allowed voltage
-bat_lowest_rescue = 2.800 -- start rescue charge
-bat_hightest_voltage = 3.540 -- highest allowed voltage
+bat_lowest_rescue = 2.850 -- start rescue charge
+bat_highest_voltage = 3.535 -- highest allowed voltage
+bat_high_voltage_hysteresis = 0.050 -- hysteresis on the high side
 max_cell_diff = 0.150 -- maximum allowed cell diff
 
 minCellDiff = 0.003

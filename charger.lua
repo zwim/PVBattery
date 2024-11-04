@@ -56,12 +56,11 @@ function Charger:startCharge(time_s)
 end
 
 function Charger:readyToCharge()
-    if self.BMS:readyToCharge() then
-        return true
-    else
+    local start_charge, continue_charge = self.BMS:readyToCharge()
+    if not continue_charge then
         self:stopCharge()
-        return false
     end
+    return start_charge
 end
 
 return Charger
