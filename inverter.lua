@@ -46,6 +46,10 @@ function Inverter:stopDischarge()
     self.Switch:toggle("off")
 end
 
+function Inverter:clearDataAge()
+    self.Switch:clearDataAge()
+end
+
 function Inverter:getCurrentPower()
    return self.Switch:getPower()
 end
