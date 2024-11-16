@@ -348,10 +348,8 @@ function AntBMS:evaluateData(force)
 
     -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
     self.v = {} -- clear old values
-
-    self.v.TotalVoltage = getInt16(self.answer, 4) * 0.1
-
     self.v.Voltage = {}
+    self.v.TotalVoltage = getInt16(self.answer, 4) * 0.1
 
     self.v.VoltageSum = 0
     for i = 1, 32 do
@@ -448,7 +446,7 @@ function AntBMS:evaluateData(force)
 end
 
 function AntBMS:isBatteryFull()
-    if next(self.v) then
+    if not self:evaluateData() then
         local is_full = self.v.SOC >= 100 and self.v.CalculatedSOC >= 100
             and self.v.CellDiff <= self.minCellDiff
             and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower
@@ -458,6 +456,7 @@ function AntBMS:isBatteryFull()
         else
             self.minCellDiff = config.minCellDiff
         end
+        return is_full
     end
 
     return false
@@ -551,7 +550,7 @@ function AntBMS:readyToCharge()
         elseif self.v.HighestVoltage >= config.bat_highest_voltage - config.bat_high_voltage_hysteresis then
             start_charge = false
             continue_charge = true
-        elseif self.v.CellDiff >= config.max_cell_diff then
+        elseif self.v.CellDiff >= config.max_cell_diff - config.batt_cell_diff_hysteresis then
             if self.v.SOC > 50 then
                 start_charge = false
                 continue_charge = false
@@ -568,7 +567,6 @@ function AntBMS:readyToCharge()
         end
         return start_charge, continue_charge
     end
-
 end
 
 function AntBMS:readyToDischarge()
@@ -648,16 +646,16 @@ function AntBMS:recoveredFromRescueCharge()
 end
 
 function AntBMS:needsBalancing()
-    if not self:evaluateData() then return end
-
-    if self.v.SOC > 50 then
-        if self.v.CellDiff >= config.max_cell_diff or self.v.HighestVoltage >= config.bat_highest_voltage then
-            return true
-        elseif math.abs(self.v.Current) <= 1.0 then
-            if self.v.CellDiff >= self.minCellDiff then
+    if self:evaluateData() then
+        if self.v.SOC > 50 then
+            if self.v.CellDiff >= config.max_cell_diff or self.v.HighestVoltage >= config.bat_highest_voltage then
                 return true
-            elseif not self:getDischargeState() then
-                return true
+            elseif math.abs(self.v.Current) <= 1.0 then
+                if self.v.CellDiff >= self.minCellDiff then
+                    return true
+                elseif not self:getDischargeState() then
+                    return true
+                end
             end
         end
     end

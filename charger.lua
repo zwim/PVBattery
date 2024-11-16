@@ -48,11 +48,8 @@ function Charger:stopCharge()
     self.Switch:toggle("off")
 end
 
-function Charger:startCharge(time_s)
+function Charger:startCharge()
     self.Switch:toggle("on")
-    if time_s then
-        util.sleep_time(15)
-    end
 end
 
 function Charger:readyToCharge()

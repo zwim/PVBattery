@@ -51,6 +51,7 @@ bat_lowest_rescue = 2.850 -- start rescue charge
 bat_highest_voltage = 3.535 -- highest allowed voltage
 bat_high_voltage_hysteresis = 0.050 -- hysteresis on the high side
 max_cell_diff = 0.150 -- maximum allowed cell diff
+batt_cell_diff_hysteresis = 0.020
 
 minCellDiff = 0.003
 CellDiffHysteresis = 0.003

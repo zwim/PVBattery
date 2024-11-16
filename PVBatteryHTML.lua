@@ -1,4 +1,4 @@
-return function(self, config, P_Grid, P_Load, P_PV)
+return function(self, config, P_Grid, P_Load, P_PV, VERSION)
     local ChargerPowerCache = {}
     local InverterPowerCache = {}
 
@@ -25,11 +25,12 @@ return function(self, config, P_Grid, P_Load, P_PV)
     end
 
     local TEMPLATE_PARSER = {
+        {"Vx.x", VERSION or "Vx.x"},
         {"_$DATE$", os.date()},
         {"_$SUNRISE$", self.sunrise},
         {"_$SUNSET$", self.sunset},
         {"_$FRONIUS_ADR$", config.FRONIUS_ADR},
-        {"_$STATE_OF_OPERATION$", self:getState() .. SOC_string},
+        {"_$STATE_OF_OPERATION$", (self._state or "") .. SOC_string},
         {"_$P_GRID$", string.format("%7.2f", P_Grid)},
         {"_$P_SELL_GRID$", P_Grid < 0 and string.format("%7.2f", P_Grid) or "0.00"},
         {"_$P_BUY_GRID$", P_Grid > 0 and string.format("%7.2f", P_Grid) or "0.00"},
