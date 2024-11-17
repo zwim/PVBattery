@@ -24,20 +24,6 @@ function json.decode(data)
     end
 end
 
-local DEBUG = false
-if DEBUG then
-    local oldhttprequest = http.request
-    function http.request(url)
-        if url:find("http:///cm") then
-            print("xxx emptry url: '" ..  url .. "  '")
-            return "", "", ""
-        else
-            return oldhttprequest(url)
-        end
-    end
-end
-
-
 local Switch = {
     timeOfLastRequiredData = 0, -- no data requiered yet
     host = nil,
@@ -79,13 +65,7 @@ function Switch:_getStatus()
     end
 
     if self:getDataAge() < config.update_interval and self.decoded then
-        if DEBUG then print("xxx getstat:", getstat, "host", self.host, "cached!") end
         return true
-    end
-
-    if DEBUG then
-        getstat = getstat + 1
-        print("xxx getstat:", getstat, "host", self.host)
     end
 
     local url = string.format("http://%s/cm?cmnd=status%%200", self.host)

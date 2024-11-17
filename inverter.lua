@@ -32,6 +32,22 @@ function Inverter:new(o)
     return o
 end
 
+function Inverter:clearDataAge()
+    self.Switch:clearDataAge()
+end
+
+function Inverter:getCurrentPower()
+   return self.Switch:getPower()
+end
+
+function Inverter:getMaxPower()
+   return self.Switch:getMaxPower()
+end
+
+function Inverter:getPowerState()
+   return self.Switch:getPowerState()
+end
+
 function Inverter:startDischarge(req_power)
     if self.time_controlled or self.BMS:readyToDischarge() then
         self.BMS:setPower(req_power or 10) -- if no power requested, start with minimal power
@@ -44,18 +60,6 @@ function Inverter:stopDischarge()
     self.BMS:setPower(0)
     util.sleep_time(0.5)
     self.Switch:toggle("off")
-end
-
-function Inverter:clearDataAge()
-    self.Switch:clearDataAge()
-end
-
-function Inverter:getCurrentPower()
-   return self.Switch:getPower()
-end
-
-function Inverter:getPowerState()
-   return self.Switch:getPowerState()
 end
 
 function Inverter:readyToDischarge()

@@ -2,8 +2,6 @@
 
 local Switch = require("switch")
 local AntBMS = require("antbms")
-local util = require("util")
-
 
 local Charger = {
     switch_host = "",
@@ -44,12 +42,12 @@ function Charger:getPowerState()
    return self.Switch:getPowerState()
 end
 
-function Charger:stopCharge()
-    self.Switch:toggle("off")
-end
-
 function Charger:startCharge()
     self.Switch:toggle("on")
+end
+
+function Charger:stopCharge()
+    self.Switch:toggle("off")
 end
 
 function Charger:readyToCharge()
