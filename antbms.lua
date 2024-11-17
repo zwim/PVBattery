@@ -1,5 +1,4 @@
 --
---
 -- see:
 -- https://github.com/syssi/esphome-ant-bms
 -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
@@ -236,7 +235,7 @@ function AntBMS:setPower(power)
     end
 end
 
-function AntBMS:getPower()
+function AntBMS:getCurrentPower()
     if self:evaluateData() then
         return self.v.CurrentPower
     else
