@@ -90,7 +90,7 @@ Device = {
         charger_switches = {},
         inverter_switch = "192.168.1.30",
         inverter_control = nil,
-        inverter_time_controlled = {off = DUSK_CIVIL, on = SUN_RISE},
+        inverter_time_controlled = "sunrise",
     },
 --[[
     { -- Device[3]

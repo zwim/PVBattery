@@ -225,8 +225,10 @@ end
 -- ToDo: If we have more than one inverte once, find the best wich Inverter:getCurrentPower
 function PVBattery:findBestInverterToTurnOff(req_power)
     for i, Inverter in pairs(self.Inverter) do
-		if Inverter.BMS:getDischargeState() ~= "off" or Inverter:getPowerState() ~= "off" then
-			return i, Inverter:getCurrentPower()
+		if not Inverter.time_controlled then
+			if Inverter.BMS:getDischargeState() ~= "off" or Inverter:getPowerState() ~= "off" then
+				return i, Inverter:getCurrentPower()
+			end
 		end
     end
 	return 0, 0
@@ -299,9 +301,9 @@ function PVBattery:chargeThreshold(date)
 end
 
 function PVBattery:isDischarging()
-    for _, inverter in pairs(self.Inverter) do
-        if not inverter.time_controlled and inverter:getPowerState() == "on"
-			and math.abs(inverter:getCurrentPower()) > 10 then
+    for _, Inverter in pairs(self.Inverter) do
+        if not Inverter.time_controlled and Inverter:getPowerState() == "on"
+			and math.abs(Inverter:getCurrentPower()) > 10 then
             return true
         end
     end
@@ -501,6 +503,22 @@ function PVBattery:main(profiling_runs)
 				print(error_msg)
 			end
 
+		end
+
+		-- Do the time controlled switching
+		for _, Inverter in pairs(self.Inverter) do
+			if Inverter.time_controlled then
+				local curr_hour = date.hour + date.min/60 + date.sec/3600
+				if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
+					if Inverter:getPowerState() ~= "on" then
+						Inverter:startDischarge()
+					end
+				else
+					if Inverter:getPowerState() ~= "off" then
+						Inverter:stopDischarge()
+					end
+				end
+			end
 		end
 
         self:serverCommands(config)
