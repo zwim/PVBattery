@@ -549,7 +549,7 @@ function AntBMS:readyToCharge()
         elseif self.v.HighestVoltage >= config.bat_highest_voltage - config.bat_high_voltage_hysteresis then
             start_charge = false
             continue_charge = true
-        elseif self.v.CellDiff >= config.max_cell_diff - config.batt_cell_diff_hysteresis then
+        elseif self.v.CellDiff >= config.max_cell_diff - config.max_cell_diff_hysteresis then
             if self.v.SOC > 50 then
                 start_charge = false
                 continue_charge = false
