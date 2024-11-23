@@ -41,8 +41,8 @@ local configuration = {
     bat_lowest_rescue = 2.801, -- start rescue charge
     bat_highest_voltage = 3.53, -- highest allowed voltage per cell
     bat_high_voltage_hysteresis = 0.050, -- hysteresis on the high side
-    max_cell_diff = 0.105,
-    batt_cell_diff_hysteresis = 0.020,
+    max_cell_diff = 0.150,
+    cell_cell_diff_hysteresis = 0.020,
 
     lastFullPeriod = 5*24*3600, -- two days
     minCellDiff = 0.003,

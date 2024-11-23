@@ -118,7 +118,7 @@ function PVBattery:updateState()
     end
 
     for _, Inverter in pairs(self.Inverter) do
-		if Inverter:getPowerState() == "on" then
+		if Inverter:getPowerState() == "on" and not Inverter.time_controlled then
             self._state = state.discharge
 			return self._state
         end
@@ -142,6 +142,10 @@ function PVBattery:updateState()
 				self._state = state.low_battery
 				return self._state
 			elseif BMS.v.CellDiff > config.max_cell_diff then
+				self._state = state.cell_diff
+				return self._state
+			elseif self._state == state.cell_diff
+				and BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
 				self._state = state.cell_diff
 				return self._state
 			end
@@ -316,7 +320,7 @@ PVBattery[state.cell_diff] = function(self, P_Grid, date)
 	else
 		for _, BMS in pairs(self.BMS) do
 			if BMS:evaluateData() then
-				if BMS.v.CellDiff > config.max_cell_diff then
+				if BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
 					BMS:disableDischarge()
 				end
 			end
@@ -373,9 +377,15 @@ PVBattery[state.balance] = function(self, P_Grid, date)
 end
 
 PVBattery[state.full] = function(self)
-	for _, BMS in pairs(self.BMS) do
-		if BMS:isBatteryFull() then
-			BMS:disableDischarge()
+	if P_Grid < self:chargeThreshold(date) then -- sell more than threshold energy
+		if not self:turnOffBestInverter(P_Grid) then -- no inverter running
+			self:turnOnBestCharger(P_Grid)
+		end
+	elseif P_Grid > 0 then
+		for _, BMS in pairs(self.BMS) do
+			if BMS:isBatteryFull() then
+				BMS:disableDischarge()
+			end
 		end
 	end
 end
