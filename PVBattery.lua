@@ -362,10 +362,14 @@ end
 
 PVBattery[state.balance] = function(self, P_Grid, date)
 	-- this is almost same as in idle, but no disableDischarge here
-	if P_Grid < self:chargeThreshold(date) then -- sell more than threhold energy
-		self:turnOnBestCharger(P_Grid)
+	if P_Grid < self:chargeThreshold(date) then -- sell more than threshold energy
+		if not self:turnOffBestInverter(P_Grid) then -- no inverter running
+			self:turnOnBestCharger(P_Grid)
+		end
 	elseif P_Grid > 0 then -- buying energy
-		self:turnOffBestCharger(P_Grid)
+		if not self:turnOffBestCharger(P_Grid) then -- no charger on
+			self:turnOnBestInverter(P_Grid)
+		end
 	end
 
 	for _, BMS in pairs(self.BMS) do
@@ -490,17 +494,23 @@ function PVBattery:main(profiling_runs)
             skip_loop = true
         end
 
+		local oldstate
+
 		if not skip_loop then
 			util:log(string.format("Grid %8.2f W (%s)", P_Grid, P_Grid > 0 and "optaining" or "selling"))
 			util:log(string.format("Load %8.2f W", P_Load))
 			util:log(string.format("Roof %8.2f W", P_PV))
 
 			-- update state, as the battery may have changed or the user could have changed something manually
-			local oldstate = self._state or ""
+			oldstate = self._state
 			if oldstate ~= self:updateState() then
-				os.execute("date")
-				print("State: ", oldstate, "->", self._state)
+				local f = io.popen("date", "r")
+				print(f:read(), "State: ", oldstate, "->", self._state)
+				f:close()
+				-- save the new state to oldstate for reference
+				oldstate = self._state
 			end
+
 			util:log("State: ", oldstate, "->", self._state)
 
 			self:generateHTML(config, P_Grid, P_Load, P_PV, VERSION)
@@ -532,6 +542,12 @@ function PVBattery:main(profiling_runs)
 		end
 
         self:serverCommands(config)
+
+		if oldstate ~= self:updateState() then
+			local f = io.popen("date", "r")
+			print(f:read(), "State: ", oldstate, "->", self._state)
+			f:close()
+		end
 
         for _, BMS in pairs(self.BMS) do
             BMS:printValues()
