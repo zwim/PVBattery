@@ -88,7 +88,7 @@ Device = {
         name = "Garage Inverter",
         BMS = nil,
         charger_switches = {},
-        inverter_switch = "192.168.1.30",
+        inverter_switch = "garage-inverter.lan",
         inverter_control = nil,
         inverter_time_controlled = "sunrise",
     },
