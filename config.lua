@@ -61,7 +61,7 @@ load_full_time_h = 2.5 -- time before sun set, to load battery at maximum
 
 sleep_time = 20 -- seconds to sleep per iteration
 
-update_interval = sleep_time - 5 -- time to keep old data before an update
+update_interval = (sleep_time - 5) -- time to keep old data before an update
 
 FRONIUS_ADR = "192.168.0.49"
 
@@ -81,7 +81,7 @@ Device = {
         },
         inverter_switch = "battery-inverter.lan",
         inverter_control = nil,
-        inverter_min_power = 110,
+        inverter_min_power = 150,
         inverter_time_controlled = nil,
     },
     { -- Device[2]

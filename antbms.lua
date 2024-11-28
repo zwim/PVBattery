@@ -294,7 +294,7 @@ function AntBMS:evaluateData(force)
         end
     end
 
-    -- If we get here, make invalidate the last data aquisition date.
+    -- If we get here, invalidate the last data aquisition date.
     -- Will be updated when new correct data are read.
     self:clearDataAge()
 
@@ -307,12 +307,16 @@ function AntBMS:evaluateData(force)
             for try = 1, 4 do -- try to read a few times
                 body, code = http.request(url)
                 code = tonumber(code)
-                if code and body then break end
+                if code and body then
+                    break
+                end
                 os.execute("date")
                 os.execute("echo 'Could not read bms.data -> try again (" .. try .. "/4).'")
                 util.sleep_time(1) -- wait
             end
-            if code and body then break end
+            if code and body then
+                break
+            end
             os.execute("date")
             os.execute("echo 'Could not get bms.data -> starting a wakup charge (" .. wake .."/2).'")
             self.wakeup()

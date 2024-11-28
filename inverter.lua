@@ -29,6 +29,10 @@ function Inverter:new(o)
         o.BMS = AntBMS:new{host = o.bms_host}
     end
 
+    if not o.min_power then
+        o.min_power = 0
+    end
+
     return o
 end
 
