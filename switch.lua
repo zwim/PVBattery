@@ -40,6 +40,9 @@ function Switch:new(o)
     if not o.timeOfLastRequiredData then
         o.timeOfLastRequiredData = 0
     end
+    if not o.max_power then
+        o.max_power = 0
+    end
     setmetatable(o, self)
     self.__index = self
     return o
@@ -58,7 +61,6 @@ function Switch:clearDataAge()
     self.decoded = nil
 end
 
-local getstat = 0
 function Switch:_getStatus()
     if not self.host then
         return false

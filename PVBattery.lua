@@ -230,7 +230,7 @@ end
 function PVBattery:findBestInverterToTurnOff(req_power)
     for i, Inverter in pairs(self.Inverter) do
 		if not Inverter.time_controlled then
-			if Inverter.BMS:getDischargeState() ~= "off" or Inverter:getPowerState() ~= "off" then
+			if Inverter.BMS:getDischargeState() ~= "off" and Inverter:getPowerState() ~= "off" then
 				return i, Inverter:getCurrentPower()
 			end
 		end
@@ -245,6 +245,7 @@ function PVBattery:turnOffBestInverter(req_power)
 				inverter_num, power))
 		self.Inverter[inverter_num]:stopDischarge()
 		self.Inverter[inverter_num]:clearDataAge()
+		return true
 	end
 end
 
@@ -257,7 +258,7 @@ function PVBattery:findBestInverterToTurnOn(req_power)
 	end
 
     for i, Inverter in pairs(self.Inverter) do
-        local min_power = Inverter.min_power or math.huge
+        local min_power = math.max(Inverter.min_power, Inverter:getMaxPower())
 		if Inverter:readyToDischarge() then
 			if min_power < req_power and min_power > avail_power then
                 if Inverter.BMS:getDischargeState() ~= "on" or Inverter:getPowerState() ~= "on" then

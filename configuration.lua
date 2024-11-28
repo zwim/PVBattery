@@ -76,7 +76,7 @@ local configuration = {
             },
             inverter_switch = "battery-inverter.lan",
             inverter_control = nil,
-            inverter_min_power = 110,
+            inverter_min_power = 150,
             inverter_time_controlled = nil,
         },
         { -- Device[2]
