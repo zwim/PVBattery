@@ -1,5 +1,5 @@
 
-local VERSION = "V4.0"
+local VERSION = "V4.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -85,11 +85,6 @@ function PVBattery:init()
             minCellDiff = config.minCellDiff,
             minPower = config.minPower,
         }
-        BMS.wakeup = function()
-            print("Wakeup charge started")
-            Charger:startCharge()
-            util.sleep_time(config.sleep_time)
-        end
         if Device.BMS ~= nil then
             table.insert(self.BMS, BMS)
         end
@@ -108,6 +103,11 @@ function PVBattery:init()
                 max_power = Device.charger_max_power[i],
                 BMS = BMS,
             }
+            BMS.wakeup = function()
+                print("Wakeup charge started")
+                Charger:startCharge()
+                util.sleep_time(config.sleep_time)
+            end
             table.insert(self.Charger, Charger)
         end
     end
@@ -253,11 +253,17 @@ function PVBattery:turnOnBestCharger(P_Grid)
     end
 end
 
--- ToDo: If we have more than one inverter on, find the best wich Inverter:getCurrentPower
+-- ToDo: If we have more than one inverter on, find the best with Inverter:getCurrentPower
 function PVBattery:findBestInverterToTurnOff(req_power)
     for i, Inverter in pairs(self.Inverter) do
-        if not Inverter.time_controlled then
+        if not Inverter.time_controlled and Inverter.BMS then
             if Inverter.BMS:getDischargeState() ~= "off" and Inverter:getPowerState() ~= "off" then
+                if req_power < 0 then
+                    return i, Inverter:getCurrentPower()
+                end
+            end
+            local start_discharge, continue_discharge = Inverter.BMS:readyToDischarge()
+            if not continue_discharge then
                 return i, Inverter:getCurrentPower()
             end
         end
@@ -285,16 +291,18 @@ function PVBattery:findBestInverterToTurnOn(req_power)
     end
 
     for i, Inverter in pairs(self.Inverter) do
-        local min_power = math.max(Inverter.min_power, Inverter:getMaxPower())
-        if Inverter:readyToDischarge() then
-            if min_power < req_power and min_power > avail_power then
-                if Inverter.BMS:getDischargeState() ~= "on" or Inverter:getPowerState() ~= "on" then
-                    pos = i
-                    avail_power = min_power
+        if not Inverter.time_controlled then
+            local min_power = math.max(Inverter.min_power, Inverter:getMaxPower())
+            if Inverter:readyToDischarge() then
+                if min_power < req_power and min_power > avail_power then
+                    if Inverter.BMS:getDischargeState() ~= "on" or Inverter:getPowerState() ~= "on" then
+                        pos = i
+                        avail_power = min_power
+                    end
                 end
+            else
+                Inverter:stopDischarge()
             end
-        else
-            Inverter:stopDischarge()
         end
     end
 
@@ -381,9 +389,12 @@ PVBattery[state.charge] = function(self, P_Grid, date)
 end
 
 PVBattery[state.discharge] = function(self, P_Grid)
+    local inverter_turned_on
     if P_Grid > 0 then -- sell more than threshold
-        self:turnOnBestInverter(P_Grid)
-    else
+        inverter_turned_on = self:turnOnBestInverter(P_Grid)
+    end
+
+    if P_Grid < 0 or not inverter_turned_on then
         self:turnOffBestInverter(P_Grid)
     end
 end
@@ -555,7 +566,7 @@ function PVBattery:main(profiling_runs)
             oldstate = self:getState()
             if oldstate ~= self:updateState() then
                 local f = io.popen("date", "r")
-                print(f:read(), "State: ", oldstate, "->", self:getState())
+                print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
                 f:close()
                 -- save the new state to oldstate for reference
                 oldstate = self:getState()
@@ -595,7 +606,7 @@ function PVBattery:main(profiling_runs)
 
         if oldstate ~= self:updateState() then
             local f = io.popen("date", "r")
-            print(f:read(), "State: ", oldstate, "->", self:getState())
+                print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
             f:close()
         end
 
