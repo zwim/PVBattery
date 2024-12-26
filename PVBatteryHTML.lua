@@ -25,7 +25,7 @@ return function(self, config, P_Grid, P_Load, P_PV, VERSION)
     end
 
     local TEMPLATE_PARSER = {
-        {"Vx.x", VERSION or "Vx.x"},
+        {"_$Vx.y.z$", VERSION or "Vx.y.z"},
         {"_$DATE$", os.date()},
         {"_$SUNRISE$", self.sunrise},
         {"_$SUNSET$", self.sunset},
@@ -73,10 +73,9 @@ return function(self, config, P_Grid, P_Load, P_PV, VERSION)
     table.insert(TEMPLATE_PARSER, {"_$POWER_CONSUMED$",
             string.format("%7.2f", P_Grid + sources - sinks)})
 
-    local date = os.date("*t")
-
-    TEMPLATE_PARSER[1][2] = string.format("%d/%d/%d-%02d:%02d:%02d",
-        date.year, date.month, date.day, date.hour, date.min, date.sec)
+--    local date = os.date("*t")
+--    TEMPLATE_PARSER[1][2] = string.format("%d/%d/%d-%02d:%02d:%02d",
+--        date.year, date.month, date.day, date.hour, date.min, date.sec)
 
     local template_descriptor = io.open("./index_template.html", "r")
     if not template_descriptor then
