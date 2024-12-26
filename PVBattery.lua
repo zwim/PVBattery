@@ -1,5 +1,5 @@
 
-local VERSION = "V4.1"
+local VERSION = "V4.1.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -322,15 +322,6 @@ function PVBattery:turnOnBestInverter(req_power)
     end
 end
 
-function PVBattery:isCharging()
-    for _, charger in pairs(self.Charger) do
-        if charger:getPowerState() == "on" then
-            return true
-        end
-    end
-    return false
-end
-
 function PVBattery:chargeThreshold(date)
     local curr_hour = date.hour + date.min/60 + date.sec/3600
     if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
@@ -338,16 +329,6 @@ function PVBattery:chargeThreshold(date)
     else
         return 0
     end
-end
-
-function PVBattery:isDischarging()
-    for _, Inverter in pairs(self.Inverter) do
-        if not Inverter.time_controlled and Inverter:getPowerState() == "on"
-            and math.abs(Inverter:getCurrentPower()) > 10 then
-            return true
-        end
-    end
-    return false
 end
 
 PVBattery[state.cell_diff] = function(self, P_Grid, date)
@@ -379,6 +360,11 @@ end
 PVBattery[state.low_battery] = PVBattery[state.low_cell]
 
 PVBattery[state.charge] = function(self, P_Grid, date)
+    for _, Inverter in pairs(self.Inverter) do
+        if not Inverter.time_controlled and Inverter:getPowerState() ~= "off" then
+            Inverter:stopDischarge()
+        end
+    end
     if P_Grid < self:chargeThreshold(date) then -- sell more than threhold energy
         self:turnOnBestCharger(P_Grid)
     elseif P_Grid > 0 then -- buying energy
@@ -389,6 +375,11 @@ PVBattery[state.charge] = function(self, P_Grid, date)
 end
 
 PVBattery[state.discharge] = function(self, P_Grid)
+    for _, Charger in pairs(self.Charger) do
+        if Charger:getPowerState() ~= "off" then
+            Charger:stopCharge()
+        end
+    end
     local inverter_turned_on
     if P_Grid > 0 then -- sell more than threshold
         inverter_turned_on = self:turnOnBestInverter(P_Grid)
@@ -472,6 +463,22 @@ PVBattery[state.shutdown] = function(self)
     end
 end
 
+function PVBattery:deleteCache()
+    -- Delete all cached values
+    for _, BMS in pairs(self.BMS) do
+        BMS:clearDataAge()
+    end
+
+    for _, Charger in pairs(self.Charger) do
+        Charger.Switch:clearDataAge()
+    end
+
+    for _, Inverter in pairs(self.Inverter) do
+        Inverter.Switch:clearDataAge()
+    end
+end
+
+
 function PVBattery:main(profiling_runs)
     local last_date, date
     -- optain a date in the past
@@ -519,18 +526,7 @@ function PVBattery:main(profiling_runs)
             short_sleep = 1
         end
 
-        -- Delete all cached values
-        for _, BMS in pairs(self.BMS) do
-            BMS:clearDataAge()
-        end
-
-        for _, Charger in pairs(self.Charger) do
-            Charger.Switch:clearDataAge()
-        end
-
-        for _, Inverter in pairs(self.Inverter) do
-            Inverter.Switch:clearDataAge()
-        end
+        self:deleteCache()
 
         -- Update Fronius
         util:log("\n-------- Total Overview:")
@@ -569,12 +565,9 @@ function PVBattery:main(profiling_runs)
                 print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
                 f:close()
                 -- save the new state to oldstate for reference
-                oldstate = self:getState()
             end
 
             util:log("State: ", oldstate, "->", self:getState())
-
-            self:generateHTML(config, P_Grid, P_Load, P_PV, VERSION)
 
             if self[self:getState()] then
                 self[self:getState()](self, P_Grid, date) -- execute the state
@@ -584,6 +577,15 @@ function PVBattery:main(profiling_runs)
                 print(error_msg)
             end
 
+            oldstate = self:getState()
+            self:deleteCache()
+            if oldstate ~= self:updateState() then
+                local f = io.popen("date", "r")
+                print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
+                f:close()
+            end
+
+            self:generateHTML(config, P_Grid, P_Load, P_PV, VERSION)
         end
 
         -- Do the time controlled switching
@@ -603,12 +605,6 @@ function PVBattery:main(profiling_runs)
         end
 
         self:serverCommands(config)
-
-        if oldstate ~= self:updateState() then
-            local f = io.popen("date", "r")
-                print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
-            f:close()
-        end
 
         for _, BMS in pairs(self.BMS) do
             BMS:printValues()

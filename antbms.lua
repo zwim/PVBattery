@@ -311,8 +311,8 @@ function AntBMS:evaluateData(force)
                     break
                 end
                 os.execute("date")
-                os.execute("echo 'Could not read bms.data -> try again (" .. try .. "/4).'")
-                util.sleep_time(1) -- wait
+                os.execute("echo 'Could not read bms.data -> try again (" .. try .. "/4) in 5 seconds.'")
+                util.sleep_time(5) -- wait
             end
             if code and body then
                 break
