@@ -1,5 +1,5 @@
 
-local VERSION = "V4.1.2"
+local VERSION = "V4.2.0"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -16,6 +16,7 @@ local InverterClass = require("inverter")
 
 local config = require("configuration")
 local util = require("util")
+local socket = require("socket")
 
 local state = {
     fail = "fail", -- unknown state
@@ -147,7 +148,7 @@ function PVBattery:updateState()
     end
 
     for _, BMS in pairs(self.BMS) do
-        if BMS:evaluateData() then
+        if BMS:getData() then
             if BMS:isBatteryFull() then
                 self:setState(state.full)
                 return self:getState()
@@ -336,7 +337,7 @@ PVBattery[state.cell_diff] = function(self, P_Grid, date)
         self:turnOnBestCharger(P_Grid)
     else
         for _, BMS in pairs(self.BMS) do
-            if BMS:evaluateData() then
+            if BMS:getData() then
                 if BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
                     BMS:disableDischarge()
                 end
@@ -455,7 +456,6 @@ PVBattery[state.shutdown] = function(self)
             Charger:stopCharge()
         end
     end
-
     for _, Inverter in pairs(self.Inverter) do
         if Inverter:getPowerState() == "on" and not Inverter.time_controlled then
             Inverter:stopDischarge()
@@ -463,7 +463,7 @@ PVBattery[state.shutdown] = function(self)
     end
 end
 
-function PVBattery:deleteCache()
+function PVBattery:clearCache()
     -- Delete all cached values
     for _, BMS in pairs(self.BMS) do
         BMS:clearDataAge()
@@ -477,11 +477,12 @@ function PVBattery:deleteCache()
     end
 end
 
+--[[
 -- Prefetch all switch values
-function PVBattery:fillCache()
---    for _, BMS in pairs(self.BMS) do
---        BMS.Switch:_getStatus()
---   end
+function PVBattery:fillCache_sequential()
+    for _, BMS in pairs(self.BMS) do
+        BMS:getData()
+    end
     for _, Inverter in pairs(self.Inverter) do
         Inverter.Switch:_getStatus()
     end
@@ -489,7 +490,81 @@ function PVBattery:fillCache()
         Charger.Switch:_getStatus()
     end
 end
+]]
 
+-- Prefetch all switch values
+function PVBattery:fillCache()
+    local threads = {}    -- list of all live threads
+
+    for _, BMS in pairs(self.BMS) do
+        local co = coroutine.create(function()
+            BMS:getData_coroutine()
+        end)
+        table.insert(threads, co)
+    end
+    for _, Inverter in pairs(self.Inverter) do
+        local co = coroutine.create(function()
+            Inverter.Switch:_getStatus_coroutine()
+        end)
+        table.insert(threads, co)
+    end
+    for _, Charger in pairs(self.Charger) do
+        local co = coroutine.create(function()
+            Charger.Switch:_getStatus_coroutine()
+        end)
+        table.insert(threads, co)
+    end
+
+    while true do
+        local n = #threads
+        if n == 0 then
+            break
+        end   -- no more threads to run
+        local connections = {}
+        for i=1,n do
+            local status, res = coroutine.resume(threads[i])
+            if not res then    -- thread finished its task?
+                table.remove(threads, i)
+                break
+            else    -- timeout
+                table.insert(connections, res)
+            end
+        end
+        if #connections == n then
+            socket.select(connections)
+        end
+    end
+end
+
+function PVBattery:getCacheDataAge(print_all_values)
+    local output = print
+    if not print_all_values then
+        output = function() end
+    end
+
+    local total_fetch_time = 0
+    local current_fetch_time = 0
+    for _, BMS in pairs(self.BMS) do
+        output(string.format("BMS %s, %2f", BMS.host, BMS:getDataAge()))
+        total_fetch_time = total_fetch_time + BMS:getDataAge()
+        current_fetch_time = math.max(current_fetch_time, BMS:getDataAge())
+    end
+    for _, Charger in pairs(self.Charger) do
+        output(string.format("Charger %s %2f", Charger.switch_host, Charger.Switch:getDataAge()))
+        total_fetch_time = total_fetch_time + Charger.Switch:getDataAge()
+        current_fetch_time = math.max(current_fetch_time, Charger.Switch:getDataAge())
+    end
+    for _, Inverter in pairs(self.Inverter) do
+        output(string.format("Inverter %s %2f", Inverter.host, Inverter.Switch:getDataAge()))
+        total_fetch_time = total_fetch_time + Inverter.Switch:getDataAge()
+        current_fetch_time = math.max(current_fetch_time, Inverter.Switch:getDataAge())
+    end
+
+    print(string.format("Savings: %2f s, sequential %2f s, parallel %2f s)",
+            total_fetch_time - current_fetch_time,
+            total_fetch_time,
+            current_fetch_time))
+end
 
 function PVBattery:main(profiling_runs)
     local last_date, date
@@ -537,11 +612,9 @@ function PVBattery:main(profiling_runs)
             util:log("Sun set at " .. self.sunset)
             short_sleep = 1
         end
-
-        self:deleteCache()
-        print("hierher und nicht weiter")
+        self:clearCache()
         self:fillCache()
-
+        self:getCacheDataAge()
 
         -- Update Fronius
         util:log("\n-------- Total Overview:")
@@ -593,7 +666,9 @@ function PVBattery:main(profiling_runs)
             end
 
             oldstate = self:getState()
-            self:deleteCache()
+            self:clearCache()
+            self:fillCache()
+            self:getCacheDataAge()
             if oldstate ~= self:updateState() then
                 local f = io.popen("date", "r")
                 print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)

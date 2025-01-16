@@ -4,7 +4,9 @@
 -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
 
 local config = require("configuration")
+local socket = require("socket")
 local util = require("util")
+
 
 local http = {}
 if config.use_wget then
@@ -125,7 +127,7 @@ function AntBMS:setAutoBalance(on)
         on = true
     end
 
-    self:evaluateData(true)
+    self:getData(true)
 
     util:log("Balancer status was ",
         self.v.BalancedStatusText and string.lower(self.v.BalancedStatusText) or self.v.BalancedStatusFlag)
@@ -194,7 +196,7 @@ function AntBMS:disableDischarge()
 end
 
 function AntBMS:getDischargeState()
-    if self:evaluateData() then
+    if self:getData() then
         return (self.v.DischargeMos == 1) and "on" or "off"
     end
 end
@@ -217,7 +219,7 @@ function AntBMS:setPower(power)
 end
 
 function AntBMS:getCurrentPower()
-    if self:evaluateData() then
+    if self:getData() then
         return self.v.CurrentPower
     else
         return math.huge
@@ -262,7 +264,7 @@ function AntBMS:isChecksumOk()
 end
 
 -- This is the usual way of reading new parameters
-function AntBMS:evaluateData(force)
+function AntBMS:getData(force)
     if not self.host or self.host == "" then
         return false
     end
@@ -330,6 +332,70 @@ function AntBMS:evaluateData(force)
         return false
     end
 
+    return self:evaluateData()
+end
+
+
+-- This is the usual way of reading new parameters
+function AntBMS:getData_coroutine(force)
+    if not self.host or self.host == "" then
+        return false
+    end
+
+    -- Require Data only, if the last require was at least update_interval seconds ago.
+    if not force and self:getDataAge() < config.update_interval then
+        -- and the last value was read correct
+        if self.v and self.v.Current then
+            return true
+        end
+    end
+
+    -- If we get here, invalidate the last data aquisition date.
+    -- Will be updated when new correct data are read.
+    self:clearDataAge()
+
+    local client, err = socket.connect(self.host, 80)
+    if not client then
+        util:log("Error opening connection to", self.host, ":", err)
+        return false
+    end
+    client:send("GET /live.data HTTP/1.0\r\n\r\n")
+
+    local body = ""
+    while true do
+        client:settimeout(0)   -- do not block
+        local s, status, partial = client:receive(1024)
+        if s then
+            body = body .. s
+        end
+        if partial then
+            body = body .. partial
+        end
+        if #body >= READ_DATA_SIZE or status == "closed" then
+            break
+        elseif status == "timeout" then
+            coroutine.yield(client)
+        end
+    end
+    client:close()
+
+    body = body:gsub("^.*\r\n\r\n","") -- remove header if it is there
+
+    self.answer = {}
+    for n = 1, #body do
+        table.insert(self.answer, body:byte(n))
+    end
+
+    if not self:isChecksumOk() then
+        self:enableBluetooth()
+        return false
+    end
+
+    return self:evaluateData()
+end
+
+-- self.answer has to have valid data
+function AntBMS:evaluateData()
     -- see https://github.com/klotztech/VBMS/wiki/Serial-protocol
     self.v = {} -- clear old values
     self.v.Voltage = {}
@@ -430,7 +496,7 @@ function AntBMS:evaluateData(force)
 end
 
 function AntBMS:isBatteryFull()
-    if not self:evaluateData() then
+    if not self:getData() then
         local is_full = self.v.SOC >= 100 and self.v.CalculatedSOC >= 100
             and self.v.CellDiff <= self.minCellDiff
             and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower
@@ -518,7 +584,7 @@ function AntBMS:clearDataAge()
 end
 
 function AntBMS:printValues()
-    self:evaluateData()
+    self:getData()
     local success, err = pcall(self._printValuesNotProtected, self)
     if not success then
         util:log("BMS reported no values; Error: ", tostring(err))
@@ -526,7 +592,7 @@ function AntBMS:printValues()
 end
 
 function AntBMS:readyToCharge()
-    if self:evaluateData() then
+    if self:getData() then
         local start_charge, continue_charge
         if self.v.HighestVoltage >= config.bat_highest_voltage then
             start_charge = false
@@ -554,7 +620,7 @@ function AntBMS:readyToCharge()
 end
 
 function AntBMS:readyToDischarge()
-    if self:evaluateData() then
+    if self:getData() then
         local start_discharge, continue_discharge
         if self.v.CellDiff > config.max_cell_diff then
             start_discharge = false
@@ -592,7 +658,7 @@ function AntBMS:readyToDischarge()
 end
 
 function AntBMS:isLowChargedOrNeedsRescue()
-    if self:evaluateData() then
+    if self:getData() then
         if self.v.LowestVoltage < config.bat_lowest_rescue or self.v.SOC < config.bat_SOC_min_rescue then
             self.rescue_charge = true
             return true
@@ -615,7 +681,7 @@ function AntBMS:recoveredFromRescueCharge()
         return true
     end
 
-    if self:evaluateData(true) then
+    if self:getData(true) then
         if self.v.LowestVoltage > config.bat_lowest_rescue
             and self.v.LowestVoltage > config.bat_lowest_voltage
             and self.v.SOC > config.bat_SOC_min_rescue
@@ -631,7 +697,7 @@ end
 
 function AntBMS:needsBalancing(balance_threshold)
     balance_threshold = balance_threshold or 75
-    if self:evaluateData() then
+    if self:getData() then
         if self.v.SOC > balance_threshold then
             if self.v.CellDiff >= config.max_cell_diff or self.v.HighestVoltage >= config.bat_highest_voltage then
                 return true
