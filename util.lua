@@ -159,7 +159,7 @@ function util.hourToTime(h)
 end
 
 function util.hostname()
-    local file = assert(io.popen("hostname"))
+    local file = io.popen("hostname")
     local output = file:read('*all')
     file:close()
     return output

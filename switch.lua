@@ -1,9 +1,8 @@
 
 local config = require("configuration")
 local json = require ("dkjson")
-local util = require("util")
 local socket = require("socket")
-
+local util = require("util")
 
 local http = {}
 -- config.use_wget = nil
@@ -96,39 +95,40 @@ function Switch:_getStatus_coroutine()
         return true
     end
 
-    -- the one which yields
-    function receive(connection)
-        connection:timeout(0)   -- do not block
-        local s, status = connection:receive(2^10)
-        if status == "timeout" then
-            coroutine.yield(connection)
-        end
-        return s, status
+    local path = "/cm?cmnd=status0"
+    local client, err = socket.connect(self.host, 80)
+    if not client then
+        util:log("Error opening connection to", self.host, ":", err)
+        return false
     end
-
-    local path = "cm?cmnd=status%%200"
-    local connection = assert(socket.connect(self.host, 80))
-    local count = 0    -- counts number of bytes read
-    connection:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
 
     local content = {}
     while true do
-        local s, status = receive(connection)
-        count = count + string.len(s)
-        table.insert(content, s)
-        if status == "closed" then break end
+        client:settimeout(0)   -- do not block
+        local s, status, partial = client:receive(1024)
+        if s then
+            s = s:gsub("^.*\r\n\r\n","") -- remove header
+            if s ~= "" then
+                table.insert(content, s)
+            end
+        end
+        if partial then
+            partial = partial:gsub("^.*\r\n\r\n","") -- remove header
+            if partial ~= "" then
+                table.insert(content, partial)
+            end
+        end
+        if status == "timeout" then
+            coroutine.yield(client)
+        elseif status == "closed" then
+            break
+        end
     end
-    connection:close()
+    client:close()
     local body = table.concat(content)
     content = nil
 
-    local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
-    body, code = http.request(url)
-    code = tonumber(code)
-    if not code or code < 200 or code >= 300 then
-        self.decoded = nil
-        return false
-    end
     self.decoded = json.decode(body)
 
     self:setDataAge()
