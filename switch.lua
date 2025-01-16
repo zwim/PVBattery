@@ -2,6 +2,8 @@
 local config = require("configuration")
 local json = require ("dkjson")
 local util = require("util")
+local socket = require("socket")
+
 
 local http = {}
 -- config.use_wget = nil
@@ -61,6 +63,7 @@ function Switch:clearDataAge()
     self.decoded = nil
 end
 
+-- Use this method for receivinge values from one switch
 function Switch:_getStatus()
     if not self.host then
         return false
@@ -82,6 +85,56 @@ function Switch:_getStatus()
     self:setDataAge()
     return true
 end
+
+-- Use this method to collect values from all switches with coroutines
+function Switch:_getStatus_coroutine()
+    if not self.host then
+        return false
+    end
+
+    if self:getDataAge() < config.update_interval and self.decoded then
+        return true
+    end
+
+    -- the one which yields
+    function receive(connection)
+        connection:timeout(0)   -- do not block
+        local s, status = connection:receive(2^10)
+        if status == "timeout" then
+            coroutine.yield(connection)
+        end
+        return s, status
+    end
+
+    local path = "cm?cmnd=status%%200"
+    local connection = assert(socket.connect(self.host, 80))
+    local count = 0    -- counts number of bytes read
+    connection:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+
+    local content = {}
+    while true do
+        local s, status = receive(connection)
+        count = count + string.len(s)
+        table.insert(content, s)
+        if status == "closed" then break end
+    end
+    connection:close()
+    local body = table.concat(content)
+    content = nil
+
+    local url = string.format("http://%s/cm?cmnd=status%%200", self.host)
+    body, code = http.request(url)
+    code = tonumber(code)
+    if not code or code < 200 or code >= 300 then
+        self.decoded = nil
+        return false
+    end
+    self.decoded = json.decode(body)
+
+    self:setDataAge()
+    return true
+end
+
 
 function Switch:getEnergyTotal()
     if not self:_getStatus() then
