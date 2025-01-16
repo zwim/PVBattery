@@ -468,13 +468,25 @@ function PVBattery:deleteCache()
     for _, BMS in pairs(self.BMS) do
         BMS:clearDataAge()
     end
-
     for _, Charger in pairs(self.Charger) do
         Charger.Switch:clearDataAge()
     end
 
     for _, Inverter in pairs(self.Inverter) do
         Inverter.Switch:clearDataAge()
+    end
+end
+
+-- Prefetch all switch values
+function PVBattery:fillCache()
+--    for _, BMS in pairs(self.BMS) do
+--        BMS.Switch:_getStatus()
+--   end
+    for _, Inverter in pairs(self.Inverter) do
+        Inverter.Switch:_getStatus()
+    end
+    for _, Charger in pairs(self.Charger) do
+        Charger.Switch:_getStatus()
     end
 end
 
@@ -527,6 +539,9 @@ function PVBattery:main(profiling_runs)
         end
 
         self:deleteCache()
+        print("hierher und nicht weiter")
+        self:fillCache()
+
 
         -- Update Fronius
         util:log("\n-------- Total Overview:")
