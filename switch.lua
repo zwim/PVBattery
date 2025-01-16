@@ -163,6 +163,7 @@ function Switch:toggle(on)
     end
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
     http.request(url)
+    self:clearDataAge()
 --[[
     local body, code = http.request(url)
     code = tonumber(code)
@@ -176,7 +177,8 @@ function Switch:toggle(on)
     end
 
     self:setDataAge()
-    return Result ]]
+    return Result
+]]
 end
 
 return Switch
