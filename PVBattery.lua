@@ -1,5 +1,5 @@
 
-local VERSION = "V4.2.0"
+local VERSION = "V4.2.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -100,7 +100,7 @@ function PVBattery:init()
 
         for i = 1, #Device.charger_switches do
             local Charger = ChargerClass:new{
-                switch_host = Device.charger_switches[i],
+                host = Device.charger_switches[i],
                 max_power = Device.charger_max_power[i],
                 BMS = BMS,
             }
@@ -195,7 +195,7 @@ function PVBattery:findBestChargerToTurnOff(req_power)
         if Charger:getPowerState() == "on" and
             not (Charger.BMS:isLowChargedOrNeedsRescue() and Charger.BMS:needsRescueCharge()) then
             -- process only activated chargers
-            local charging_power = Charger:getCurrentPower() or math.huge
+            local charging_power = Charger:getPower() or math.huge
             if charging_power > req_power or charging_power > avail_power then
                 -- either one charging power that is larger than requested power (✓)
                 -- or the largest charging power (✓)
@@ -254,18 +254,18 @@ function PVBattery:turnOnBestCharger(P_Grid)
     end
 end
 
--- ToDo: If we have more than one inverter on, find the best with Inverter:getCurrentPower
+-- ToDo: If we have more than one inverter on, find the best with Inverter:getPower
 function PVBattery:findBestInverterToTurnOff(req_power)
     for i, Inverter in pairs(self.Inverter) do
         if not Inverter.time_controlled and Inverter.BMS then
             if Inverter.BMS:getDischargeState() ~= "off" and Inverter:getPowerState() ~= "off" then
                 if req_power < 0 then
-                    return i, Inverter:getCurrentPower()
+                    return i, Inverter:getPower()
                 end
             end
             local start_discharge, continue_discharge = Inverter.BMS:readyToDischarge()
             if not continue_discharge then
-                return i, Inverter:getCurrentPower()
+                return i, Inverter:getPower()
             end
         end
     end
@@ -469,11 +469,11 @@ function PVBattery:clearCache()
         BMS:clearDataAge()
     end
     for _, Charger in pairs(self.Charger) do
-        Charger.Switch:clearDataAge()
+        Charger:clearDataAge()
     end
 
     for _, Inverter in pairs(self.Inverter) do
-        Inverter.Switch:clearDataAge()
+        Inverter:clearDataAge()
     end
 end
 
@@ -484,10 +484,10 @@ function PVBattery:fillCache_sequential()
         BMS:getData()
     end
     for _, Inverter in pairs(self.Inverter) do
-        Inverter.Switch:_getStatus()
+        Inverter:_getStatus()
     end
     for _, Charger in pairs(self.Charger) do
-        Charger.Switch:_getStatus()
+        Charger:_getStatus()
     end
 end
 ]]
@@ -504,13 +504,13 @@ function PVBattery:fillCache()
     end
     for _, Inverter in pairs(self.Inverter) do
         local co = coroutine.create(function()
-            Inverter.Switch:_getStatus_coroutine()
+            Inverter:_getStatus_coroutine()
         end)
         table.insert(threads, co)
     end
     for _, Charger in pairs(self.Charger) do
         local co = coroutine.create(function()
-            Charger.Switch:_getStatus_coroutine()
+            Charger:_getStatus_coroutine()
         end)
         table.insert(threads, co)
     end
@@ -550,14 +550,14 @@ function PVBattery:getCacheDataAge(print_all_values)
         current_fetch_time = math.max(current_fetch_time, BMS:getDataAge())
     end
     for _, Charger in pairs(self.Charger) do
-        output(string.format("Charger %s %2f", Charger.switch_host, Charger.Switch:getDataAge()))
-        total_fetch_time = total_fetch_time + Charger.Switch:getDataAge()
-        current_fetch_time = math.max(current_fetch_time, Charger.Switch:getDataAge())
+        output(string.format("Charger %s %2f", Charger.switch_host, Charger:getDataAge()))
+        total_fetch_time = total_fetch_time + Charger:getDataAge()
+        current_fetch_time = math.max(current_fetch_time, Charger:getDataAge())
     end
     for _, Inverter in pairs(self.Inverter) do
-        output(string.format("Inverter %s %2f", Inverter.host, Inverter.Switch:getDataAge()))
-        total_fetch_time = total_fetch_time + Inverter.Switch:getDataAge()
-        current_fetch_time = math.max(current_fetch_time, Inverter.Switch:getDataAge())
+        output(string.format("Inverter %s %2f", Inverter.host, Inverter:getDataAge()))
+        total_fetch_time = total_fetch_time + Inverter:getDataAge()
+        current_fetch_time = math.max(current_fetch_time, Inverter:getDataAge())
     end
 
     print(string.format("Savings: %2f s, sequential %2f s, parallel %2f s)",
@@ -618,8 +618,9 @@ function PVBattery:main(profiling_runs)
 
         -- Update Fronius
         util:log("\n-------- Total Overview:")
-        Fronius:getPowerFlowRealtimeData()
+        local xxx = util.getCurrentTime()
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+        print(util.getCurrentTime()-xxx)
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)

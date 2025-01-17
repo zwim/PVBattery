@@ -4,17 +4,8 @@ local json = require ("dkjson")
 local socket = require("socket")
 local util = require("util")
 
-local http = {}
--- config.use_wget = nil
-if config.use_wget then
-    function http.request(url)
-        return util.httpRequest(url)
-    end
-else
-    -- loads the HTTP module and any libraries it requires
-    http = require("socket.http")
-    http.TIMEOUT=5
-end
+local http = require("socket.http")
+http.TIMEOUT=5
 
 local decode_unchecked = json.decode
 function json.decode(data)
@@ -26,27 +17,38 @@ function json.decode(data)
 end
 
 local Switch = {
-    timeOfLastRequiredData = 0, -- no data requiered yet
     host = nil,
     body = nil,
     status = nil,
     headers = nil,
     code = nil,
+    timeOfLastRequiredData = 0, -- no data requiered yet
     max_power = 0,
     power_state = 0,
 }
 
-function Switch:new(o)
-    o = o or {}   -- create object if user does not provide one
-    if not o.timeOfLastRequiredData then
-        o.timeOfLastRequiredData = 0
-    end
-    if not o.max_power then
-        o.max_power = 0
-    end
+function Switch:extend(subclass_prototype)
+    local o = subclass_prototype or {}
     setmetatable(o, self)
     self.__index = self
     return o
+end
+
+function Switch:new(o)
+    o = self:extend(o)
+    if o.init then
+        o:init()
+    end
+    return o
+end
+
+function Switch:init()
+    if not self.timeOfLastRequiredData then
+        self.timeOfLastRequiredData = 0
+    end
+    if not self.max_power then
+        self.max_power = 0
+    end
 end
 
 function Switch:getDataAge()
