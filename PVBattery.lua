@@ -1,5 +1,5 @@
 
-local VERSION = "V4.2.1"
+local VERSION = "V4.2.2"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -471,10 +471,10 @@ function PVBattery:clearCache()
     for _, Charger in pairs(self.Charger) do
         Charger:clearDataAge()
     end
-
     for _, Inverter in pairs(self.Inverter) do
         Inverter:clearDataAge()
     end
+    Fronius:clearDataAge()
 end
 
 --[[
@@ -514,6 +514,11 @@ function PVBattery:fillCache()
         end)
         table.insert(threads, co)
     end
+
+    local co = coroutine.create(function()
+        Fronius:getPowerFlowRealtimeData_coroutine()
+    end)
+    table.insert(threads, co)
 
     while true do
         local n = #threads
@@ -560,7 +565,11 @@ function PVBattery:getCacheDataAge(print_all_values)
         current_fetch_time = math.max(current_fetch_time, Inverter:getDataAge())
     end
 
-    print(string.format("Savings: %2f s, sequential %2f s, parallel %2f s)",
+    output(string.format("Fronius %s %2f", Fronius.host, Fronius:getDataAge()))
+    total_fetch_time = total_fetch_time + Fronius:getDataAge()
+    current_fetch_time = math.max(current_fetch_time, Fronius:getDataAge())
+
+    util:log(string.format("Savings: %2f s, sequential %2f s, parallel %2f s)",
             total_fetch_time - current_fetch_time,
             total_fetch_time,
             current_fetch_time))
@@ -620,7 +629,6 @@ function PVBattery:main(profiling_runs)
         util:log("\n-------- Total Overview:")
         local xxx = util.getCurrentTime()
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
-        print(util.getCurrentTime()-xxx)
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)

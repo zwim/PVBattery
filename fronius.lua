@@ -2,19 +2,11 @@
 local config = require("configuration")
 local json = require("dkjson")
 local util = require("util")
-
-local http = {}
-if config.use_wget then
-    function http.request(url)
-        return util.httpRequest(url)
-    end
-else
-    -- loads the HTTP module and any libraries it requires
-    http = require("socket.http")
-end
+local socket = require("socket")
+local http = require("socket.http")
 
 local host = "192.168.0.49"
-local port = ":80"
+local port = "80"
 
 local inverter_id = 1
 local meter_id = 0
@@ -53,8 +45,12 @@ function Fronius:setDataAge()
     self.timeOfLastRequiredData = util.getCurrentTime()
 end
 
+function Fronius:clearDataAge()
+    self.timeOfLastRequiredData = 0
+end
+
 function Fronius:_get_RealtimeData(cmd)
-    local url = string.format("http://%s%s%s%s", self.host, self.port, self.urlPath, cmd)
+    local url = string.format("http://%s:%s%s%s", self.host, self.port, self.urlPath, cmd)
     local body, code = http.request(url)
     code = tonumber(code)
     if code and code >= 200 and code < 300 and body then
@@ -65,23 +61,76 @@ function Fronius:_get_RealtimeData(cmd)
 end
 
 function Fronius:getInverterRealtimeData()
-    if self:getDataAge() < config.update_interval then return end
-
+    if self:getDataAge() < config.update_interval then return true end
     self.Data.GetInverterRealtimeData = self:_get_RealtimeData(GetInverterRealtimeData_cmd)
     self:setDataAge()
 end
 
 function Fronius:getPowerFlowRealtimeData()
-    if self:getDataAge() < config.update_interval then return end
-
+    if self:getDataAge() < config.update_interval then return true end
     self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData(GetPowerFlowRealtimeData_cmd)
     self:setDataAge()
 end
 
 function Fronius:getMeterRealtimeData()
-    if self:getDataAge() < config.update_interval then return end
-
+    if self:getDataAge() < config.update_interval then return true end
     self.Data.GetMeterRealtimeData = self:_get_RealtimeData(GetMeterRealtimeData_cmd)
+    self:setDataAge()
+end
+
+function Fronius:_get_RealtimeData_coroutine(cmd)
+    local path = self.urlPath .. cmd
+    local client, err = socket.connect(self.host, self.port or 80)
+    if not client then
+        util:log("Error opening connection to", self.host, ":", err)
+        return false
+    end
+    client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    local content = {}
+    while true do
+        client:settimeout(0)   -- do not block
+        local s, status, partial = client:receive(2^15)
+        if s then
+            s = s:gsub("^.*\r\n\r\n","") -- remove header
+            if s ~= "" then
+                table.insert(content, s)
+            end
+        end
+        if partial then
+            partial = partial:gsub("^.*\r\n\r\n","") -- remove header
+            if partial ~= "" then
+                table.insert(content, partial)
+            end
+        end
+
+        if status == "timeout" then
+            coroutine.yield(client)
+        elseif status == "closed" then
+            break
+        end
+    end
+    client:close()
+    local body = table.concat(content)
+    content = nil
+
+    return json.decode(body)
+end
+
+function Fronius:getInverterRealtimeData_coroutine()
+    if self:getDataAge() < config.update_interval then return true end
+    local retval = self:_get_RealtimeData_coroutine(GetInverterRealtimeData_cmd)
+    self:setDataAge()
+end
+
+function Fronius:getPowerFlowRealtimeData_coroutine()
+    if self:getDataAge() < config.update_interval then return true end
+    self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData_coroutine(GetPowerFlowRealtimeData_cmd)
+    self:setDataAge()
+end
+
+function Fronius:getMeterRealtimeData_coroutine()
+    if self:getDataAge() < config.update_interval then return true end
+    self.Data.GetMeterRealtimeData = self:_get_RealtimeData_coroutine(GetMeterRealtimeData_cmd)
     self:setDataAge()
 end
 
