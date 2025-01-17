@@ -13,57 +13,39 @@ local Inverter = {
     static_load = 0,
 
     -- will get initialized by new
-    Switch = nil,
     BMS = nil,
 }
 
-function Inverter:new(o)
-    o = o or {}   -- create object if user does not provide one
-    setmetatable(o, self)
-    self.__index = self
 
-    if o.host and o.host ~= "" then
-        o.Switch = Switch:new{host = o.host}
-    end
-    if o.bms_host and o.bms_host ~= "" then
-        o.BMS = AntBMS:new{host = o.bms_host}
-    end
+local Inverter = Switch:extend{
+    bms_host = "",
+    max_power = 0,
+    min_power = 0,
+    -- will get initialized by new
+    BMS = nil,
+}
 
-    if not o.min_power then
-        o.min_power = 0
+function Inverter:init()
+    if self.bms_host and self.bms_host ~= "" then
+        self.BMS = AntBMS:new{host = o.bms_host}
     end
 
-    return o
+    return self
 end
 
-function Inverter:clearDataAge()
-    self.Switch:clearDataAge()
-end
-
-function Inverter:getCurrentPower()
-   return self.Switch:getPower()
-end
-
-function Inverter:getMaxPower()
-   return self.Switch:getMaxPower()
-end
-
-function Inverter:getPowerState()
-   return self.Switch:getPowerState()
-end
 
 function Inverter:startDischarge(req_power)
     if self.time_controlled or self.BMS:readyToDischarge() then
         self.BMS:setPower(req_power or 10) -- if no power requested, start with minimal power
         util.sleep_time(1)
-        self.Switch:toggle("on")
+        self:toggle("on")
     end
 end
 
 function Inverter:stopDischarge()
     self.BMS:setPower(0)
     util.sleep_time(0.5)
-    self.Switch:toggle("off")
+    self:toggle("off")
 end
 
 function Inverter:readyToDischarge()

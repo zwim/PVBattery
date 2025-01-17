@@ -3,51 +3,26 @@
 local Switch = require("switch")
 local AntBMS = require("antbms")
 
-local Charger = {
-    switch_host = "",
+local Charger = Switch:extend{
     bms_host = "",
     max_power = 0,
     -- will get initialized by new
-    Switch = nil,
     BMS = nil,
 }
 
-function Charger:new(o)
-    o = o or {}   -- create object if user does not provide one
-    setmetatable(o, self)
-    self.__index = self
-
-    if o.switch_host and o.switch_host ~= "" then
-        o.Switch = Switch:new{host = o.switch_host, max_power = o.max_power}
+function Charger:init()
+    if self.bms_host and self.bms_host ~= "" then
+        self.BMS = AntBMS:new{host = o.bms_host}
     end
-    if o.bms_host and o.bms_host ~= "" then
-        o.BMS = AntBMS:new{host = o.bms_host}
-    end
-    return o
-end
-
-function Charger:clearDataAge()
-    self.Switch:clearDataAge()
-end
-
-function Charger:getCurrentPower()
-    return self.Switch:getPower()
-end
-
-function Charger:getMaxPower()
-    return self.Switch:getMaxPower()
-end
-
-function Charger:getPowerState()
-    return self.Switch:getPowerState()
+    return self
 end
 
 function Charger:startCharge()
-    self.Switch:toggle("on")
+    self:toggle("on")
 end
 
 function Charger:stopCharge()
-    self.Switch:toggle("off")
+    self:toggle("off")
 end
 
 function Charger:readyToCharge()
