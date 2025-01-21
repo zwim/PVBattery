@@ -520,7 +520,8 @@ function PVBattery:fillCache()
     end)
     table.insert(threads, co)
 
-    while true do
+    local start_time = util.getCurrentTime()
+    repeat
         local n = #threads
         if n == 0 then
             break
@@ -538,7 +539,8 @@ function PVBattery:fillCache()
         if #connections == n then
             socket.select(connections)
         end
-    end
+    until util.getCurrentTime() - start_time >= config.update_interval
+    -- So if we are locked in here; end the lock
 end
 
 function PVBattery:getCacheDataAge(print_all_values)
@@ -627,7 +629,6 @@ function PVBattery:main(profiling_runs)
 
         -- Update Fronius
         util:log("\n-------- Total Overview:")
-        local xxx = util.getCurrentTime()
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
