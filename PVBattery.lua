@@ -1,5 +1,5 @@
 
-local VERSION = "V4.2.2"
+local VERSION = "V4.3.2"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -732,6 +732,9 @@ end
 
 local MyBatteries = PVBattery
 MyBatteries:init()
+
+
+util.deleteRunningInstances()
 
 os.execute("date; echo Init done")
 
