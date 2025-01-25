@@ -1,5 +1,5 @@
 
-local VERSION = "V4.3.2"
+local VERSION = "V4.3.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -527,13 +527,16 @@ function PVBattery:fillCache()
             break
         end   -- no more threads to run
         local connections = {}
-        for i=1,n do
-            local status, res = coroutine.resume(threads[i])
-            if not res then    -- thread finished its task?
+        for i = n, 1, -1 do
+            -- threads return a connection or a boolean value
+            -- thee boolean value means the thread has ended (with or without success)
+            local status, con = coroutine.resume(threads[i])
+            if status and type(con) ~= "boolean" then
+                -- timeout while reading
+                table.insert(connections, con)
+            else
+                -- thread has finished its task
                 table.remove(threads, i)
-                break
-            else    -- timeout
-                table.insert(connections, res)
             end
         end
         if #connections == n then

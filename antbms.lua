@@ -391,7 +391,8 @@ function AntBMS:getData_coroutine(force)
         return false
     end
 
-    return self:evaluateData()
+    self:evaluateData()
+    return true
 end
 
 -- self.answer has to have valid data
@@ -492,7 +493,6 @@ function AntBMS:evaluateData()
 
     -- Now we store the new aquisition time.
     self:setDataAge()
-    return true
 end
 
 function AntBMS:isBatteryFull()
@@ -566,8 +566,6 @@ function AntBMS:getParameters()
     for n = 1, 256 do
         print(string:format("%3d: 0x%X", n, self.Parameter[n]))
     end
-
-
     return true
 end
 
