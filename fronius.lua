@@ -60,15 +60,15 @@ function Fronius:_get_RealtimeData(cmd)
     end
 end
 
-function Fronius:getInverterRealtimeData()
-    if self:getDataAge() < config.update_interval then return true end
-    self.Data.GetInverterRealtimeData = self:_get_RealtimeData(GetInverterRealtimeData_cmd)
-    self:setDataAge()
-end
-
 function Fronius:getPowerFlowRealtimeData()
     if self:getDataAge() < config.update_interval then return true end
     self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData(GetPowerFlowRealtimeData_cmd)
+    self:setDataAge()
+end
+
+function Fronius:getInverterRealtimeData()
+    if self:getDataAge() < config.update_interval then return true end
+    self.Data.GetInverterRealtimeData = self:_get_RealtimeData(GetInverterRealtimeData_cmd)
     self:setDataAge()
 end
 
@@ -116,22 +116,25 @@ function Fronius:_get_RealtimeData_coroutine(cmd)
     return json.decode(body)
 end
 
-function Fronius:getInverterRealtimeData_coroutine()
-    if self:getDataAge() < config.update_interval then return true end
-    local retval = self:_get_RealtimeData_coroutine(GetInverterRealtimeData_cmd)
-    self:setDataAge()
-end
-
 function Fronius:getPowerFlowRealtimeData_coroutine()
     if self:getDataAge() < config.update_interval then return true end
     self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData_coroutine(GetPowerFlowRealtimeData_cmd)
     self:setDataAge()
+    return true
+end
+
+function Fronius:getInverterRealtimeData_coroutine()
+    if self:getDataAge() < config.update_interval then return true end
+    local retval = self:_get_RealtimeData_coroutine(GetInverterRealtimeData_cmd)
+    self:setDataAge()
+    return true
 end
 
 function Fronius:getMeterRealtimeData_coroutine()
     if self:getDataAge() < config.update_interval then return true end
     self.Data.GetMeterRealtimeData = self:_get_RealtimeData_coroutine(GetMeterRealtimeData_cmd)
     self:setDataAge()
+    return true
 end
 
 function Fronius:gotValidRealtimeData()
@@ -141,9 +144,7 @@ end
 
 -- todo add a getter if neccessary
 function Fronius:getGridLoadPV()
-    self:getPowerFlowRealtimeData()
-
-    if self:gotValidRealtimeData() then
+    if self:getPowerFlowRealtimeData() and self:gotValidRealtimeData() then
         return Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid,
                Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load,
                Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_PV
