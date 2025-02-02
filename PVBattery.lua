@@ -540,7 +540,7 @@ function PVBattery:fillCache()
             end
         end
         if #connections == n then
-            socket.select(connections)
+            socket.select(connections, nil, 1) -- 1 second timeout
         end
     until util.getCurrentTime() - start_time >= config.update_interval
     -- So if we are locked in here; end the lock
@@ -725,6 +725,49 @@ end
 
 -------------------------------------------------------------------------------
 
+local function deleteRunningInstances()
+    local file = io.open("/proc/self/stat", "r")
+    if not file then
+        print("cannot detect my own PID")
+        return
+    end
+    local ownpid = file:read("*a"):gsub(" .*$", "")
+    file:close()
+    util:log("Own pid=" .. ownpid)
+
+    file = io.popen("ps -ax")
+    if not file then
+        util:log("Error calling 'ps -ax'")
+        print("Error calling 'ps -ax'")
+        return
+    end
+
+    local pid_to_kill = {}
+    for line in file:lines() do
+        if line:find("lua.* .*PVBattery.*%.lua") then
+            print(line)
+            local pid = line:gsub("^ *", "")
+            pid = pid:gsub(" .*$", "")
+
+            print("xxx", pid)
+            if pid ~= ownpid then
+                table.insert(pid_to_kill, pid)
+            end
+        end
+    end
+    file:close()
+
+    local nb_deleted = #pid_to_kill
+
+    if nb_deleted > 0 then
+        local pids = table.concat(pid_to_kill, " ")
+        print(string.format("kill -term %s", pids))
+        os.execute(string.format("kill -term %s", pids))
+    end
+
+    return nb_deleted
+end
+
 if #arg > 2 then
     if arg[1] and arg[1] == "-c" then
         if arg[2] then
@@ -736,8 +779,7 @@ end
 local MyBatteries = PVBattery
 MyBatteries:init()
 
-
-util.deleteRunningInstances()
+deleteRunningInstances()
 
 os.execute("date; echo Init done")
 
