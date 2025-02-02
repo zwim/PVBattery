@@ -216,40 +216,4 @@ function util.httpRequest(url)
     return body, code
 end
 
-function util.deleteRunningInstances()
-    local file = io.open("/proc/self/stat", "r")
-    if not file then
-        print("cannot detect my own PID")
-        return
-    end
-    local ownpid = file:read("*a"):gsub(" .*$", "")
-    file:close()
-    util:log("Own pid=" .. ownpid)
-
-    file = io.popen("ps -ax")
-    if not file then
-        util:log("Error calling 'ps -ax'")
-        print("Error calling 'ps -ax'")
-        return
-    end
-
-    local nb_deleted = 0
-    for line in file:lines() do
-        if line:find("lua.* .*PVBattery.*%.lua") then
-            print(line)
-            local pid = line:gsub(" .*$", "")
-            if pid ~= ownpid then
-                os.execute(string.format("kill -term %s", pid))
-                print("killed")
-                nb_deleted = nb_deleted + 1
-            end
-        end
-    end
-    file:close()
-
-    return nb_deleted
-end
-
-
-
 return util
