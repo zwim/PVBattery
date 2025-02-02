@@ -1,5 +1,5 @@
 
-local VERSION = "V4.3.1"
+local VERSION = "V4.3.2"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -748,8 +748,6 @@ local function deleteRunningInstances()
             print(line)
             local pid = line:gsub("^ *", "")
             pid = pid:gsub(" .*$", "")
-
-            print("xxx", pid)
             if pid ~= ownpid then
                 table.insert(pid_to_kill, pid)
             end

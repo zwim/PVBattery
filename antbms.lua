@@ -294,14 +294,14 @@ function AntBMS:getData(force)
                     break
                 end
                 os.execute("date")
-                os.execute("echo 'Could not read bms.data -> try again (" .. try .. "/4) in 5 seconds.'")
+                os.execute("echo 'Could not read bms.data --- try again (" .. try .. "/4) in 5 seconds.'")
                 util.sleep_time(5) -- wait
             end
             if code and body then
                 break
             end
             os.execute("date")
-            os.execute("echo 'Could not get bms.data -> starting a wakup charge (" .. wake .."/2).'")
+            os.execute("echo 'Could not get bms.data --- starting a wakup charge (" .. wake .."/2).'")
             self.wakeup()
             util.sleep_time(config.sleep_time)
         end
@@ -311,7 +311,7 @@ function AntBMS:getData(force)
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute("date")
-            os.execute("echo 'Could not read bsm.data -> reboot ESP32 -> echo sleeping " .. config.sleep_time .. "'")
+            os.execute("echo 'Could not read bsm.data --- reboot ESP32 --- echo sleeping " .. config.sleep_time .. "'")
             util.sleep_time(2 * config.sleep_time)
             return false
         end
