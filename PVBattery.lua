@@ -1,5 +1,5 @@
 
-local VERSION = "V4.3.2"
+local VERSION = "V4.3.3"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -148,6 +148,12 @@ function PVBattery:updateState()
     end
 
     for _, BMS in pairs(self.BMS) do
+        for _ = 1, 5 do
+            if BMS:getData() then
+                break
+            end
+            util.sleep_time(2)
+        end
         if BMS:getData() then
             if BMS:isBatteryFull() then
                 self:setState(state.full)
@@ -172,7 +178,7 @@ function PVBattery:updateState()
                 self:setState(state.cell_diff)
                 return self:getState()
             end
-        else -- can not read BMS -> shutdown
+        else
             self:setState(state.shutdown)
             self[self:getState()](self)
             return self:getState()
@@ -633,11 +639,14 @@ function PVBattery:main(profiling_runs)
         -- Update Fronius
         util:log("\n-------- Total Overview:")
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
-        local repeat_request = math.min(20, config.sleep_time - 5)
+        local repeat_request = math.max(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
             repeat_request = repeat_request - 1
             util.sleep_time(1) -- try again in 1 second
+            self:clearCache()
+            self:fillCache()
+            self:getCacheDataAge()
             P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
         end
 
@@ -684,8 +693,9 @@ function PVBattery:main(profiling_runs)
             self:getCacheDataAge()
             if oldstate ~= self:updateState() then
                 local f = io.popen("date", "r")
-                print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
+                print(f:read(), "STATE: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
                 f:close()
+                util:log("STATE: ", oldstate, "->", self:getState())
             end
 
             self:generateHTML(config, P_Grid, P_Load, P_PV, VERSION)
