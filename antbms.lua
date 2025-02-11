@@ -137,9 +137,9 @@ function AntBMS:setAutoBalance(on)
         return
     end
 
-    if on then
+    if on and self.v.BalancedStatusFlag == 0 then
         self:turnAutoBalanceOn()
-    else
+    elseif not on and self.v.BalancedStatusFlage ~= 0 then
         self:turnAutoBalanceOff()
     end
 end
