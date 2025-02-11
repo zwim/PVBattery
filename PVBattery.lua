@@ -379,6 +379,12 @@ PVBattery[state.charge] = function(self, P_Grid, date)
             print("Huston we have a problem")
         end
     end
+    for _, BMS in pairs(self.BMS) do
+        if BMS:needsBalancing() then
+            BMS:enableDischarge()
+            BMS:setAutoBalance(true)
+        end
+    end
 end
 
 PVBattery[state.discharge] = function(self, P_Grid)
@@ -639,6 +645,9 @@ function PVBattery:main(profiling_runs)
         -- Update Fronius
         util:log("\n-------- Total Overview:")
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+
+        P_Grid = -360
+        print("xxxxxxxxxxxxxxxxxxxxxxxxxx not read")
         local repeat_request = math.max(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
