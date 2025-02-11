@@ -332,7 +332,8 @@ function AntBMS:getData(force)
         return false
     end
 
-    return self:evaluateData()
+    self:evaluateData()
+    return true
 end
 
 
@@ -496,15 +497,15 @@ function AntBMS:evaluateData()
 end
 
 function AntBMS:isBatteryFull()
-    if not self:getData() then
-        local is_full = self.v.SOC >= 100 and self.v.CalculatedSOC >= 100
+    if self:getData() then
+        local is_full = self.v.SOC >= 100 and self.v.CalculatedSOC >= 95.5
             and self.v.CellDiff <= self.minCellDiff
-            and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower
+            and self.v.CurrentPower > config.charge_finished_current and self.v.CurrentPower <= self.minPower
 
         if is_full then
-            self.minCellDiff = config.minCellDiff + config.CellDiffHysteresis
+            self.minCellDiff = config.minCellDiffBase + config.CellDiffHysteresis
         else
-            self.minCellDiff = config.minCellDiff
+            self.minCellDiff = config.minCellDiffBase
         end
         return is_full
     end
@@ -575,6 +576,7 @@ end
 
 function AntBMS:setDataAge()
     self.timeOfLastRequiredData = util.getCurrentTime()
+    return true
 end
 
 function AntBMS:clearDataAge()

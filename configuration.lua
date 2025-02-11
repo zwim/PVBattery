@@ -46,8 +46,10 @@ local configuration = {
 
     lastFullPeriod = 5*24*3600, -- two days
     minCellDiff = 0.003,
+    minCellDiffBase = 0.003,
     CellDiffHysteresis = 0.003,
     minPower = 30,
+    charge_finisched_current = -0.3,
 
     bat_SOC_hysteresis = 2,
     bat_voltage_hysteresis = 0.050,

@@ -21,6 +21,7 @@ local socket = require("socket")
 local state = {
     fail = "fail", -- unknown state
     idle = "idle",
+    idle_full = "idle_full",
     charge = "charge",
     balance = "balance", -- during charge or on the high side
     full = "full",
@@ -129,7 +130,7 @@ end
 
 -- might be neccesary, if the user switches something manually
 function PVBattery:updateState()
-    for _, Charger in pairs(self.Charger) do
+   for _, Charger in pairs(self.Charger) do
         if Charger:getPowerState() == "on" then
             if Charger.BMS:isLowChargedOrNeedsRescue() and Charger.BMS:needsRescueCharge() then
                 self:setState(state.rescue_charge)
@@ -156,7 +157,9 @@ function PVBattery:updateState()
         end
         if BMS:getData() then
             if BMS:isBatteryFull() then
-                self:setState(state.full)
+                if self:getState() ~= state.idle_full then
+                    self:setState(state.full)
+                end
                 return self:getState()
             elseif BMS:needsBalancing() then
                 self:setState(state.balance)
@@ -380,7 +383,13 @@ PVBattery[state.charge] = function(self, P_Grid, date)
         end
     end
     for _, BMS in pairs(self.BMS) do
-        if BMS:needsBalancing() then
+        if BMS:isBatteryFull() then
+            for _, Charger in pairs(self.Charger) do
+                if Charger.BMS == BMS then
+                   Charger:stopCharge()
+                end
+            end
+        elseif BMS:needsBalancing() then
             BMS:enableDischarge()
             BMS:setAutoBalance(true)
         end
@@ -424,17 +433,16 @@ PVBattery[state.balance] = function(self, P_Grid, date)
 end
 
 PVBattery[state.full] = function(self, P_Grid, date)
-    if P_Grid < self:chargeThreshold(date) then -- sell more than threshold energy
-        if not self:turnOffBestInverter(P_Grid) then -- no inverter running
-            self:turnOnBestCharger(P_Grid)
-        end
-    elseif P_Grid > 0 then
-        for _, BMS in pairs(self.BMS) do
-            if BMS:isBatteryFull() then
-                BMS:disableDischarge()
-            end
-        end
+    for _, Charger in pairs(self.Charger) do
+        Charger:stopCharge()
     end
+
+    for _, BMS in pairs(self.BMS) do
+        BMS:setAutoBalance(false)
+        BMS:disableDischarge()
+    end
+
+    self:setState(state.idle_full)
 end
 
 PVBattery[state.rescue_charge] = function(self)
@@ -460,6 +468,8 @@ PVBattery[state.idle] = function(self, P_Grid, date)
         end
     end
 end
+
+PVBattery[state.idle_full] = PVBattery[state.idle]
 
 PVBattery[state.shutdown] = function(self)
     print("state -> shutdown")
@@ -646,8 +656,8 @@ function PVBattery:main(profiling_runs)
         util:log("\n-------- Total Overview:")
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
 
-        P_Grid = -360
-        print("xxxxxxxxxxxxxxxxxxxxxxxxxx not read")
+--        P_Grid = -360
+--        print("xxxxxxxxxxxxxxxxxxxxxxxxxx not readynosadf")
         local repeat_request = math.max(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
