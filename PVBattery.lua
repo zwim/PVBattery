@@ -1,5 +1,5 @@
 
-local VERSION = "V4.4.0"
+local VERSION = "V4.4.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
