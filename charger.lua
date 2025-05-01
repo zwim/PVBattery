@@ -18,6 +18,9 @@ function Charger:init()
 end
 
 function Charger:startCharge()
+    if self.BMS then
+        self.BMS:enableDischarge()
+    end
     self:toggle("on")
 end
 
