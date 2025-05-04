@@ -1,5 +1,5 @@
 
-local VERSION = "V4.4.1"
+local VERSION = "V4.4.2"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -50,6 +50,14 @@ PVBattery.generateHTML = require("PVBatteryHTML")
 PVBattery.serverCommands = require("servercommands")
 --------------------
 
+-- Helper to format solar times
+local function formatSunEvent(label, hourVal)
+    local h, m, s = util.hourToTime(hourVal)
+    local str = string.format("%02d:%02d:%02d", h, m, s)
+    util:log(label .. " at " .. str)
+    return str
+end
+
 function PVBattery:init()
     config:read()
     util:setLog(config.log_file_name or "PVBattery.log")
@@ -65,13 +73,9 @@ function PVBattery:init()
 
     SunTime:setDate()
     SunTime:calculateTimes()
-    local h, m, s
-    h, m, s = util.hourToTime(SunTime.rise)
-    self.sunrise = string.format("%02d:%02d:%02d", h, m, s)
-    util:log("Sun rise at " .. self.sunrise)
-    h, m, s = util.hourToTime(SunTime.set)
-    self.sunset = string.format("%02d:%02d:%02d", h, m, s)
-    util:log("Sun set at " .. self.sunset)
+
+    self.sunrise = formatSunEvent("Sun rise", SunTime.rise)
+    self.sunset  = formatSunEvent("Sun set", SunTime.set)
 
     -- IMPORTANT: Our authorative power meter, which shows if we produce or consume energy
     Fronius = Fronius:new{host = config.FRONIUS_ADR}
@@ -272,7 +276,7 @@ function PVBattery:findBestInverterToTurnOff(req_power)
                     return i, Inverter:getPower()
                 end
             end
-            local start_discharge, continue_discharge = Inverter.BMS:readyToDischarge()
+            local _, continue_discharge = Inverter.BMS:readyToDischarge()
             if not continue_discharge then
                 return i, Inverter:getPower()
             end
@@ -519,37 +523,27 @@ function PVBattery:fillCache()
     local threads = {}    -- list of all live threads
 
     for _, BMS in pairs(self.BMS) do
-        local co = coroutine.create(function()
-            BMS:getData_coroutine()
-        end)
+        local co = coroutine.create(function() BMS:getData_coroutine() end)
         table.insert(threads, co)
     end
     for _, Inverter in pairs(self.Inverter) do
-        local co = coroutine.create(function()
-            Inverter:_getStatus_coroutine()
-        end)
+        local co = coroutine.create(function() Inverter:_getStatus_coroutine() end)
         table.insert(threads, co)
     end
     for _, Charger in pairs(self.Charger) do
-        local co = coroutine.create(function()
-            Charger:_getStatus_coroutine()
-        end)
+        local co = coroutine.create(function() Charger:_getStatus_coroutine() end)
         table.insert(threads, co)
     end
 
-    local co = coroutine.create(function()
-        Fronius:getPowerFlowRealtimeData_coroutine()
-    end)
+    local co = coroutine.create(function() Fronius:getPowerFlowRealtimeData_coroutine() end)
     table.insert(threads, co)
 
     local start_time = util.getCurrentTime()
     repeat
-        local n = #threads
-        if n == 0 then
-            break
-        end   -- no more threads to run
+        if #threads == 0 then break end   -- no more threads to run
+
         local connections = {}
-        for i = n, 1, -1 do
+        for i = #threads, 1, -1 do
             -- threads return a connection or a boolean value
             -- thee boolean value means the thread has ended (with or without success)
             local status, con = coroutine.resume(threads[i])
@@ -561,45 +555,27 @@ function PVBattery:fillCache()
                 table.remove(threads, i)
             end
         end
-        if #connections == n then
+        if #connections == #threads then
             socket.select(connections, nil, 1) -- 1 second timeout
         end
     until util.getCurrentTime() - start_time >= config.update_interval
     -- So if we are locked in here; end the lock
 end
 
-function PVBattery:showCacheDataAge(print_all_values)
-    local output = print
-    if not print_all_values then
-        output = function() end
-    end
 
-    local total_fetch_time = 0
-    local current_fetch_time = 0
-    for _, BMS in pairs(self.BMS) do
-        output(string.format("BMS %s, %2f", BMS.host, BMS:getDataAge()))
-        total_fetch_time = total_fetch_time + BMS:getDataAge()
-        current_fetch_time = math.max(current_fetch_time, BMS:getDataAge())
-    end
-    for _, Charger in pairs(self.Charger) do
-        output(string.format("Charger %s %2f", Charger.switch_host, Charger:getDataAge()))
-        total_fetch_time = total_fetch_time + Charger:getDataAge()
-        current_fetch_time = math.max(current_fetch_time, Charger:getDataAge())
-    end
-    for _, Inverter in pairs(self.Inverter) do
-        output(string.format("Inverter %s %2f", Inverter.host, Inverter:getDataAge()))
-        total_fetch_time = total_fetch_time + Inverter:getDataAge()
-        current_fetch_time = math.max(current_fetch_time, Inverter:getDataAge())
-    end
 
-    output(string.format("Fronius %s %2f", Fronius.host, Fronius:getDataAge()))
-    total_fetch_time = total_fetch_time + Fronius:getDataAge()
-    current_fetch_time = math.max(current_fetch_time, Fronius:getDataAge())
-
-    util:log(string.format("Savings: %2f s, sequential %2f s, parallel %2f s)",
-            total_fetch_time - current_fetch_time,
-            total_fetch_time,
-            current_fetch_time))
+function PVBattery:showCacheDataAge(verbose)
+    local log = verbose and print or function() end
+    local total, max_age = 0, 0
+    local function report(name, age)
+        log(string.format("%s: %.2f s", name, age))
+        total = total + age; max_age = math.max(max_age, age)
+    end
+    for _, B in pairs(self.BMS)     do report("BMS "     ..B.host, B:getDataAge()) end
+    for _, C in pairs(self.Charger) do report("Charger " ..C.host, C:getDataAge()) end
+    for _, I in pairs(self.Inverter)do report("Inverter "..I.host, I:getDataAge()) end
+    report("Fronius "..Fronius.host, Fronius:getDataAge())
+    util:log(string.format("Savings: %.2f s, sequential %.2f s, parallel %.2f s)", total - max_age, total, max_age))
 end
 
 function PVBattery:main(profiling_runs)
@@ -656,8 +632,6 @@ function PVBattery:main(profiling_runs)
         util:log("\n-------- Total Overview:")
         local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
 
---        P_Grid = -360
---        print("xxxxxxxxxxxxxxxxxxxxxxxxxx not readynosadf")
         local repeat_request = math.max(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
@@ -698,10 +672,12 @@ function PVBattery:main(profiling_runs)
             util:log("State: ", oldstate, "->", self:getState())
             self:generateHTML(config, P_Grid, P_Load, P_PV, VERSION)
 
-            if self[self:getState()] then
-                self[self:getState()](self, P_Grid, date) -- execute the state
+
+            local stateHandler = self[self:getState()]
+            if stateHandler then
+                stateHandler(self, P_Grid, date) -- execute the state
             else
-                local error_msg = "Error: state '"..tostring(self:getState()).."' not implemented yet"
+                local error_msg = "Error: state '" .. tostring(self:getState()) .. "' not implemented yet"
                 util:log(error_msg)
                 print(error_msg)
             end

@@ -129,7 +129,6 @@ function Switch:_getStatus_coroutine()
     end
     client:close()
     local body = table.concat(content)
-    content = nil
 
     self.decoded = json.decode(body)
 

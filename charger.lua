@@ -11,8 +11,8 @@ local Charger = Switch:extend{
 }
 
 function Charger:init()
-    if self.bms_host and self.bms_host ~= "" then
-        self.BMS = AntBMS:new{host = o.bms_host}
+    if self.bms_host ~= "" then
+        self.BMS = AntBMS:new{host = self.bms_host}
     end
     return self
 end

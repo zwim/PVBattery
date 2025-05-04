@@ -5,18 +5,6 @@ local AntBMS = require("antbms")
 
 local util = require("util")
 
-local Inverter = {
-    skip = false,
-    host = "",
-    bms_host = "",
-    dynamic_load = false,
-    static_load = 0,
-
-    -- will get initialized by new
-    BMS = nil,
-}
-
-
 local Inverter = Switch:extend{
     bms_host = "",
     max_power = 0,
@@ -26,25 +14,28 @@ local Inverter = Switch:extend{
 }
 
 function Inverter:init()
-    if self.bms_host and self.bms_host ~= "" then
-        self.BMS = AntBMS:new{host = o.bms_host}
+    if self.bms_host ~= "" then
+        self.BMS = AntBMS:new{host = self.bms_host}
     end
-
     return self
 end
 
 
 function Inverter:startDischarge(req_power)
-    if self.time_controlled or self.BMS:readyToDischarge() then
-        self.BMS:setPower(req_power or 10) -- if no power requested, start with minimal power
-        util.sleep_time(1)
+    if self.time_controlled or (self.BMS and self.BMS:readyToDischarge()) then
+        if self.BMS then
+            self.BMS:setPower(req_power or 10) -- if no power requested, start with minimal power
+            util.sleep_time(1)
+        end
         self:toggle("on")
     end
 end
 
 function Inverter:stopDischarge()
-    self.BMS:setPower(0)
-    util.sleep_time(0.5)
+    if self.BMS then
+        self.BMS:setPower(0)
+        util.sleep_time(0.5)
+    end
     self:toggle("off")
 end
 
@@ -53,7 +44,11 @@ function Inverter:readyToDischarge()
         return true
     end
 
-    local start_discharge, continue_discharge = self.BMS:readyToDischarge()
+    local start_discharge, continue_discharge
+    if self.BMS then
+        start_discharge, continue_discharge = self.BMS:readyToDischarge()
+    end
+
     if not continue_discharge then
         self:stopDischarge()
     end
