@@ -111,7 +111,6 @@ function Fronius:_get_RealtimeData_coroutine(cmd)
     end
     client:close()
     local body = table.concat(content)
-    content = nil
 
     return json.decode(body)
 end
@@ -125,7 +124,7 @@ end
 
 function Fronius:getInverterRealtimeData_coroutine()
     if self:getDataAge() < config.update_interval then return true end
-    local retval = self:_get_RealtimeData_coroutine(GetInverterRealtimeData_cmd)
+    self.Data.GetInverterRealtimeData = self:_get_RealtimeData_coroutine(GetInverterRealtimeData_cmd)
     self:setDataAge()
     return true
 end

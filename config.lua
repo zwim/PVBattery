@@ -54,7 +54,7 @@ max_cell_diff = 0.148 -- maximum allowed cell diff
 max_cell_diff_hysteresis = 0.020
 
 minCellDiff = 0.003
-minCellDiffBase = minCellDiff
+minCellDiffBase = 0.003
 CellDiffHysteresis = 0.003
 minPower = 30
 charge_finished_current = -0.3
@@ -63,7 +63,7 @@ load_full_time_h = 2.5 -- time before sun set, to load battery at maximum
 
 sleep_time = 20 -- seconds to sleep per iteration
 
-update_interval = (sleep_time - 5) -- time to keep old data before an update
+update_interval = 15 -- time to keep old data before an update
 
 FRONIUS_ADR = "192.168.0.49"
 
