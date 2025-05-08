@@ -17,7 +17,7 @@ local urlPath = "/solar_api/v1/"
 local GetInverterRealtimeData_cmd = "GetInverterRealtimeData.cgi?Scope=Device&DeviceId=" .. inverter_id
     .. "&DataCollection=CommonInverterData"
 local GetPowerFlowRealtimeData_cmd = "GetPowerFlowRealtimeData.fcgi?Scope=Device&DeviceId=" .. inverter_id
-local GetMeterRealtimeData_cmd = "GetMeterRealtimeData.cgi?Scope=Device&DeviceId=" .. meter_id
+local GetMeterRealtimeData_cmd   = "GetMeterRealtimeData.cgi?Scope=Device&DeviceId=" .. meter_id
     .. "&DataCollection=CommonInverterData"
 
 local Fronius = {
@@ -27,7 +27,7 @@ local Fronius = {
     url = "",
     Data = {},
     Request = {},
-    timeOfLastRequiredData = 0, -- no data yet
+    timeOfLastRequiredData = {}, -- no data yet
 }
 
 function Fronius:new(o)
@@ -37,16 +37,20 @@ function Fronius:new(o)
     return o
 end
 
-function Fronius:getDataAge()
-    return util.getCurrentTime() - self.timeOfLastRequiredData
+function Fronius:getDataAge(source)
+    return util.getCurrentTime() - (self.timeOfLastRequiredData[source] or 0)
 end
 
-function Fronius:setDataAge()
-    self.timeOfLastRequiredData = util.getCurrentTime()
+function Fronius:setDataAge(source)
+    self.timeOfLastRequiredData[source] = util.getCurrentTime()
 end
 
-function Fronius:clearDataAge()
-    self.timeOfLastRequiredData = 0
+function Fronius:clearDataAge(source)
+    if source then
+        self.timeOfLastRequiredData[source] = 0
+    else
+        self.timeOfLastRequireData = {}
+    end
 end
 
 function Fronius:_get_RealtimeData(cmd)
@@ -61,21 +65,21 @@ function Fronius:_get_RealtimeData(cmd)
 end
 
 function Fronius:getPowerFlowRealtimeData()
-    if self:getDataAge() < config.update_interval then return true end
+    if self:getDataAge(GetPowerFlowRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData(GetPowerFlowRealtimeData_cmd)
-    self:setDataAge()
+    self:setDataAge(GetPowerFlowRealtimeData_cmd)
 end
 
 function Fronius:getInverterRealtimeData()
-    if self:getDataAge() < config.update_interval then return true end
+    if self:getDataAge(GetInverterRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetInverterRealtimeData = self:_get_RealtimeData(GetInverterRealtimeData_cmd)
-    self:setDataAge()
+    self:setDataAge(GetInverterRealtimeData_cmd)
 end
 
 function Fronius:getMeterRealtimeData()
-    if self:getDataAge() < config.update_interval then return true end
+    if self:getDataAge(GetMeterRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetMeterRealtimeData = self:_get_RealtimeData(GetMeterRealtimeData_cmd)
-    self:setDataAge()
+    self:setDataAge(GetMeterRealtimeData_cmd)
 end
 
 function Fronius:_get_RealtimeData_coroutine(cmd)
@@ -116,39 +120,49 @@ function Fronius:_get_RealtimeData_coroutine(cmd)
 end
 
 function Fronius:getPowerFlowRealtimeData_coroutine()
-    if self:getDataAge() < config.update_interval then return true end
+    if self:getDataAge(GetPowerFlowRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData_coroutine(GetPowerFlowRealtimeData_cmd)
-    self:setDataAge()
+    self:setDataAge(GetPowerFlowRealtimeData_cmd)
     return true
 end
 
 function Fronius:getInverterRealtimeData_coroutine()
-    if self:getDataAge() < config.update_interval then return true end
+    if self:getDataAge(GetInverterRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetInverterRealtimeData = self:_get_RealtimeData_coroutine(GetInverterRealtimeData_cmd)
-    self:setDataAge()
+    self:setDataAge(GetInverterRealtimeData_cmd)
     return true
 end
 
 function Fronius:getMeterRealtimeData_coroutine()
-    if self:getDataAge() < config.update_interval then return true end
+    if self:getDataAge(GetMeterRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetMeterRealtimeData = self:_get_RealtimeData_coroutine(GetMeterRealtimeData_cmd)
-    self:setDataAge()
+    self:setDataAge(GetMeterRealtimeData_cmd)
     return true
 end
 
-function Fronius:gotValidRealtimeData()
+function Fronius:gotValidPowerFlowRealtimeData()
     return self.Data and self.Data.GetPowerFlowRealtimeData and self.Data.GetPowerFlowRealtimeData.Body
         and self.Data.GetPowerFlowRealtimeData.Body.Data and self.Data.GetPowerFlowRealtimeData.Body.Data.Site
 end
 
+function Fronius:gotValidInverterRealtimeData()
+    return self.Data and self.Data.GetInverterRealtimeData and self.Data.GetInverterRealtimeData.Body
+        and self.Data.GetInverterRealtimeData.Body.Data.PAC
+end
+
+
 -- todo add a getter if neccessary
 function Fronius:getGridLoadPV()
-    if self:getPowerFlowRealtimeData() and self:gotValidRealtimeData() then
-        return Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid,
-               Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load,
-               Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_PV
+
+    if self:getPowerFlowRealtimeData() and self:gotValidPowerFlowRealtimeData()  and
+       self:getInverterRealtimeData() and self:gotValidInverterRealtimeData() then
+
+        return self.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid,
+               self.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load,
+               self.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_PV,
+               self.Data.GetInverterRealtimeData.Body.Data.PAC.Value
     else
-        return nil, nil, nil
+        return nil, nil, nil, nil
     end
 end
 
