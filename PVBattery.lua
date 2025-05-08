@@ -1,5 +1,5 @@
 
-local VERSION = "V4.4.2"
+local VERSION = "V4.4.3"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -630,7 +630,7 @@ function PVBattery:main(profiling_runs)
 
         -- Update Fronius
         util:log("\n-------- Total Overview:")
-        local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+        local P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
 
         local repeat_request = math.max(20, config.sleep_time - 5)
         while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
@@ -640,7 +640,12 @@ function PVBattery:main(profiling_runs)
             self:clearCache()
             self:fillCache()
             self:showCacheDataAge()
-            P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+            P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
+        end
+
+        -- Normally P_PV comes from panel and P_AC is less, so use the smaller one
+        if P_PV and P_AC then
+            P_PV = math.min(P_PV, P_AC)
         end
 
         if not P_Grid or not P_Load or not P_PV then
