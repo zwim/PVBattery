@@ -1,6 +1,8 @@
 
 -- command to hard reset a connected ESP32 device
 
+local ESP32_RESET_SLEEP_TIME = 20 -- depends on network, wifi ...; for me 13s would be enough but ...
+
 -- quick and dirty, as the python-esptool interactin in gentoo as of 2024/06/26 seems broken
 local RESET_COMMAND = "esptool.py"
 local RESET_COMMAND_ARGS =
@@ -25,5 +27,5 @@ if arg[0]:find("antbms[-]reset.lua") then
     print("execute: ", ESP32_HARD_RESET_COMMAND)
     os.execute(ESP32_HARD_RESET_COMMAND)
 else
-    return ESP32_HARD_RESET_COMMAND
+    return ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME
 end
