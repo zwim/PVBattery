@@ -20,7 +20,7 @@ return function(self, config, P_Grid, P_Load, P_PV, VERSION)
     for  i = 1, #self.BMS do
         if self.BMS[i].v.SOC then
             SOC_string = SOC_string .. " " .. self.BMS[i].host .. " " .. self.BMS[i].v.SOC .. "%%<br>"
-            SOC_string = SOC_string .. os.date("%c", self.BMS[i].timeOfLastFullBalancing) .. "<br>"
+            SOC_string = SOC_string .. os.date("%c", math.floor(self.BMS[i].timeOfLastFullBalancing)) .. "<br>"
         end
     end
 

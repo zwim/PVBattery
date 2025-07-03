@@ -8,9 +8,11 @@ if Profiler then
 end
 ]]
 
-local CHARGER_IP = "192.168.0.50"
+local CHARGER_IP = "moped-charger"
 
-local Fronius = require("fronius")
+--local Fronius = require("fronius")
+local P1meter = require("p1meter")
+
 local SunTime = require("suntime/suntime")
 local ChargerClass = require("charger")
 
@@ -37,6 +39,9 @@ function MopedCharger:init()
     config.config_file_name = "moped-config.lua"
     config.log_file_name = "/var/log/MopedCharger.log"
 
+    -- config.compressor = "bzip2 -6"
+    config.compressor = "zstd -8 --rm -T3"
+
     util:setLog(config.log_file_name or "MopedCharger.log")
 
     util:log("\n#############################################")
@@ -58,12 +63,12 @@ function MopedCharger:init()
     util:log("Sun set at " .. self.sunset)
 
     -- IMPORTANT: Our authorative power meter, which shows if we produce or consume energy
-    Fronius = Fronius:new{host = config.FRONIUS_ADR}
+--    Fronius = Fronius:new{host = config.FRONIUS_ADR}
+    P1meter = P1meter:new{host = "HW-p1meter.lan"}
 
     self.Charger = ChargerClass:new{
         host = CHARGER_IP,
     }
-
 end
 
 function MopedCharger:getState() return self._state end
@@ -150,23 +155,25 @@ function MopedCharger:main(profiling_runs)
         end
 
         -- Update Fronius
-        Fronius:getPowerFlowRealtimeData()
-        local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+--        Fronius:getPowerFlowRealtimeData()
+--        local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+
+        local P_Grid = P1meter:getCurrentPower()
+
         local repeat_request = math.min(20, config.sleep_time - 5)
-        while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
+        while (not P_Grid) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
             repeat_request = repeat_request - 1
             util.sleep_time(1) -- try again in 1 second
-            P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+--            P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
+            P_Grid = P1meter:getCurrentPower()
         end
 
-        if not P_Grid or not P_Load or not P_PV then
+        if not P_Grid then
             short_sleep = 1
             skip_loop = true
         else
             util:log(string.format("Grid %8.2f W", P_Grid))
-            util:log(string.format("Load %8.2f W", P_Load))
-            util:log(string.format("Roof %8.2f W", P_PV))
         end
 
         if not skip_loop then
@@ -188,7 +195,8 @@ function MopedCharger:main(profiling_runs)
             end
         end
 
-        print("'skip_loop?"..tostring(skip_loop).."'", self:getGoal(), self:getState(), P_Grid, curr_power, self.charger_max_power)
+        print("'skip_loop?"..tostring(skip_loop).."'",
+              self:getGoal(), self:getState(), P_Grid, curr_power, self.charger_max_power)
 
         if not skip_loop then
             if self:isGoal("idle") and curr_power > 0 then

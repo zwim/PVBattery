@@ -27,5 +27,5 @@ if arg[0]:find("antbms[-]reset.lua") then
     print("execute: ", ESP32_HARD_RESET_COMMAND)
     os.execute(ESP32_HARD_RESET_COMMAND)
 else
-    return ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME
+    return {ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME}
 end

@@ -57,8 +57,8 @@ function Fronius:_get_RealtimeData(cmd)
     local url = string.format("http://%s:%s%s%s", self.host, self.port, self.urlPath, cmd)
     local body, code = http.request(url)
     code = tonumber(code)
-    if code and code >= 200 and code < 300 and body then
-        return json.decode(body)
+    if code and code >= 200 and code < 300 then
+        return body and json.decode(body) or {}
     else
         return {}
     end
@@ -68,18 +68,21 @@ function Fronius:getPowerFlowRealtimeData()
     if self:getDataAge(GetPowerFlowRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData(GetPowerFlowRealtimeData_cmd)
     self:setDataAge(GetPowerFlowRealtimeData_cmd)
+    return true
 end
 
 function Fronius:getInverterRealtimeData()
     if self:getDataAge(GetInverterRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetInverterRealtimeData = self:_get_RealtimeData(GetInverterRealtimeData_cmd)
     self:setDataAge(GetInverterRealtimeData_cmd)
+    return true
 end
 
 function Fronius:getMeterRealtimeData()
     if self:getDataAge(GetMeterRealtimeData_cmd) < config.update_interval then return true end
     self.Data.GetMeterRealtimeData = self:_get_RealtimeData(GetMeterRealtimeData_cmd)
     self:setDataAge(GetMeterRealtimeData_cmd)
+    return true
 end
 
 function Fronius:_get_RealtimeData_coroutine(cmd)
@@ -116,7 +119,7 @@ function Fronius:_get_RealtimeData_coroutine(cmd)
     client:close()
     local body = table.concat(content)
 
-    return json.decode(body)
+    return body and json.decode(body) or {}
 end
 
 function Fronius:getPowerFlowRealtimeData_coroutine()
@@ -154,7 +157,7 @@ end
 -- todo add a getter if neccessary
 function Fronius:getGridLoadPV()
 
-    if self:getPowerFlowRealtimeData() and self:gotValidPowerFlowRealtimeData()  and
+    if self:getPowerFlowRealtimeData() and self:gotValidPowerFlowRealtimeData() and
        self:getInverterRealtimeData() and self:gotValidInverterRealtimeData() then
 
         return self.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid,

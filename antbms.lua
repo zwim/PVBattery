@@ -17,7 +17,7 @@ else
     http = require("socket.http")
 end
 
-local ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME = require("antbms-reset")
+local ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME = table.unpack((require("antbms-reset")))
 
 local READ_DATA_SIZE = 140
 
@@ -210,7 +210,7 @@ function AntBMS:setPower(power)
         util.sleep_time(1)
     end
 
-    self:_sendCommand(string.format("set?power=%d", power))
+    self:_sendCommand(string.format("set?power=%d", math.floor(power)))
 
     if power == 0 then
         util.sleep_time(1)
@@ -311,7 +311,8 @@ function AntBMS:getData(force)
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute("date")
-            os.execute("echo 'Could not read bsm.data --- reboot ESP32 --- echo sleeping " .. ESP32_RESET_SLEEP_TIME .. "'")
+            os.execute("echo 'Could not read bsm.data --- reboot ESP32 --- echo sleeping "..
+                ESP32_RESET_SLEEP_TIME .. "'")
             util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)
             return false
         end
@@ -529,6 +530,8 @@ function AntBMS:getParameters()
             if code and body then break end
             os.execute("date")
             os.execute("echo Could not get bms parameters")
+            util:log("Could not get bms paramters")
+
             util.sleep_time(1)
         end
         if not code or not body then
@@ -536,6 +539,7 @@ function AntBMS:getParameters()
             -- no need any more, as bsm will reset itself now.
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
+            util:log("BMS hard reset")
             os.execute("date")
             os.execute("echo sleeping " .. ESP32_RESET_SLEEP_TIME)
             util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)

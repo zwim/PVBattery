@@ -1,6 +1,27 @@
 
+local json = require("dkjson")
 local lfs = require("lfs")
 local posix = require("posix")
+
+
+
+local json_decode_tmp = json.decode
+
+function json.decode(str)
+    if str then
+        str = str:gsub("^%s*(.-)%s*$", "%1")
+        str = str:gsub("\\n", "\n")
+        str = str:gsub("\\\"", "\"")
+        str = str:gsub("null", "0")
+
+        local x, y, z = json_decode_tmp(str)
+        return x, y, z
+    else
+        return 0
+    end
+end
+
+
 
 local util = {
     log = nil,
@@ -127,9 +148,11 @@ function util:cleanLogs()
         end
     end
 
-    if lfs.attributes(self.log_file_name, "size") > 1024*1024 then
-        local log_file_name_rotated = self.log_file_name:sub(1, self.log_file_name:find(".log$") - 1)..os.date("-%Y%m%d-%H%M%S")..".log"
-        if os.execute("mv "..self.log_file_name.." "..log_file_name_rotated) ~= 0 then
+    local attributes = lfs.attributes(self.log_file_name, "size")
+    if attributes and attributes > 1024*1024 then
+        local log_file_name_rotated = self.log_file_name:sub(1, self.log_file_name:find(".log$") - 1) ..
+            os.date("-%Y%m%d-%H%M%S") .. ".log"
+        if os.execute("mv " .. self.log_file_name .. " " .. log_file_name_rotated) ~= 0 then
             print("Error in rotating log file")
         end
         -- close the old log and open a new one
@@ -173,7 +196,7 @@ end
 function util.httpRequest(url)
     local command = string.format("wget -nv --timeout=2 --server-response '%s'  -o /tmp/code -O /tmp/body", url)
 
---    local command = string.format("curl  '%s' --tcp-nodelay --connect-timeout 2 -o /tmp/body --dump-header /tmp/code --silent --tcp-fastopen", url)
+-- "curl  url --tcp-nodelay --connect-timeout 2 -o /tmp/body --dump-header /tmp/code --silent --tcp-fastopen
 
     os.execute("rm -f /tmp/code /tmp/body")
 
