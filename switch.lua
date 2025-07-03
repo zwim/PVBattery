@@ -7,15 +7,6 @@ local util = require("util")
 local http = require("socket.http")
 http.TIMEOUT=5
 
-local decode_unchecked = json.decode
-function json.decode(data)
-    if data then
-        return decode_unchecked(data)
-    else
-        return {}
-    end
-end
-
 local Switch = {
     host = nil,
     body = nil,
@@ -81,7 +72,7 @@ function Switch:_getStatus()
         self.decoded = nil
         return false
     end
-    self.decoded = json.decode(body)
+    self.decoded = body and json.decode(body) or {}
 
     self:setDataAge()
     return true
@@ -130,7 +121,7 @@ function Switch:_getStatus_coroutine()
     client:close()
     local body = table.concat(content)
 
-    self.decoded = json.decode(body)
+    self.decoded = body and json.decode(body) or {}
 
     self:setDataAge()
     return true
@@ -224,7 +215,7 @@ function Switch:toggle(on)
     if not code or code < 200 or code >= 300 then
         return
     end
-    local decoded = json.decode(body)
+    local decoded = body and json.decode(body) or {}
     local Result =
     if decoded then
         Result = decoded.power
