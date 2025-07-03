@@ -4,6 +4,10 @@ local lfs = require("lfs")
 local posix = require("posix")
 
 
+if not table.unpack then
+    table.unpack = unpack
+end
+
 
 local json_decode_tmp = json.decode
 
