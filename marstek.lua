@@ -16,11 +16,25 @@ function Marstek:new(o)
 end
 
 local registers = {}
+-- registers.         = {adr = , typ = "", gain = , unit = ""}
+
 registers.readBatteryVoltage     = {adr = 32100, typ = "u16", gain = 0.01, unit = "V"}
 registers.readBatteryCurrent     = {adr = 32101, typ = "s16", gain = 0.01, unit = "A"}
 registers.readBatteryPower       = {adr = 32102, typ = "s32", gain = 1, unit = "W"}
 registers.readBatterySOC         = {adr = 32104, typ = "u16", gain = 1, unit = "%"}
 registers.readBatteryTotalEnergy = {adr = 32105, typ = "u16", gain = 0.001, unit = "kWh"}
+
+registers.readACVoltage   = {adr = 32200, typ = "u16", gain = 0.1, unit = "V"}
+registers.readACCurrent   = {adr = 32201, typ = "u16", gain = 0.01, unit = "A"}
+registers.readACPower     = {adr = 32202, typ = "s32", gain = 1, unit = "W"}
+
+registers.readACOffgridVoltage  = {adr = 32300, typ = "u16", gain = 0.1, unit = "V"}
+registers.readACOffgridCurrent  = {adr = 32301, typ = "u16", gain = 0.01, unit = "A"}
+registers.readACOffgridPower    = {adr = 32302, typ = "s32", gain = 1, unit = "W"}
+
+registers.readInternalTemperature = {adr = 35000, typ = "s16", gain = 0.1, unit = "°C"}
+registers.readMaxCellTemperature  = {adr = 35010, typ = "s16", gain = 0.1, unit = "°C"}
+registers.readMinCellTemperature  = {adr = 35011, typ = "s16", gain = 0.1, unit = "°C"}
 
 -- Modbus TCP Funktion zum Lesen von Holding Registers
 local function readHoldingRegisters(ip, port, slaveId, quantity, reg)
@@ -117,12 +131,10 @@ function Marstek:readBatteryVoltage()
     return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryVoltage),
     "Battery Voltage", registers.readBatteryVoltage.unit
 end
-
 function Marstek:readBatteryCurrent()
     return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryCurrent),
     "Battery Current", registers.readBatteryCurrent.unit
 end
-
 -- negative meanse that the battery is discharching
 function Marstek:readBatteryPower()
     return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryPower),
@@ -136,6 +148,21 @@ function Marstek:readBatteryTotalEnergy()
     return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryTotalEnergy),
     "Battery TotalEnergy", registers.readBatteryTotalEnergy.unit
 end
+
+function Marstek:readACVoltage()
+    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACVoltage),
+    "Battery Voltage", registers.readACVoltage.unit
+end
+function Marstek:readACCurrent()
+    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACCurrent),
+    "Battery Current", registers.readACCurrent.unit
+end
+-- negative meanse that the battery is discharching
+function Marstek:readACPower()
+    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACPower),
+    "Battery Power", registers.readACPower.unit
+end
+
 
 
 return Marstek

@@ -717,14 +717,13 @@ function PVBattery:main(profiling_runs)
 
         -- Positive values mean power is going into the VenusE
         -- Negative values mean VenusE is discharging
-        local P_VenusE = self.VenusE:readBatteryPower()
+        local P_VenusE = self.VenusE:readACPower()
 
         -- we want to turn on Charger if P_VenusE < -160
 --        P_VenusE =  -200
 --            self:turnOnBestInverter(P_Grid, P_VenusE)
 --        P_VenusE = -100
 --            self:turnOffBestInverter(P_Grid, P_VenusE)
-
 
         --        local P_Grid, P_Load, P_PV, P_AC = P1meter:getCurrentPower(), 0, 0, 0, 0
 
