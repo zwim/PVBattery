@@ -168,7 +168,7 @@ function PVBattery:updateState(date, P_Grid, P_VenusE)
     end
 
     for _, Inverter in pairs(self.Inverter) do
-        if Inverter:getPowerState() == "on" and not Inverter.time_controlled then
+        if Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off" and not Inverter.time_controlled then
             self:setState(state.discharge)
             return self:getState()
         end
@@ -406,7 +406,8 @@ PVBattery[state.low_battery] = PVBattery[state.low_cell]
 -- luacheck: ignore self P_Grid P_VenusE date
 PVBattery[state.charge] = function(self, P_Grid, P_VenusE, date)
     for _, Inverter in pairs(self.Inverter) do
-        if not Inverter.time_controlled and Inverter:getPowerState() ~= "off" then
+        if not Inverter.time_controlled
+            and Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off" then
             Inverter:stopDischarge()
         end
     end
@@ -520,7 +521,8 @@ PVBattery[state.shutdown] = function(self, P_Grid, P_VenusE, date)
         end
     end
     for _, Inverter in pairs(self.Inverter) do
-        if Inverter:getPowerState() == "on" and not Inverter.time_controlled then
+        if Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off"
+            and not Inverter.time_controlled then
             Inverter:stopDischarge()
         end
     end
@@ -728,14 +730,19 @@ function PVBattery:main(profiling_runs)
         --        local P_Grid, P_Load, P_PV, P_AC = P1meter:getCurrentPower(), 0, 0, 0, 0
 
         local repeat_request = math.max(20, config.sleep_time - 5)
-        while (not P_Grid or not P_Load or not P_PV) and repeat_request > 0 do
-            util:log("Communication error: repeat request:", repeat_request)
+        while (not P_Grid or not P_Load or not P_PV or not P_VenusE) and repeat_request > 0 do
             repeat_request = repeat_request - 1
             util.sleep_time(1) -- try again in 1 second
-            self:clearCache()
-            self:fillCache()
-            self:showCacheDataAge()
-            P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
+            if not P_Grid or not P_Load or not P_PV then
+                util:log("Communication error: repeat request:", repeat_request)
+                self:clearCache()
+                self:fillCache()
+                self:showCacheDataAge()
+                P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
+            end
+            if not P_VenusE then
+                P_VenusE = self.VenusE:readACPower()
+            end
         end
 
         -- Normally P_PV comes from panel and P_AC is less, so use the smaller one
@@ -743,7 +750,7 @@ function PVBattery:main(profiling_runs)
             P_PV = math.min(P_PV, P_AC)
         end
 
-        if not P_Grid or not P_Load or not P_PV then
+        if not P_Grid or not P_Load or not P_PV or not P_VenusE then
             short_sleep = 4
             skip_loop = true
             rescue_stop = rescue_stop - 1
@@ -765,7 +772,8 @@ function PVBattery:main(profiling_runs)
             oldstate = self:getState()
             if oldstate ~= self:updateState(date, P_Grid, P_VenusE) then
                 local f = io.popen("date", "r")
-                print(f:read(), "State: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
+                print(f:read(), "State: ", oldstate, "->", self:getState(),
+                    "P_Grid", P_Grid, "P_Load", P_Load, "P_VenusE", P_VenusE)
                 f:close()
                 -- save the new state to oldstate for reference
             end
