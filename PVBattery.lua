@@ -168,7 +168,12 @@ function PVBattery:updateState(date, P_Grid, P_VenusE)
     end
 
     for _, Inverter in pairs(self.Inverter) do
-        if Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off" and not Inverter.time_controlled then
+        if Inverter:getPowerState() ~= Inverter.BMS:getDischargeState() and not Inverter.time_controlled then
+            self:setState(state.force_discharge)
+            return self:getState()
+        end
+        if Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off"
+            and not Inverter.time_controlled then
             self:setState(state.discharge)
             return self:getState()
         end
@@ -294,10 +299,10 @@ function PVBattery:findBestInverterToTurnOff(P_Grid, P_VenusE)
     for i, Inverter in pairs(self.Inverter) do
         if not Inverter.time_controlled and Inverter.BMS then
             if Inverter.BMS:getDischargeState() ~= "off" and Inverter:getPowerState() ~= "off" then
-                -- Inverter delivers min_power (positive), VenusE delivers power (negative)
+                -- Inverter delivers min_power (positive), VenusE delivers power (positive)
                 -- If req_power is positive, we buy energy
                 local max_power = Inverter:getMaxPower()
-                if P_VenusE > -max_power or P_Grid < max_power then
+                if P_VenusE < max_power or P_Grid < max_power then
                     return i, Inverter:getPower()
                 end
             end
@@ -335,7 +340,7 @@ function PVBattery:findBestInverterToTurnOn(req_power, P_VenusE)
             if Inverter:readyToDischarge() then
                 -- Inverter delivers min_power (positive), VenusE delivers power (negative)
                 -- If req_power is positive, we buy energy
-                if (P_VenusE < -min_power) or (min_power < req_power and min_power > avail_power) then
+                if (P_VenusE > min_power) or (min_power < req_power and min_power > avail_power) then
                     if Inverter.BMS:getDischargeState() ~= "on" or Inverter:getPowerState() ~= "on" then
                         pos = i
                         avail_power = min_power
@@ -528,45 +533,25 @@ PVBattery[state.shutdown] = function(self, P_Grid, P_VenusE, date)
     end
 end
 
---[[
-PVBattery[state.force_discharge] = function(self, P_Grid)
+
+PVBattery[state.force_discharge] = function(self, P_Grid, P_VenusE)
     print("state -> force_discharge")
 
-    -- as long as we don't sell more than 50W try to discharge
-    if P_Grid < -50 then
-        return
-    end
-
-    -- turn on our slow inverter
     for _, Inverter in pairs(self.Inverter) do
-        if not Inverter.time_controlled and Inverter.BMS then
-            if Inverter:getPowerState() ~= "on" then
-                os.execute("date")
-                Inverter:startDischarge()
-                Inverter:clearDataAge()
+        if not Inverter.time_controlled then
+            local power_state = Inverter:getPowerState()
+            local discharge_state = Inverter.BMS:getDischargeState()
+            if power_state ~= discharge_state then
+                if Inverter:getPowerState() ~= "off" then
+                    Inverter:startDischarge()
+                else
+                    Inverter:stopDischarge()
+
+                end
             end
         end
     end
-
-    -- wait for inverter to be ready (5m 30s)
-    -- and one minute
-    local start_time = util.getCurrentTime()
-    repeat
-        util.sleep_time(10) -- wait a bit
-        local _, continue_discharge;
-
-        for _, Inverter in pairs(self.Inverter) do
-            _, continue_discharge = Inverter.BMS:readyToDischarge()
-            if not continue_discharge then
-                break
-            end
-        end
-    until util.getCurrentTime() - start_time >= (6.5*60)
-
-    self:setState(state.discharge)
-    return true
 end
-]]
 
 function PVBattery:clearCache()
     -- Delete all cached values
@@ -721,6 +706,8 @@ function PVBattery:main(profiling_runs)
         -- Negative values mean VenusE is discharging
         local P_VenusE = self.VenusE:readACPower()
 
+        print("VenusE", P_VenusE)
+
         -- we want to turn on Charger if P_VenusE < -160
 --        P_VenusE =  -200
 --            self:turnOnBestInverter(P_Grid, P_VenusE)
@@ -773,7 +760,8 @@ function PVBattery:main(profiling_runs)
             if oldstate ~= self:updateState(date, P_Grid, P_VenusE) then
                 local f = io.popen("date", "r")
                 print(f:read(), "State: ", oldstate, "->", self:getState(),
-                    "P_Grid", P_Grid, "P_Load", P_Load, "P_VenusE", P_VenusE)
+                    "P_Grid", math.floor(P_Grid+0.5), "P_Load", math.floor(P_Load+0.5),
+                    "P_VenusE", math.floor(P_VenusE+0.5))
                 f:close()
                 -- save the new state to oldstate for reference
             end
@@ -796,7 +784,9 @@ function PVBattery:main(profiling_runs)
             self:showCacheDataAge()
             if oldstate ~= self:updateState(date, P_Grid, P_VenusE) then
                 local f = io.popen("date", "r")
-                print(f:read(), "STATE: ", oldstate, "->", self:getState(), "P_Grid", P_Grid, "P_Load", P_Load)
+                print(f:read(), "State: ", oldstate, "->", self:getState(),
+                    "P_Grid", math.floor(P_Grid+0.5), "P_Load", math.floor(P_Load+0.5),
+                    "P_VenusE", math.floor(P_VenusE+0.5))
                 f:close()
             end
             util:log("STATE: ", oldstate, "->", self:getState())
