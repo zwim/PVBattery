@@ -2,6 +2,7 @@ local bit = require("bit")
 local socket = require("socket")
 
 local Marstek = {
+    client = nil,
     host = nil,
     ip = nil, -- IP-Adresse des ELFIN WL11A
     port = nil, -- Modbus TCP Port
@@ -37,15 +38,17 @@ registers.readMaxCellTemperature  = {adr = 35010, typ = "s16", gain = 0.1, unit 
 registers.readMinCellTemperature  = {adr = 35011, typ = "s16", gain = 0.1, unit = "°C"}
 
 -- Modbus TCP Funktion zum Lesen von Holding Registers
-local function readHoldingRegisters(ip, port, slaveId, quantity, reg)
-
-    local client = socket.tcp()
-    client:settimeout(5) -- Timeout auf 10 Sekunden setzen
-
-    local success, err = client:connect(ip, port)
-    if not success then
-        print("Fehler beim Verbinden: " .. err)
-        return nil
+local transactionId = 0x0001
+function Marstek:readHoldingRegisters(ip, port, slaveId, quantity, reg)
+    if not self.client then
+        self.client = socket.tcp()
+        self.client:settimeout(5)
+        self.client:setoption("keepalive", true)  -- Aktiviert TCP-Keepalive
+        local success, err = self.client:connect(ip, port)
+        if not success then
+            print("Fehler beim Verbinden: " .. err)
+            return nil
+        end
     end
 
     local startAddress = reg.adr
@@ -59,7 +62,7 @@ local function readHoldingRegisters(ip, port, slaveId, quantity, reg)
     local bytes = math.floor(size / 8)
 
     -- Modbus TCP Anfrage erstellen
-    local transactionId = 0x0001
+    transactionId = (transactionId + 1) % 0xFFFF
     local protocolId = 0x0000
     local length = 6
     local functionCode = 0x03
@@ -79,32 +82,48 @@ local function readHoldingRegisters(ip, port, slaveId, quantity, reg)
         bit.band(math.floor(bytes/2), 0xFF)
     )
 
-    client:send(request)
+    self.client:send(request)
 
-    local response
-    response, err = client:receive(9 + bytes)
+    local response, err
+    response, err = self.client:receive(9 + bytes)
     if not response then
-        print("Fehler beim Empfangen der Antwort: " .. err)
+        print("Marstek: Fehler beim Empfangen der Antwort: " .. err .. " Try to reconnect")
+        -- reconnect
+        self.client:close()
+        self.client = socket.tcp()
+        self.client:settimeout(5)
+        self.client:setoption("keepalive", true)
+        local success
+        success, err = self.client:connect(ip, port)
+        if not success then
+            print("Marstek: Fehler beim Verbinden: " .. err)
+            return nil
+        end
+        self.client:send(request)
+        response, err = self.client:receive(9 + bytes)
+    end
+    if not response then
+        print("Marstek: Fehler beim Empfangen der Antwort: " .. err)
         return nil
     end
 
-    client:close()
+--    self.client:close()
 
     -- Antwort analysieren
     if #response < 9 then
-        print("Ungültige Antwortlänge")
+        print("Marstek: Ungültige Antwortlänge")
         return nil
     end
 
     local functionCodeResponse = string.byte(response, 8)
     if functionCodeResponse ~= functionCode then
-        print("Fehlerhafter Funktionode in der Antwort")
+        print("Marstek: Fehlerhafter Funktionode in der Antwort")
         return nil
     end
 
     local byteCountResponse = string.byte(response, 9)
     if byteCountResponse ~= bytes then
-        print("Fehlerhafte Byteanzahl in der Antwort")
+        print("Marstek: Fehlerhafte Byteanzahl in der Antwort")
         return nil
     end
 
@@ -128,38 +147,38 @@ local function readHoldingRegisters(ip, port, slaveId, quantity, reg)
 end
 
 function Marstek:readBatteryVoltage()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryVoltage),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryVoltage),
     "Battery Voltage", registers.readBatteryVoltage.unit
 end
 function Marstek:readBatteryCurrent()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryCurrent),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryCurrent),
     "Battery Current", registers.readBatteryCurrent.unit
 end
 -- negative meanse that the battery is discharching
 function Marstek:readBatteryPower()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryPower),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryPower),
     "Battery Power", registers.readBatteryPower.unit
 end
 function Marstek:readBatterySOC()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatterySOC),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatterySOC),
     "Battery SOC", registers.readBatterySOC.unit
 end
 function Marstek:readBatteryTotalEnergy()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryTotalEnergy),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryTotalEnergy),
     "Battery TotalEnergy", registers.readBatteryTotalEnergy.unit
 end
 
 function Marstek:readACVoltage()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACVoltage),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACVoltage),
     "Battery Voltage", registers.readACVoltage.unit
 end
 function Marstek:readACCurrent()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACCurrent),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACCurrent),
     "Battery Current", registers.readACCurrent.unit
 end
 -- negative meanse that the battery is discharching
 function Marstek:readACPower()
-    return readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACPower),
+    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACPower),
     "Battery Power", registers.readACPower.unit
 end
 

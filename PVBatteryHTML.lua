@@ -1,4 +1,4 @@
-return function(self, config, P_Grid, P_Load, P_PV, VERSION)
+return function(self, config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
     local ChargerPowerCache = {}
     local InverterPowerCache = {}
 
@@ -7,6 +7,7 @@ return function(self, config, P_Grid, P_Load, P_PV, VERSION)
         ChargerPowerCache[i] = self.Charger[i]:getPower()
         sinks = sinks + (ChargerPowerCache[i] or 0)
     end
+    sinks = sinks + math.max(-P_VenusE, 0)
 
     local sources = P_PV
     for  i = 1, #self.Inverter do
@@ -15,13 +16,17 @@ return function(self, config, P_Grid, P_Load, P_PV, VERSION)
             sources = sources + (InverterPowerCache[i] or 0)
         end
     end
+    sources = sources + math.max(P_VenusE, 0)
 
     local SOC_string = "<br>SOC:"
     for  i = 1, #self.BMS do
         if self.BMS[i].v.SOC then
-            SOC_string = SOC_string .. " " .. self.BMS[i].host .. " " .. self.BMS[i].v.SOC .. "%%<br>"
+            SOC_string = SOC_string .. " " .. self.BMS[i].host .. " " .. self.BMS[i].v.SOC .. "%% "
             SOC_string = SOC_string .. os.date("%c", math.floor(self.BMS[i].timeOfLastFullBalancing)) .. "<br>"
         end
+    end
+    if self.VenusE_SOC then
+        SOC_string = SOC_string .. "SOC: Marstek VenusE " .. self.VenusE_SOC .. "%%<br>"
     end
 
     local TEMPLATE_PARSER = {
@@ -32,7 +37,7 @@ return function(self, config, P_Grid, P_Load, P_PV, VERSION)
         {"_$FRONIUS_ADR$", config.FRONIUS_ADR},
         {"_$STATE_OF_OPERATION$", (self._state or "") .. SOC_string},
         {"_$P_GRID$", string.format("%7.2f", P_Grid)},
-        {"_$P_SELL_GRID$", P_Grid < 0 and string.format("%7.2f", P_Grid) or "0.00"},
+        {"_$P_SELL_GRID$", P_Grid < 0 and string.format("%7.2f", -P_Grid) or "0.00"},
         {"_$P_BUY_GRID$", P_Grid > 0 and string.format("%7.2f", P_Grid) or "0.00"},
         {"_$P_LOAD$", string.format("%7.2f", P_Load)},
         {"_$P_ROOF$", string.format("%7.2f", P_PV)},
@@ -56,6 +61,10 @@ return function(self, config, P_Grid, P_Load, P_PV, VERSION)
         {"_$GARAGE_INVERTER_POWER$",
             string.format("%7.2f", InverterPowerCache[2])},
         {"_$GARAGE_INVERTER$", self.Inverter[2].host},
+        {"_$VENUS_CHARGE_POWER$",
+            string.format("%7.2f", math.max(-P_VenusE, 0))},
+        {"_$VENUS_DISCHARGE_POWER$",
+            string.format("%7.2f", math.max(P_VenusE, 0))},
  --       {"_$MOPED_CHARGER_POWER",
  --           string.format("%7.2f", ChargerPowerCache[3])},
  --       {"_$MOPED_CHARGER", self.Charger[3].switch_host},

@@ -1,17 +1,9 @@
 
-local Profiler = nil
---[[
--- profiler from https://github.com/charlesmallah/lua-profiler
-local Profiler = require("suntime/profiler")
-if Profiler then
-    Profiler.start()
-end
-]]
-
 local CHARGER_IP = "moped-charger"
 
 --local Fronius = require("fronius")
 local P1meter = require("p1meter")
+local Marstek = require("marstek")
 
 local SunTime = require("suntime/suntime")
 local ChargerClass = require("charger")
@@ -64,7 +56,8 @@ function MopedCharger:init()
 
     -- IMPORTANT: Our authorative power meter, which shows if we produce or consume energy
 --    Fronius = Fronius:new{host = config.FRONIUS_ADR}
-    P1meter = P1meter:new{host = "HW-p1meter.lan"}
+    self.P1meter = P1meter:new{host = "HW-p1meter.lan"}
+    self.VenusE = Marstek:new({ip = "192.168.0.208", port=502, slaveId = 1})
 
     self.Charger = ChargerClass:new{
         host = CHARGER_IP,
@@ -158,27 +151,38 @@ function MopedCharger:main(profiling_runs)
 --        Fronius:getPowerFlowRealtimeData()
 --        local P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
 
-        local P_Grid = P1meter:getCurrentPower()
+        -- Positive values mean power going into Fronius;
+        -- e.g. positive P_Grid we buy energy
+        --      negative P_Grid we sell energy
+        local P_Grid = self.P1meter:getCurrentPower()
+        -- Positive values mean power is going into the VenusE
+        -- Negative values mean VenusE is discharging
+        local P_VenusE = self.VenusE:readACPower()
 
         local repeat_request = math.min(20, config.sleep_time - 5)
-        while (not P_Grid) and repeat_request > 0 do
+        while (not P_Grid or not P_VenusE) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
             repeat_request = repeat_request - 1
             util.sleep_time(1) -- try again in 1 second
 --            P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
-            P_Grid = P1meter:getCurrentPower()
+            if not P_Grid then
+                P_Grid = P1meter:getCurrentPower()
+            end
+            if not P_VenusE then
+                P_VenusE = self.VenusE:readACPower()
+            end
         end
 
-        if not P_Grid then
+        if not P_Grid or not P_VenusE then
             short_sleep = 1
             skip_loop = true
         else
-            util:log(string.format("Grid %8.2f W", P_Grid))
+            util:log(string.format("Grid %8.2f W, VenusE %8.2f W", P_Grid, P_VenusE))
         end
 
         if not skip_loop then
             self:isState(self.Charger:getPowerState(), true)
-            if not self:getState("on") and not self:GetState("off") then -- try onece again
+            if not self:getState("on") and not self:GetState("off") then -- try once again
                 self:isState(self.Charger:getPowerState(), true)
             end
 
@@ -195,8 +199,8 @@ function MopedCharger:main(profiling_runs)
             end
         end
 
-        print("'skip_loop?"..tostring(skip_loop).."'",
-              self:getGoal(), self:getState(), P_Grid, curr_power, self.charger_max_power)
+        print("'skip_loop:"..tostring(skip_loop).."'",
+              self:getGoal(), self:getState(), P_Grid, P_VenusE, curr_power, self.charger_max_power)
 
         if not skip_loop then
             if self:isGoal("idle") and curr_power > 0 then
@@ -204,25 +208,27 @@ function MopedCharger:main(profiling_runs)
                 self:isGoal("mid_charge", true)
             elseif self:isGoal("mid_charge") then
                 if self:isState("on") then
-                    if P_Grid > 0 then -- we don't have enough power from PV
+                    if P_Grid - math.abs(P_VenusE) > 0 then -- we don't have enough power from PV
                         self.Charger:stopCharge()
                     elseif curr_power < self.charger_max_power * self.charger_mid_percent then
                         self:turnOff()
                     end
                 else
-                    if -P_Grid > self.charger_max_power * 1.05 then -- if we have enough power from PV
+                    if -P_Grid + math.abs(P_VenusE) > self.charger_max_power * 1.05 then
+                        -- if we have enough power from PV
                         self.Charger:startCharge(15) -- charge for 15s to get a stable charge current
                     end
                 end
             elseif self:isGoal("full_charge") then
                 if self:isState("on") then
-                    if P_Grid > 0 then -- we don't have enough power from PV
+                    if P_Grid - math.abs(P_VenusE) > 0 then -- we don't have enough power from PV
                         self.Charger:stopCharge()
                     elseif curr_power < self.charger_max_power * self.charger_full_percent then
                         self:turnOff()
                     end
                 else
-                    if -P_Grid > self.charger_max_power * 1.05 then -- if we have enough power from PV
+                    if -P_Grid + math.abs(P_VenusE) > self.charger_max_power * 1.05 then
+                        -- if we have enough power from PV
                         self.Charger:startCharge(15) -- charge for 15s to get a stable charge current
                     end
                 end

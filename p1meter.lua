@@ -59,14 +59,18 @@ function P1meter:getData()
     return true
 end
 
+local client = nil
 function P1meter:_get_data_coroutine(cmd)
     local path = self.urlPath .. cmd
-    local client, err = socket.connect(self.host, self.port or 80)
+    local err
     if not client then
-        util:log("Error opening connection to", self.host, ":", err)
-        return false
+        client, err = socket.connect(self.host, self.port or 80)
+        if not client then
+            util:log("Error opening connection to", self.host, ":", err)
+            return false
+        end
     end
-    client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    local x = client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
     local content = {}
     while true do
         client:settimeout(0)   -- do not block
