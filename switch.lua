@@ -8,6 +8,7 @@ local http = require("socket.http")
 http.TIMEOUT=5
 
 local Switch = {
+    socket = nil, -- tcp.socket, will be filled automatically
     host = nil,
     body = nil,
     status = nil,
@@ -78,9 +79,10 @@ function Switch:_getStatus()
     return true
 end
 
+local READ_DATA_SIZE = 2048*2
 -- Use this method to collect values from all switches with coroutines
 function Switch:_getStatus_coroutine()
-    if not self.host then
+    if not self.host or self.host == "" then
         return false
     end
 
@@ -88,39 +90,45 @@ function Switch:_getStatus_coroutine()
         return true
     end
 
-    local path = "/cm?cmnd=status0"
-    local client, err = socket.connect(self.host, 80)
-    if not client then
+    local ok, err
+    self.socket = socket.tcp()
+    self.socket:settimeout(2)
+    self.socket:setoption("keepalive", true)
+    ok, err = self.socket:connect(self.host, 80)
+    if not ok then
         util:log("Error opening connection to", self.host, ":", err)
+        print("Error opening connection to", self.host, ":", err)
+        self.socket = nil
         return false
     end
-    client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
 
-    local content = {}
+    local path = "/cm?cmnd=status0"
+    self.socket:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    self.socket:settimeout(0)   -- do not block
+
+    local body = ""
     while true do
-        client:settimeout(0)   -- do not block
-        local s, status, partial = client:receive(1024)
-        if s then
-            s = s:gsub("^.*\r\n\r\n","") -- remove header
-            if s ~= "" then
-                table.insert(content, s)
-            end
+        local s, status, partial = self.socket:receive(READ_DATA_SIZE)
+        if s and s ~= "" then
+            body = body .. s
         end
-        if partial then
-            partial = partial:gsub("^.*\r\n\r\n","") -- remove header
-            if partial ~= "" then
-                table.insert(content, partial)
-            end
+        if partial and partial ~= "" then
+           body = body .. partial
         end
-        if status == "timeout" then
-            coroutine.yield(client)
-        elseif status == "closed" then
+
+        if #body >= READ_DATA_SIZE or status == "closed" then
+            self.socket:close()
+            self.socket = nil
             break
+        elseif status == "timeout" then
+            coroutine.yield(self.socket)
         end
     end
-    client:close()
-    local body = table.concat(content)
 
+    local header_end = body:find("\r\n\r\n", 1, true)
+    if header_end then
+        body = body:sub(header_end + 4)
+    end
     self.decoded = body and json.decode(body) or {}
 
     self:setDataAge()

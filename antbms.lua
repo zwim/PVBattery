@@ -19,7 +19,8 @@ end
 
 local ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME = table.unpack((require("antbms-reset")))
 
-local READ_DATA_SIZE = 140
+local BMS_DATA_SIZE = 140
+local READ_DATA_SIZE = 2048
 
 -- Get data at `pos` in `buffer` attention lua table starts with 1
 -- whereas the protocol is defined for a C-buffer starting with 0
@@ -42,10 +43,11 @@ end
 ----------------------------------------------------------------
 
 local AntBMS = {
+    socket = nil, -- tcp.socket, will be filled automatically
     host = "",
     v = {},
     timeOfLastRequiredData = 0, -- no data yet
-    timeOfLastFullBalancing = 1709465939, -- no data yet
+    timeOfLastFullBalancing = 0, -- no data yet
 
     MOSFETChargeStatusFlag = {
         [0] = "Off",
@@ -226,7 +228,7 @@ function AntBMS:getCurrentPower()
     end
 end
 function AntBMS:isChecksumOk()
-    if #self.answer < READ_DATA_SIZE then
+    if #self.answer < BMS_DATA_SIZE then
         return false
     end
 
@@ -234,12 +236,12 @@ function AntBMS:isChecksumOk()
     -- We leaf the loop if checksum is OK or if there is to less data
     while true do
         -- delete leading bytes until 0xAA55AAFF
-        while getInt32(self.answer, 0) ~= 0xAA55AAFF and #self.answer >= READ_DATA_SIZE do
+        while getInt32(self.answer, 0) ~= 0xAA55AAFF and #self.answer >= BMS_DATA_SIZE do
             table.remove(self.answer, 1)
         end
 
         -- bail out if to less data left, after cleaning
-        if #self.answer < READ_DATA_SIZE then
+        if #self.answer < BMS_DATA_SIZE then
             util:log("to less data")
             break
         end
@@ -259,7 +261,7 @@ function AntBMS:isChecksumOk()
         end
     end
 
-    util:log("xxx checksum error", checksum, expected)
+    util:log("BMS: checksum error", checksum, expected)
     return false
 end
 
@@ -281,31 +283,90 @@ function AntBMS:getData(force)
     -- Will be updated when new correct data are read.
     self:clearDataAge()
 
+    local ok, err
+
+    local body = ""
     local checksum = false
     local retries = 10
-    while #self.answer < READ_DATA_SIZE and retries > 0 do
-        local url = string.format("http://%s/live.data", self.host)
-        local body, code
-        for wake = 1, 2 do -- try to wake up BT-Module by starting a short charge
-            for try = 1, 4 do -- try to read a few times
-                body, code = http.request(url)
-                code = tonumber(code)
-                if code and body then
+
+    self.answer = {}
+    while #self.answer < BMS_DATA_SIZE and retries > 0 do
+        for try = 1, 4 do -- try to read a few times
+            if not self.socket then
+                self.socket = socket.tcp()
+                self.socket:settimeout(5)
+                self.socket:setoption("keepalive", true)
+                ok, err = self.socket:connect(self.host, 80)
+                if not ok then
+                    util:log("Error opening connection to", self.host, ":", err)
+                    self.socket = nil
+                    return false
+                end
+            end
+
+            ok, err = self.socket:send("GET /live.data HTTP/1.0\r\n\r\n")
+            if not ok then
+                util:log("Error sending request:", err)
+                self.socket:close()
+                self.socket = nil
+                return false
+            end
+
+            local timeout = util.getCurrentTime() + config.update_interval
+
+            while util.getCurrentTime() < timeout do
+                local s, status, partial = self.socket:receive(READ_DATA_SIZE)
+                if s and s ~= "" then
+                    body = body .. s
+                end
+                if partial and partial ~= "" then
+                    body = body .. partial
+                end
+
+--[[                    if #body >= 4 then
+                    while not (body:byte(1) == 0xaa and body:byte(2) == 0x55
+                               and body:byte(3) == 0xaa and body:byte(4) == 0xff)
+                          and #body >= 4 do
+                        body = body:sub(2)
+                    end
+                end
+]]
+                local header_end = body:find("\r\n\r\n", 1, true)
+                if header_end then
+                    body = body:sub(header_end + 4)
+                end
+
+
+                if status == "closed" then
+                    self.socket:close()
+                    self.socket = nil
+                    break
+                elseif status == "timeout" then
+                    self.socket:close()
+                    self.socket = nil
                     break
                 end
-                os.execute("date")
-                os.execute("echo 'Could not read bms.data --- try again (" .. try .. "/4) in 5 seconds.'")
-                util.sleep_time(5) -- wait
+
+                if #body >= BMS_DATA_SIZE then
+                    break
+                end
             end
-            if code and body then
+
+            if #body >= BMS_DATA_SIZE then
                 break
             end
+
             os.execute("date")
-            os.execute("echo 'Could not get bms.data --- starting a wakup charge (" .. wake .."/2).'")
-            self.wakeup()
-            util.sleep_time(config.sleep_time)
+            os.execute("echo 'Could not read bms.data --- try again (" .. try .. "/4) in 5 seconds.'")
+            util.sleep_time(5) -- wait
+        end --for
+
+        if self.socket then
+            self.socket:close()
+            self.socket = nil
         end
-        if not code or not body then
+
+        if not body or body == "" then
             -- maybe the BMS has lost internet connection, so reset the ESP32
             -- no need any more, as bms will reset itself now.
             --os.execute(ESP32_HARD_RESET_COMMAND)
@@ -316,10 +377,14 @@ function AntBMS:getData(force)
             util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)
             return false
         end
-        self.answer = {}
+
         for n = 1, #body do
             table.insert(self.answer, body:byte(n))
         end
+
+--        if #body >= BMS_DATA_SIZE then
+--            break
+--        end
 
         checksum = self:isChecksumOk()
         if checksum then
@@ -328,7 +393,13 @@ function AntBMS:getData(force)
         retries = retries - 1
     end
 
+    if #body < BMS_DATA_SIZE then
+        return false
+    end
+
     if not checksum then
+        util:log("Antbms: Checksum error")
+        print("Antbms: Checksum error", #body)
         self:enableBluetooth()
         return false
     end
@@ -336,7 +407,6 @@ function AntBMS:getData(force)
     self:evaluateData()
     return true
 end
-
 
 -- This is the usual way of reading new parameters
 function AntBMS:getData_coroutine(force)
@@ -352,36 +422,65 @@ function AntBMS:getData_coroutine(force)
         end
     end
 
+    local ok, err
+    if not self.socket then
+        self.socket = socket.tcp()
+        self.socket:settimeout(5) -- timeout for opening the connection
+        self.socket:setoption("keepalive", true)
+        ok, err = self.socket:connect(self.host, 80)
+        if not ok then
+            util:log("[getData_coroutine] Error opening connection to", self.host, ":", err)
+            self.socket = nil
+            return false
+        end
+    end
+
     -- If we get here, invalidate the last data aquisition date.
     -- Will be updated when new correct data are read.
     self:clearDataAge()
 
-    local client, err = socket.connect(self.host, 80)
-    if not client then
-        util:log("Error opening connection to", self.host, ":", err)
-        return false
-    end
-    client:send("GET /live.data HTTP/1.0\r\n\r\n")
+    self.socket:send("GET /live.data HTTP/1.0\r\n\r\n")
 
     local body = ""
-    while true do
-        client:settimeout(0)   -- do not block
-        local s, status, partial = client:receive(1024)
-        if s then
+    for _ = 1, 20 do
+        self.socket:settimeout(1)
+        local s, status, partial = self.socket:receive(READ_DATA_SIZE)
+        if s and s ~= "" then
             body = body .. s
         end
-        if partial then
+        if partial and partial ~= "" then
             body = body .. partial
         end
-        if #body >= READ_DATA_SIZE or status == "closed" then
+
+--[[
+        if #body >= 4 then
+            while not (body:byte(1) == 0xaa and body:byte(2) == 0x55
+                       and body:byte(3) == 0xaa and body:byte(4) == 0xff)
+                  and #body >= 4 do
+                body = body:sub(2)
+            end
+        end
+]]
+        local header_end = body:find("\r\n\r\n", 1, true)
+        if header_end then
+            body = body:sub(header_end + 4)
+        end
+
+        if #body >= BMS_DATA_SIZE then
+            break
+        elseif status == "closed" then
+            self.socket:close()
+            self.socket = nil
             break
         elseif status == "timeout" then
-            coroutine.yield(client)
+            coroutine.yield(self.socket)
         end
     end
-    client:close()
 
-    body = body:gsub("^.*\r\n\r\n","") -- remove header if it is there
+    if self.socket then
+        self.socket:close()
+        self.socket = nil
+    end
 
     self.answer = {}
     for n = 1, #body do
@@ -482,6 +581,7 @@ function AntBMS:evaluateData()
 
     self.answer = {} -- clear old received bytes
 
+
     if util.getCurrentTime() >= self.timeOfLastFullBalancing + config.lastFullPeriod then
         config.bat_SOC_max = 101
     end
@@ -521,7 +621,8 @@ function AntBMS:getParameters()
     end
 
     local retries = 10
-    while #self.answer < READ_DATA_SIZE and retries > 0 do
+    self.answer = {}
+    while #self.answer < BMS_DATA_SIZE and retries > 0 do
         local url = string.format("http://%s/parameters.backup", self.host)
         local body, code
         for _ = 1, 5 do -- try to read a few times
@@ -545,7 +646,6 @@ function AntBMS:getParameters()
             util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)
             return false
         end
-        self.answer = {}
         for n = 1, #body do
             table.insert(self.answer, body:byte(n))
         end
@@ -592,7 +692,9 @@ function AntBMS:printValues()
     local success, err = pcall(self._printValuesNotProtected, self)
     if not success then
         util:log("BMS reported no values; Error: ", tostring(err))
+        print("BMS reported no values; Error:", tostring(err))
     end
+    return success
 end
 
 function AntBMS:readyToCharge()

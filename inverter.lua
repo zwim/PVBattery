@@ -20,7 +20,6 @@ function Inverter:init()
     return self
 end
 
-
 function Inverter:startDischarge(req_power)
     if self.time_controlled or (self.BMS and self.BMS:readyToDischarge()) then
         if self.BMS then
@@ -28,6 +27,7 @@ function Inverter:startDischarge(req_power)
             util.sleep_time(1)
         end
         self:toggle("on")
+        self:clearDataAge()
     end
 end
 
@@ -37,6 +37,7 @@ function Inverter:stopDischarge()
         util.sleep_time(0.5)
     end
     self:toggle("off")
+    self:clearDataAge()
 end
 
 function Inverter:readyToDischarge()

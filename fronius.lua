@@ -87,16 +87,16 @@ end
 
 function Fronius:_get_RealtimeData_coroutine(cmd)
     local path = self.urlPath .. cmd
-    local client, err = socket.connect(self.host, self.port or 80)
-    if not client then
+    local socket, err = socket.connect(self.host, self.port or 80)
+    if not socket then
         util:log("Error opening connection to", self.host, ":", err)
         return false
     end
-    client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    socket:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
     local content = {}
     while true do
-        client:settimeout(0)   -- do not block
-        local s, status, partial = client:receive(2^15)
+        socket:settimeout(0)   -- do not block
+        local s, status, partial = socket:receive(2^15)
         if s then
             s = s:gsub("^.*\r\n\r\n","") -- remove header
             if s ~= "" then
@@ -111,12 +111,12 @@ function Fronius:_get_RealtimeData_coroutine(cmd)
         end
 
         if status == "timeout" then
-            coroutine.yield(client)
+            coroutine.yield(socket)
         elseif status == "closed" then
             break
         end
     end
-    client:close()
+    socket:close()
     local body = table.concat(content)
 
     return body and json.decode(body) or {}
@@ -152,7 +152,6 @@ function Fronius:gotValidInverterRealtimeData()
     return self.Data and self.Data.GetInverterRealtimeData and self.Data.GetInverterRealtimeData.Body
         and self.Data.GetInverterRealtimeData.Body.Data.PAC
 end
-
 
 -- todo add a getter if neccessary
 function Fronius:getGridLoadPV()

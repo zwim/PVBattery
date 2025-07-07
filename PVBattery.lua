@@ -143,19 +143,6 @@ end
 function PVBattery:updateState(date, P_Grid, P_VenusE)
     -- This means that our battery is ahead of all others, but only twice a day
 
---[[
-    local current_hour = date.hour + date.min/60 + date.sec/3600 + 2 -- two hours after sunset
-    if current_hour > SunTime.set_civil + 0.5 then -- half an hour after sunset
-        if not forced_discharge then
-            forced_discharge = true
-            self:setState(state.force_discharge)
-            return self:getState()
-        end
-    elseif current_hour > SunTime.rise_civil - 1 then -- one hour before sunrise
-        forced_discharge = false
-    end
-]]
-
     for _, Charger in pairs(self.Charger) do
         if Charger:getPowerState() == "on" then
             if Charger.BMS:isLowChargedOrNeedsRescue() and Charger.BMS:needsRescueCharge() then
@@ -168,11 +155,14 @@ function PVBattery:updateState(date, P_Grid, P_VenusE)
     end
 
     for _, Inverter in pairs(self.Inverter) do
-        if Inverter:getPowerState() ~= Inverter.BMS:getDischargeState() and not Inverter.time_controlled then
+        local powerState = Inverter:getPowerState()
+        local dischargeState = Inverter.BMS:getDischargeState()
+        if powerState == "on" and dischargeState == "off"
+            and not Inverter.time_controlled then
             self:setState(state.force_discharge)
             return self:getState()
         end
-        if Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off"
+        if powerState ~= "off" and dischargeState ~= "off"
             and not Inverter.time_controlled then
             self:setState(state.discharge)
             return self:getState()
@@ -189,7 +179,7 @@ function PVBattery:updateState(date, P_Grid, P_VenusE)
         if BMS:getData() then
             if BMS:isBatteryFull() then
                 if self:getState() ~= state.idle_full then
-                    self:setState(state.full)
+                    self:setState(state.idle_full)
                 end
                 return self:getState()
             elseif BMS:needsBalancing() then
@@ -225,7 +215,7 @@ end
 
 -- find an activated charger which is charging with more than req_power
 -- or find the activated charger with the highest power.
-function PVBattery:findBestChargerToTurnOff(req_power)
+function PVBattery:findBestChargerToTurnOff(req_power, P_VenusE)
     local pos = 0
     local avail_power = 0
 
@@ -248,12 +238,15 @@ function PVBattery:findBestChargerToTurnOff(req_power)
     return pos, avail_power
 end
 
-function PVBattery:turnOffBestCharger(P_Grid)
+function PVBattery:turnOffBestCharger(P_Grid, P_VenusE)
+    if P_VenusE < 0 then
+        return false
+    end
     -- allow a small power buy instead of a bigger power sell.
-    local charger_num, charger_power = self:findBestChargerToTurnOff(P_Grid)
+    local charger_num, charger_power = self:findBestChargerToTurnOff(P_Grid, P_VenusE)
     -- Only activate one inverter, as the current is only estimated-
     if charger_num > 0 then
-        util:log(string.format("Deactivated Charger: %s with %s W",
+        util:log(string.format("Deactivate Charger: %s with %s W",
                 charger_num, charger_power))
         self.Charger[charger_num]:stopCharge(P_Grid)
         self.Charger[charger_num]:clearDataAge()
@@ -261,16 +254,15 @@ function PVBattery:turnOffBestCharger(P_Grid)
     end
 end
 
-function PVBattery:findBestChargerToTurnOn(req_power)
+function PVBattery:findBestChargerToTurnOn(req_power, P_VenusE)
     local pos = 0
     local avail_power = 0
 
-    if req_power > 0 then print("Error 3") end
     req_power = -req_power -- as we compare to positive values in max_power
 
     for i, Charger in pairs(self.Charger) do
         local max_power = Charger:getMaxPower() or 0
-        if max_power < req_power and max_power > avail_power then
+        if max_power < req_power and max_power > avail_power or max_power < -P_VenusE then
             if Charger:readyToCharge() then
                 if Charger:getPowerState() == "off" then
                     pos = i
@@ -283,8 +275,11 @@ function PVBattery:findBestChargerToTurnOn(req_power)
     return pos, avail_power
 end
 
-function PVBattery:turnOnBestCharger(P_Grid)
-    local charger_num, charger_power = self:findBestChargerToTurnOn(P_Grid)
+function PVBattery:turnOnBestCharger(P_Grid, P_VenusE)
+    if P_VenusE > 0 then
+        return false
+    end
+    local charger_num, charger_power = self:findBestChargerToTurnOn(P_Grid, P_VenusE)
     -- Activate one charger, as the current is only estimated.
     if charger_num > 0 then
         util:log(string.format("Activate charger: %s with %5.2f W",
@@ -302,12 +297,14 @@ function PVBattery:findBestInverterToTurnOff(P_Grid, P_VenusE)
                 -- Inverter delivers min_power (positive), VenusE delivers power (positive)
                 -- If req_power is positive, we buy energy
                 local max_power = Inverter:getMaxPower()
-                if P_VenusE < max_power or P_Grid < max_power then
+                if P_VenusE < max_power or (P_VenusE >= 0 and P_Grid > 50) then
+                    util:log("debug xxx "..i, "P_VenusE ".. P_VenusE, "P_Grid "..P_Grid, "max_power "..max_power)
                     return i, Inverter:getPower()
                 end
             end
             local _, continue_discharge = Inverter.BMS:readyToDischarge()
             if not continue_discharge then
+                util:log("got you sucker xxx")
                 return i, Inverter:getPower()
             end
         end
@@ -316,6 +313,9 @@ function PVBattery:findBestInverterToTurnOff(P_Grid, P_VenusE)
 end
 
 function PVBattery:turnOffBestInverter(req_power, P_VenusE)
+    if P_VenusE > 0 then
+        return false
+    end
     local inverter_num, power = self:findBestInverterToTurnOff(req_power, P_VenusE)
     if inverter_num > 0 then
         util:log(string.format("Deactivate inverter: %s with %s",
@@ -356,6 +356,9 @@ function PVBattery:findBestInverterToTurnOn(req_power, P_VenusE)
 end
 
 function PVBattery:turnOnBestInverter(P_Grid, P_VenusE)
+    if P_VenusE < 0 then -- Venus is charging
+        return false
+    end
     -- allow a small power buy instead of a bigger power sell.
     local inverter_num, inverter_power = self:findBestInverterToTurnOn(P_Grid, P_VenusE)
     -- Only activate one inverter, as the current is only estimated-
@@ -381,7 +384,7 @@ end
 -- luacheck: ignore self P_Grid P_VenusE date
 PVBattery[state.cell_diff] = function(self, P_Grid, P_VenusE, date)
     if P_Grid < self:chargeThreshold(date) then -- sell more than threshold energy
-        self:turnOnBestCharger(P_Grid)
+        self:turnOnBestCharger(P_Grid, P_VenusE)
     else
         for _, BMS in pairs(self.BMS) do
             if BMS:getData() then
@@ -396,7 +399,7 @@ end
 -- luacheck: ignore self P_Grid P_VenusE date
 PVBattery[state.low_cell] = function(self, P_Grid, P_VenusE, date)
     if P_Grid < self:chargeThreshold(date) then -- sell more than threshold energy
-        self:turnOnBestCharger(P_Grid)
+        self:turnOnBestCharger(P_Grid, P_VenusE)
     else
         for _, Inverter in pairs(self.Inverter) do
             if Inverter.BMS:isLowChargedOrNeedsRescue() then
@@ -412,16 +415,15 @@ PVBattery[state.low_battery] = PVBattery[state.low_cell]
 PVBattery[state.charge] = function(self, P_Grid, P_VenusE, date)
     for _, Inverter in pairs(self.Inverter) do
         if not Inverter.time_controlled
-            and Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off" then
+           and Inverter:getPowerState() ~= "off"
+           and Inverter.BMS:getDischargeState() ~= "off" then
             Inverter:stopDischarge()
         end
     end
-    if P_Grid < self:chargeThreshold(date) then -- sell more than threhold energy
-        self:turnOnBestCharger(P_Grid)
+    if P_Grid < self:chargeThreshold(date)  then -- sell more than threhold energy
+        self:turnOnBestCharger(P_Grid, P_VenusE)
     elseif P_Grid > 0 then -- buying energy
-        if not self:turnOffBestCharger(P_Grid) then
-            print("Huston we have a problem")
-        end
+        self:turnOffBestCharger(P_Grid, P_VenusE)
     end
     for _, BMS in pairs(self.BMS) do
         if BMS:isBatteryFull() then
@@ -448,7 +450,7 @@ PVBattery[state.discharge] = function(self, P_Grid, P_VenusE, date)
     if P_Grid > 0 then -- sell more than threshold
         inverter_turned_on = self:turnOnBestInverter(P_Grid, P_VenusE)
     end
-
+--xxx
     if P_Grid < 0 or not inverter_turned_on then
         self:turnOffBestInverter(P_Grid, P_VenusE)
     end
@@ -459,10 +461,10 @@ PVBattery[state.balance] = function(self, P_Grid, P_VenusE, date)
     -- this is almost same as in idle, but no disableDischarge here
     if P_Grid < self:chargeThreshold(date) then -- sell more than threshold energy
         if not self:turnOffBestInverter(P_Grid, P_VenusE) then -- no inverter running
-            self:turnOnBestCharger(P_Grid)
+            self:turnOnBestCharger(P_Grid, P_VenusE)
         end
     elseif P_Grid > 0 then -- buying energy
-        if not self:turnOffBestCharger(P_Grid) then -- no charger on
+        if not self:turnOffBestCharger(P_Grid, P_VenusE) then -- no charger on
             self:turnOnBestInverter(P_Grid, P_VenusE)
         end
     end
@@ -500,12 +502,12 @@ end
 
 -- luacheck: ignore self P_Grid P_VenusE date
 PVBattery[state.idle] = function(self, P_Grid, P_VenusE, date)
-    if P_Grid < self:chargeThreshold(date) then -- sell more than threshold energy
+    if P_Grid < self:chargeThreshold(date) or P_VenusE < -100 then -- sell more than threshold energy
         if not self:turnOffBestInverter(P_Grid, P_VenusE) then -- no inverter running
-            self:turnOnBestCharger(P_Grid)
+            self:turnOnBestCharger(P_Grid, P_VenusE)
         end
     elseif P_Grid > 0 then -- buying energy
-        if not self:turnOffBestCharger(P_Grid) then -- no charger on
+        if not self:turnOffBestCharger(P_Grid, P_VenusE) then -- no charger on
             self:turnOnBestInverter(P_Grid, P_VenusE)
         end
     else
@@ -546,7 +548,6 @@ PVBattery[state.force_discharge] = function(self, P_Grid, P_VenusE)
                     Inverter:startDischarge()
                 else
                     Inverter:stopDischarge()
-
                 end
             end
         end
@@ -585,49 +586,76 @@ end
 
 -- Prefetch all switch values
 function PVBattery:fillCache()
-    local threads = {}    -- list of all live threads
+    local threads = {}
+    local socket_to_thread = {}
+    local readable_sockets = {}
 
+    local function addThread(co)
+        table.insert(threads, { co = co })
+    end
+
+    -- Alle Coroutine-Erzeugungen
     for _, BMS in pairs(self.BMS) do
-        local co = coroutine.create(function() BMS:getData_coroutine() end)
-        table.insert(threads, co)
+        addThread(coroutine.create(function() return BMS:getData_coroutine() end))
     end
     for _, Inverter in pairs(self.Inverter) do
-        local co = coroutine.create(function() Inverter:_getStatus_coroutine() end)
-        table.insert(threads, co)
+        addThread(coroutine.create(function() return Inverter:_getStatus_coroutine() end))
     end
     for _, Charger in pairs(self.Charger) do
-        local co = coroutine.create(function() Charger:_getStatus_coroutine() end)
-        table.insert(threads, co)
+        addThread(coroutine.create(function() return Charger:_getStatus_coroutine() end))
+    end
+    addThread(coroutine.create(function() return Fronius:getPowerFlowRealtimeData_coroutine() end))
+    -- addThread(coroutine.create(function() return P1meter:getData_coroutine() end))
+
+    -- Erste Runde: starten der Coroutinen und Zuordnung zu Sockets
+    for i = #threads, 1, -1 do
+        local thread = threads[i]
+        local ok, result = coroutine.resume(thread.co)
+
+        if not ok then
+            util:log("Coroutine error:", result)
+            table.remove(threads, i)
+        elseif type(result) == "boolean" then
+            -- Keine Socket, Coroutine ist fertig
+            table.remove(threads, i)
+        else
+            local sock_id = tostring(result)
+            socket_to_thread[sock_id] = thread.co
+            table.insert(readable_sockets, result)
+        end
     end
 
-    local co = coroutine.create(function() Fronius:getPowerFlowRealtimeData_coroutine() end)
-    table.insert(threads, co)
+    local timeout = util.getCurrentTime() + config.update_interval
+    while #readable_sockets > 0 and util.getCurrentTime() < timeout do
+        local ready = socket.select(readable_sockets, nil, 1)
 
---    local co = coroutine.create(function() P1meter:getData_coroutine() end)
---    table.insert(threads, co)
+        for _, sock in ipairs(ready) do
+            local sock_id = tostring(sock)
+            local thread = socket_to_thread[sock_id]
 
-    local start_time = util.getCurrentTime()
-    repeat
-        if #threads == 0 then break end   -- no more threads to run
+            if thread then
+                local ok, result = coroutine.resume(thread)
 
-        local connections = {}
-        for i = #threads, 1, -1 do
-            -- threads return a connection or a boolean value
-            -- thee boolean value means the thread has ended (with or without success)
-            local status, con = coroutine.resume(threads[i])
-            if status and type(con) ~= "boolean" then
-                -- timeout while reading
-                table.insert(connections, con)
-            else
-                -- thread has finished its task
-                table.remove(threads, i)
+                if not ok then
+                    util:log("Coroutine resume error:", result)
+                    socket_to_thread[sock_id] = nil
+                elseif type(result) == "boolean" then
+                    -- Coroutine ist fertig
+                    socket_to_thread[sock_id] = nil
+                else
+                    socket_to_thread[sock_id] = thread
+                end
             end
         end
-        if #connections == #threads then
-            socket.select(connections, nil, 1) -- 1 second timeout
+
+        readable_sockets = {}
+        for sock_id in pairs(socket_to_thread) do
+            local sock = socket.fromtostring and socket.fromtostring(sock_id)
+            if sock then
+                table.insert(readable_sockets, sock)
+            end
         end
-    until util.getCurrentTime() - start_time >= config.update_interval
-    -- So if we are locked in here; end the lock
+    end
 end
 
 function PVBattery:showCacheDataAge(verbose)
@@ -702,21 +730,13 @@ function PVBattery:main(profiling_runs)
         --      negative P_Grid we sell energy
         local P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
 
-        -- Positive values mean power is going into the VenusE
-        -- Negative values mean VenusE is discharging
+        -- Positive values mean VenusE is discharging
+        -- Nagative values mean power is charging
         local P_VenusE = self.VenusE:readACPower()
+        P_VenusE = P_VenusE and math.floor(P_VenusE)
+        local VenusE_SOC = self.VenusE:readBatterySOC()
 
-        print("VenusE", P_VenusE)
-
-        -- we want to turn on Charger if P_VenusE < -160
---        P_VenusE =  -200
---            self:turnOnBestInverter(P_Grid, P_VenusE)
---        P_VenusE = -100
---            self:turnOffBestInverter(P_Grid, P_VenusE)
-
-        --        local P_Grid, P_Load, P_PV, P_AC = P1meter:getCurrentPower(), 0, 0, 0, 0
-
-        local repeat_request = math.max(20, config.sleep_time - 5)
+        local repeat_request = 5
         while (not P_Grid or not P_Load or not P_PV or not P_VenusE) and repeat_request > 0 do
             repeat_request = repeat_request - 1
             util.sleep_time(1) -- try again in 1 second
@@ -732,12 +752,16 @@ function PVBattery:main(profiling_runs)
             end
         end
 
+        -- Defautlt to 0 % or 0 W if no marstek is found.
+        self.VenusE_SOC = VenusE_SOC and math.floor(VenusE_SOC) or 0
+        P_VenusE = P_VenusE or 0
+
         -- Normally P_PV comes from panel and P_AC is less, so use the smaller one
         if P_PV and P_AC then
             P_PV = math.min(P_PV, P_AC)
         end
 
-        if not P_Grid or not P_Load or not P_PV or not P_VenusE then
+        if not P_Grid or not P_Load or not P_PV and not P_VenusE then
             short_sleep = 4
             skip_loop = true
             rescue_stop = rescue_stop - 1
@@ -754,6 +778,7 @@ function PVBattery:main(profiling_runs)
             util:log(string.format("Grid %8.2f W (%s)", P_Grid, P_Grid > 0 and "optaining" or "selling"))
             util:log(string.format("Load %8.2f W", P_Load))
             util:log(string.format("Roof %8.2f W", P_PV))
+            util:log(string.format("VenusE %8.2f W", P_VenusE))
 
             -- update state, as the battery may have changed or the user could have changed something manually
             oldstate = self:getState()
@@ -766,7 +791,7 @@ function PVBattery:main(profiling_runs)
                 -- save the new state to oldstate for reference
             end
             util:log("State: ", oldstate, "->", self:getState())
-            self:generateHTML(config, P_Grid, P_Load, P_PV, VERSION)
+            self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
 
             -- Here the dragons fly (aka the datastructure of the states knowk in)
             local stateHandler = self[self:getState()]
@@ -790,7 +815,7 @@ function PVBattery:main(profiling_runs)
                 f:close()
             end
             util:log("STATE: ", oldstate, "->", self:getState())
-            self:generateHTML(config, P_Grid, P_Load, P_PV, VERSION)
+            self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
         end
 
         -- Do the time controlled switching
@@ -887,6 +912,7 @@ if not Profiler then
     -- this is the outer loop, a safety-net if the inner loop is broken with `break`
     while true do
         util:cleanLogs()
+        MyBatteries.BMS[1].timeOfLastFullBalancing = util.getCurrentTime() - 26*3600 -- yesterday the same time
         MyBatteries:main()
     end
 else -- if Profiler
