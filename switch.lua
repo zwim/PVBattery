@@ -16,7 +16,6 @@ local Switch = {
     code = nil,
     timeOfLastRequiredData = 0, -- no data requiered yet
     max_power = 0,
-    power_state = 0,
 }
 
 function Switch:extend(subclass_prototype)
@@ -194,13 +193,13 @@ function Switch:getPowerState()
         self:getPower() -- update max_power
     end
 
-    self.power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
-    if self.power_state == 0 or self.power_state == "0" or self.power_state:find("^0.") then
+    local power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
+    if power_state == 0 or power_state == "0" or power_state:find("^0.") then
         return "off"
-    elseif self.power_state == 1 or self.power_state == "1" or self.power_state:find("^1.") then
+    elseif power_state == 1 or power_state == "1" or power_state:find("^1.") then
         return "on"
     else
-        return self.power_state
+        return power_state
     end
 end
 
