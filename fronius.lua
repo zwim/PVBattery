@@ -49,7 +49,7 @@ function Fronius:clearDataAge(source)
     if source then
         self.timeOfLastRequiredData[source] = 0
     else
-        self.timeOfLastRequireData = {}
+        self.timeOfLastRequiredData = {}
     end
 end
 

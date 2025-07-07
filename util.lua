@@ -243,4 +243,48 @@ function util.httpRequest(url)
     return body, code
 end
 
+function util.deleteRunningInstances(name)
+    if not name or name == "" then
+        name = "ThisProgramDoesNotRunForShure123"
+    end
+    local file = io.open("/proc/self/stat", "r")
+    if not file then
+        print("cannot detect my own PID")
+        return
+    end
+    local ownpid = file:read("*a"):gsub(" .*$", "")
+    file:close()
+    util:log("Own pid=" .. ownpid)
+
+    file = io.popen("ps -ax")
+    if not file then
+        util:log("Error calling 'ps -ax'")
+        print("Error calling 'ps -ax'")
+        return
+    end
+
+    local pid_to_kill = {}
+    for line in file:lines() do
+        if line:find("lua.* .*"..name..".*%.lua") then
+            print(line)
+            local pid = line:gsub("^ *", "")
+            pid = pid:gsub(" .*$", "")
+            if pid ~= ownpid then
+                table.insert(pid_to_kill, pid)
+            end
+        end
+    end
+    file:close()
+
+    local nb_deleted = #pid_to_kill
+
+    if nb_deleted > 0 then
+        local pids = table.concat(pid_to_kill, " ")
+        print(string.format("kill -term %s", pids))
+        os.execute(string.format("kill -term %s", pids))
+    end
+
+    return nb_deleted
+end
+
 return util
