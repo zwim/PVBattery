@@ -39,7 +39,7 @@ position = {
 }
 
 bat_SOC_min = 20 -- Percent
-bat_SOC_full = 80
+bat_SOC_full = 95
 bat_SOC_max = 101 -- Percent
 bat_SOC_min_rescue = 10 -- start rescue charge
 

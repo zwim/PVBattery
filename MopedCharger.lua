@@ -182,11 +182,11 @@ function MopedCharger:main(profiling_runs)
 
         if not skip_loop then
             self:isState(self.Charger:getPowerState(), true)
-            if not self:getState("on") and not self:GetState("off") then -- try once again
+            if not self:getState("on") and not self:getState("off") then -- try once again
                 self:isState(self.Charger:getPowerState(), true)
             end
 
-            skip_loop = not self:getState("on") and not self:GetState("off")
+            skip_loop = not self:getState("on") and not self:getState("off")
         end
 
         if not skip_loop then

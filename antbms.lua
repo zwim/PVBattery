@@ -261,7 +261,7 @@ function AntBMS:isChecksumOk()
         end
     end
 
-    util:log("BMS: checksum error", checksum, expected)
+    util:log(string.format("BMS: checksum error - expected: %d, got: %d", expected, checksum))
     return false
 end
 

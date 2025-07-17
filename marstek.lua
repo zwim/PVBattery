@@ -107,8 +107,6 @@ function Marstek:readHoldingRegisters(ip, port, slaveId, quantity, reg)
         return nil
     end
 
---    self.client:close()
-
     -- Antwort analysieren
     if #response < 9 then
         print("Marstek: Ungültige Antwortlänge")
