@@ -651,6 +651,29 @@ function PVBattery:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_strin
     self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
 end
 
+function PVBattery:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)
+    local oldstate, newstate
+    oldstate = self:getState()
+    newstate = self:updateState(date, P_Grid, P_VenusE)
+
+    local log_string
+    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, P_VenusE=%5.0fW",
+        date_string, P_Grid+0.5, P_Load+0.5, P_VenusE+0.5)
+    log_string = log_string .. string.format(" %8s -> %8s", oldstate, newstate)
+
+    if oldstate ~= newstate then
+        print(log_string)
+
+--        print(date_string, " State: ", oldstate .. " -> " .. newstate,
+--            "P_Grid", math.floor(P_Grid+0.5), "P_Load", math.floor(P_Load+0.5),
+--            "P_VenusE", math.floor(P_VenusE+0.5))
+        -- save the new state to oldstate for reference
+    end
+    util:log(log_string)
+--    util:log("State: ", oldstate, "->", newstate)
+    self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
+end
+
 function PVBattery:main(profiling_runs)
     local last_date, date
     -- optain a date in the past
