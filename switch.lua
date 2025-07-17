@@ -189,7 +189,7 @@ function Switch:getPowerState()
         self:getPower() -- update max_power
     end
 
-    local power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
+    local power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power or ""
     if power_state == 0 or power_state == "0" or power_state:find("^0.") then
         return "off"
     elseif power_state == 1 or power_state == "1" or power_state:find("^1.") then

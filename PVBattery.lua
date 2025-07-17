@@ -424,24 +424,6 @@ PVBattery[state.charge] = function(self, P_Grid, P_VenusE, date)
 end
 
 -- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.balance] = function(self, P_Grid, P_VenusE, date)
-    local needs_balancing, is_full
-    for _, BMS in pairs(self.BMS) do
-        if BMS:needsBalancing() then
-            BMS:enableDischarge()
-            BMS:setAutoBalance(true)
-            needs_balancing = true
-        end
-        if BMS:isBatteryFull() then
-            is_full = true
-        end
-    end
-    if not needs_balancing and not is_full then
-        self:setChargeOrDischarge(P_Grid, P_VenusE)
-    end
-end
-
--- luacheck: ignore self P_Grid P_VenusE date
 PVBattery[state.discharge] = function(self, P_Grid, P_VenusE, date)
     local expected_state = self:setChargeOrDischarge(P_Grid, P_VenusE)
     if expected_state == state.discharge then
@@ -658,19 +640,14 @@ function PVBattery:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_strin
 
     local log_string
     log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, P_VenusE=%5.0fW",
-        date_string, P_Grid+0.5, P_Load+0.5, P_VenusE+0.5)
+        date_string, P_Grid, P_Load, P_VenusE)
     log_string = log_string .. string.format(" %8s -> %8s", oldstate, newstate)
 
     if oldstate ~= newstate then
         print(log_string)
 
---        print(date_string, " State: ", oldstate .. " -> " .. newstate,
---            "P_Grid", math.floor(P_Grid+0.5), "P_Load", math.floor(P_Load+0.5),
---            "P_VenusE", math.floor(P_VenusE+0.5))
-        -- save the new state to oldstate for reference
     end
     util:log(log_string)
---    util:log("State: ", oldstate, "->", newstate)
     self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
 end
 
