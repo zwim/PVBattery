@@ -135,72 +135,67 @@ function PVBattery:setState(new_state)
         self._state = new_state
     else
         print("Error wrong state selected", new_state)
-        self:setState(state.fail)
+        self._state = tate.fail
     end
+    return self._state
 end
 
 -- luacheck: ignore P_Grid P_VenusE date
 function PVBattery:updateState(date, P_Grid, P_VenusE)
     -- This means that our battery is ahead of all others, but only twice a day
 
-    for _, Charger in pairs(self.Charger) do
+    for _, Charger in ipairs(self.Charger) do
         if Charger:getPowerState() == "on" then
             if Charger.BMS:isLowChargedOrNeedsRescue() and Charger.BMS:needsRescueCharge() then
-                self:setState(state.rescue_charge)
+                return self:setState(state.rescue_charge)
             else
-                self:setState(state.charge)
+                return self:setState(state.charge)
             end
-            return self:getState()
         end
     end
 
-    for _, Inverter in pairs(self.Inverter) do
+    for _, Inverter in ipairs(self.Inverter) do
         local powerState = Inverter:getPowerState()
         local dischargeState = Inverter.BMS:getDischargeState()
-        if powerState == "on" and dischargeState == "off"
-            and not Inverter.time_controlled then
-            self:setState(state.force_discharge)
-            return self:getState()
-        end
-        if powerState ~= "off" and dischargeState ~= "off"
-            and not Inverter.time_controlled then
-            self:setState(state.discharge)
-            return self:getState()
+        if not Inverter.time_controlled then
+            if powerState == "on" and dischargeState == "off" then
+                return self:setState(state.force_discharge)
+            end
+            if powerState ~= "off" and dischargeState ~= "off" then
+                return self:setState(state.discharge)
+            end
         end
     end
 
-    for _, BMS in pairs(self.BMS) do
+    -- Helper to ensure BMS data is available
+    local function ensureBMSData(BMS)
         for _ = 1, 5 do
-            if BMS:getData() then
-                break
-            end
+            if BMS:getData() then return true end
             util.sleep_time(2)
         end
-        if BMS:getData() then
+        return BMS:getData()
+    end
+
+    for _, BMS in ipairs(self.BMS) do
+        if ensureBMSData(BMS) then
             if BMS:isBatteryFull() then
                 if self:getState() ~= state.idle_full then
-                    self:setState(state.idle_full)
+                    return self:setState(state.idle_full)
                 end
                 return self:getState()
             elseif BMS:needsBalancing() then
-                self:setState(state.balance)
-                return self:getState()
+                return self:setState(state.balance)
             elseif BMS:isLowChargedOrNeedsRescue() and BMS:needsRescueCharge() then
-                self:setState(state.rescue_charge)
-                return self:getState()
+                return self:setState(state.rescue_charge)
             elseif BMS.v.LowestVoltage < config.bat_lowest_voltage then
-                self:setState(state.low_cell)
-                return self:getState()
+                return self:setState(state.low_cell)
             elseif BMS.v.SOC <= config.bat_SOC_min then
-                self:setState(state.low_battery)
-                return self:getState()
+                return self:setState(state.low_battery)
             elseif BMS.v.CellDiff > config.max_cell_diff then
-                self:setState(state.cell_diff)
-                return self:getState()
+                return self:setState(state.cell_diff)
             elseif self:getState() == state.cell_diff
                 and BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
-                self:setState(state.cell_diff)
-                return self:getState()
+                return self:setState(state.cell_diff)
             end
         else
             self:setState(state.shutdown)
@@ -209,8 +204,7 @@ function PVBattery:updateState(date, P_Grid, P_VenusE)
         end
     end
 
-    self:setState(state.idle)
-    return self:getState()
+    return self:setState(state.idle)
 end
 
 -- find an activated charger which is charging with more than req_power
@@ -248,10 +242,11 @@ function PVBattery:turnOffBestCharger(P_Grid, P_VenusE)
     if charger_num > 0 then
         util:log(string.format("Deactivate Charger: %s with %s W",
                 charger_num, charger_power))
-        self.Charger[charger_num]:stopCharge(P_Grid)
+        self.Charger[charger_num]:stopCharge()
         self.Charger[charger_num]:clearDataAge()
         return true
     end
+    return false
 end
 
 function PVBattery:findBestChargerToTurnOn(req_power, P_VenusE)
@@ -324,6 +319,7 @@ function PVBattery:turnOffBestInverter(req_power, P_VenusE)
         self.Inverter[inverter_num]:clearDataAge()
         return true
     end
+    return false
 end
 
 function PVBattery:findBestInverterToTurnOn(req_power, P_VenusE)
@@ -369,6 +365,7 @@ function PVBattery:turnOnBestInverter(P_Grid, P_VenusE)
         self.Inverter[inverter_num]:clearDataAge()
         return true
     end
+    return false
 end
 
 -- luacheck: ignore self
@@ -662,7 +659,7 @@ function PVBattery:showCacheDataAge(verbose)
     local log = verbose and print or function() end
     local total, max_age = 0, 0
     local function report(name, age)
-        log(string.format("%s: %.2f s", name, age))
+        log(string.format("%s: %5f s", name, age))
         total = total + age; max_age = math.max(max_age, age)
     end
     for _, B in pairs(self.BMS)     do report("BMS "     ..B.host, B:getDataAge()) end
@@ -671,6 +668,29 @@ function PVBattery:showCacheDataAge(verbose)
     report("Fronius "..Fronius.host, Fronius:getDataAge())
 --    report("P1meter "..P1meter.host, P1meter:getDataAge())
     util:log(string.format("Savings: %.2f s, sequential %.2f s, parallel %.2f s)", total - max_age, total, max_age))
+end
+
+function PVBattery:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)
+    local oldstate, newstate
+    oldstate = self:getState()
+    newstate = self:updateState(date, P_Grid, P_VenusE)
+
+    local log_string
+    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, P_VenusE=%5.0fW",
+        date_string, P_Grid+0.5, P_Load+0.5, P_VenusE+0.5)
+    log_string = log_string .. string.format(" %8s -> %8s", oldstate, newstate)
+
+    if oldstate ~= newstate then
+        print(log_string)
+
+--        print(date_string, " State: ", oldstate .. " -> " .. newstate,
+--            "P_Grid", math.floor(P_Grid+0.5), "P_Load", math.floor(P_Load+0.5),
+--            "P_VenusE", math.floor(P_VenusE+0.5))
+        -- save the new state to oldstate for reference
+    end
+    util:log(log_string)
+--    util:log("State: ", oldstate, "->", newstate)
+    self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
 end
 
 function PVBattery:main(profiling_runs)
@@ -772,26 +792,15 @@ function PVBattery:main(profiling_runs)
             rescue_stop = math.floor(60/4) + 1
         end
 
-        local oldstate
 
         if not skip_loop then
-            util:log(string.format("Grid %8.2f W (%s)", P_Grid, P_Grid > 0 and "optaining" or "selling"))
-            util:log(string.format("Load %8.2f W", P_Load))
-            util:log(string.format("Roof %8.2f W", P_PV))
-            util:log(string.format("VenusE %8.2f W", P_VenusE))
+            util:log(string.format("Grid %8f W (%s)", P_Grid, P_Grid > 0 and "optaining" or "selling"))
+            util:log(string.format("Load %8f W", P_Load))
+            util:log(string.format("Roof %8f W", P_PV))
+            util:log(string.format("VenusE %8f W", P_VenusE))
 
             -- update state, as the battery may have changed or the user could have changed something manually
-            oldstate = self:getState()
-            if oldstate ~= self:updateState(date, P_Grid, P_VenusE) then
-                local f = io.popen("date", "r")
-                print(f:read(), "State: ", oldstate, "->", self:getState(),
-                    "P_Grid", math.floor(P_Grid+0.5), "P_Load", math.floor(P_Load+0.5),
-                    "P_VenusE", math.floor(P_VenusE+0.5))
-                f:close()
-                -- save the new state to oldstate for reference
-            end
-            util:log("State: ", oldstate, "->", self:getState())
-            self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
+            self:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)
 
             -- Here the dragons fly (aka the datastructure of the states knowk in)
             local stateHandler = self[self:getState()]
@@ -803,19 +812,11 @@ function PVBattery:main(profiling_runs)
                 print(error_msg)
             end
 
-            oldstate = self:getState()
             self:clearCache()
             self:fillCache()
             self:showCacheDataAge()
-            if oldstate ~= self:updateState(date, P_Grid, P_VenusE) then
-                local f = io.popen("date", "r")
-                print(f:read(), "State: ", oldstate, "->", self:getState(),
-                    "P_Grid", math.floor(P_Grid+0.5), "P_Load", math.floor(P_Load+0.5),
-                    "P_VenusE", math.floor(P_VenusE+0.5))
-                f:close()
-            end
-            util:log("STATE: ", oldstate, "->", self:getState())
-            self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
+
+            self:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)
         end
 
         -- Do the time controlled switching
