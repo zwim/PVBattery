@@ -108,7 +108,7 @@ function Switch:_getStatus_coroutine()
             body = body .. s
         end
         if partial and partial ~= "" then
-           body = body .. partial
+            body = body .. partial
         end
 
         if #body >= READ_DATA_SIZE or status == "closed" then
@@ -189,7 +189,7 @@ function Switch:getPowerState()
         self:getPower() -- update max_power
     end
 
-    local power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power
+    local power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power or ""
     if power_state == 0 or power_state == "0" or power_state:find("^0.") then
         return "off"
     elseif power_state == 1 or power_state == "1" or power_state:find("^1.") then
