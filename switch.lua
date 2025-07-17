@@ -10,10 +10,6 @@ http.TIMEOUT=5
 local Switch = {
     socket = nil, -- tcp.socket, will be filled automatically
     host = nil,
-    body = nil,
-    status = nil,
-    headers = nil,
-    code = nil,
     timeOfLastRequiredData = 0, -- no data requiered yet
     max_power = 0,
 }
