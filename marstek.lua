@@ -180,6 +180,15 @@ function Marstek:readACPower()
     "Battery Power", registers.readACPower.unit
 end
 
+function Marstek:isDischargingMoreThan(power, limit)
+    limit = limit or 0
+    return power > limit
+end
+
+function Marstek:isChargingMoreThan(power, limit)
+    limit = limit or 0
+    return -power > limit
+end
 
 
 return Marstek

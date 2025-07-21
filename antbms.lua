@@ -583,25 +583,28 @@ function AntBMS:evaluateData()
 
 
     if util.getCurrentTime() >= self.timeOfLastFullBalancing + config.lastFullPeriod then
-        config.bat_SOC_max = 101
-    end
-
-    if self.v.SOC >= 100 and self.v.CalculatedSOC >= 100 and self.v.CellDiff <= self.minCellDiff
-        and self.v.CurrentPower > 0 and self.v.CurrentPower <= self.minPower then
-
-        self.timeOfLastFullBalancing = util.getCurrentTime()
-        config.bat_SOC_max = config.bat_SOC_full
+        config.bat_SOC_full = 100
     end
 
     -- Now we store the new aquisition time.
     self:setDataAge()
+
+    if self:isBatteryFull() then
+        self.timeOfLastFullBalancing = util.getCurrentTime()
+        config.bat_SOC_max = config.bat_SOC_full
+    end
 end
 
 function AntBMS:isBatteryFull()
     if self:getData() then
-        local is_full = self.v.SOC >= 100 and self.v.CalculatedSOC >= 95.5
-            and self.v.CellDiff <= self.minCellDiff
-            and self.v.CurrentPower > config.charge_finished_current and self.v.CurrentPower <= self.minPower
+        local is_full
+        if config.bat_SOC_max == 100 then
+            is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
+                and self.v.CellDiff <= self.minCellDiff
+                and self.v.CurrentPower > config.charge_finished_current and self.v.CurrentPower <= self.minPower
+        else
+            is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
+        end
 
         if is_full then
             self.minCellDiff = config.minCellDiffBase + config.CellDiffHysteresis
@@ -816,6 +819,7 @@ function AntBMS:needsBalancing(balance_threshold)
             end
         end
     end
+    return false
 end
 
 function AntBMS:_printValuesNotProtected()

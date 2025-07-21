@@ -35,7 +35,7 @@ local configuration = {
 
     bat_SOC_min = 15, -- Percent
     bat_SOC_full = 90, -- Percent
-    bat_SOC_max = 101, -- Percent
+    bat_SOC_max = 100, -- Percent
     bat_SOC_min_rescue = 10, -- start rescue charge
     bat_lowest_voltage = 2.90, -- lowest allowed voltage per cell
     bat_lowest_rescue = 2.801, -- start rescue charge
