@@ -40,7 +40,7 @@ position = {
 
 bat_SOC_min = 20 -- Percent
 bat_SOC_full = 95
-bat_SOC_max = 101 -- Percent
+bat_SOC_max = 100 -- Percent
 bat_SOC_min_rescue = 10 -- start rescue charge
 
 bat_SOC_hysteresis = 3
@@ -53,8 +53,8 @@ bat_high_voltage_hysteresis = 0.050 -- hysteresis on the high side
 max_cell_diff = 0.148 -- maximum allowed cell diff
 max_cell_diff_hysteresis = 0.020
 
-minCellDiff = 0.003
-minCellDiffBase = 0.003
+minCellDiff = 0.003 -- 0.003
+minCellDiffBase = 0.003 -- 0.003
 CellDiffHysteresis = 0.003
 minPower = 30
 charge_finished_current = -0.3
