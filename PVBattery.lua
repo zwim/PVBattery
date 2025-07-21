@@ -424,6 +424,24 @@ PVBattery[state.charge] = function(self, P_Grid, P_VenusE, date)
 end
 
 -- luacheck: ignore self P_Grid P_VenusE date
+PVBattery[state.balance] = function(self, P_Grid, P_VenusE, date)
+    local needs_balancing, is_full
+    for _, BMS in pairs(self.BMS) do
+        if BMS:needsBalancing() then
+            BMS:enableDischarge()
+            BMS:setAutoBalance(true)
+            needs_balancing = true
+        end
+        if BMS:isBatteryFull() then
+            is_full = true
+        end
+    end
+    if not needs_balancing and not is_full then
+        self:setChargeOrDischarge(P_Grid, P_VenusE)
+    end
+end
+
+-- luacheck: ignore self P_Grid P_VenusE date
 PVBattery[state.discharge] = function(self, P_Grid, P_VenusE, date)
     local expected_state = self:setChargeOrDischarge(P_Grid, P_VenusE)
     if expected_state == state.discharge then
@@ -613,24 +631,6 @@ function PVBattery:showCacheDataAge(verbose)
     report("Fronius "..Fronius.host, Fronius:getDataAge())
 --    report("P1meter "..P1meter.host, P1meter:getDataAge())
     util:log(string.format("Savings: %5f s, sequential %5f s, parallel %5f s)", total - max_age, total, max_age))
-end
-
-function PVBattery:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)
-    local oldstate, newstate
-    oldstate = self:getState()
-    newstate = self:updateState(date, P_Grid, P_VenusE)
-
-    local log_string
-    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, P_VenusE=%5.0fW",
-        date_string, P_Grid, P_Load, P_VenusE)
-    log_string = log_string .. string.format(" %8s -> %8s", oldstate, newstate)
-
-    if oldstate ~= newstate then
-        print(log_string)
-
-    end
-    util:log(log_string)
-    self:generateHTML(config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
 end
 
 function PVBattery:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)
