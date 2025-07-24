@@ -94,22 +94,6 @@ Device = {
         inverter_control = nil,
         inverter_time_controlled = "sunrise",
     },
---[[
-    { -- Device[3]
-        name = "Moped",
-        BMS = "", -- fehlt noch
-        charger_switches = {
-            "192.168.1.100",
-        },
-        charger_max_power = {
-            500,
-        },
-        inverter_switch = "192.168.1.50",
-        inverter_control = "fehltnoch",
-        inverter_min_power = 10,
-        inverter_time_controlled = nil,
-    },
-    ]]
 }
 
 -- compressor = "bzip2 -6"
