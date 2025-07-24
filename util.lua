@@ -3,11 +3,9 @@ local json = require("dkjson")
 local lfs = require("lfs")
 local posix = require("posix")
 
-
 if not table.unpack then
     table.unpack = unpack
 end
-
 
 local json_decode_tmp = json.decode
 
@@ -24,8 +22,6 @@ function json.decode(str)
         return 0
     end
 end
-
-
 
 local util = {
     log = nil,
@@ -82,7 +78,7 @@ function util.HexToNum(str)
   return 0
 end
 
-function util.StringToHex(str)
+function util.stringToHex(str)
   if str ~= nil then
     return (str:gsub('.', function (c)
         if c == 0 then return "00" end
@@ -118,10 +114,11 @@ end
 
 -- sleeps 'time' seconds
 function util.sleep_time(time)
-    if time <= 0 then return end
-    local sec = math.floor(time)
-    local nsec = (time - sec) * 1e9
-    posix.time.nanosleep({tv_sec = sec, tv_nsec = nsec})
+    if time > 0 then
+        local sec = math.floor(time)
+        local nsec = (time - sec) * 1e9
+        posix.time.nanosleep({tv_sec = sec, tv_nsec = nsec})
+    end
 end
 
 -- returns time in seconds

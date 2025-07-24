@@ -7,15 +7,7 @@ local config = require("configuration")
 local socket = require("socket")
 local util = require("util")
 
-
-local http = {}
-if config.use_wget then
-    function http.request(url)
-        return util.httpRequest(url)
-    end
-else
-    http = require("socket.http")
-end
+local http = require("socket.http")
 
 local ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME = table.unpack((require("antbms-reset")))
 
@@ -160,40 +152,40 @@ function AntBMS:_sendCommand(cmd)
 end
 
 function AntBMS:reboot()
-    return self:_sendCommand("reboot")
+    self:_sendCommand("reboot")
 end
 
 function AntBMS:toggleAutoBalance()
-    return self:_sendCommand("balance.toggle")
+    self:_sendCommand("balance.toggle")
 end
 
 function AntBMS:turnAutoBalanceOn()
-    return self:_sendCommand("balance.on")
+    self:_sendCommand("balance.on")
 end
 
 function AntBMS:turnAutoBalanceOff()
-    return self:_sendCommand("balance.off")
+    self:_sendCommand("balance.off")
 end
 
 function AntBMS:readAutoBalance()
-    return self:_sendCommand("balance.get")
+    self:_sendCommand("balance.get")
 end
 
 function AntBMS:enableBluetooth()
-    return self:_sendCommand("set?bluetooth=1")
+    self:_sendCommand("set?bluetooth=1")
 end
 
 -- todo check result
 function AntBMS:enableDischarge()
     if self:getDischargeState() ~= "on" then
-        return self:_sendCommand("set?bms_discharge=1")
+        self:_sendCommand("set?bms_discharge=1")
     end
 end
 
 -- todo check result
 function AntBMS:disableDischarge()
     if self:getDischargeState() ~= "off" then
-        return self:_sendCommand("set?bms_discharge=0")
+        self:_sendCommand("set?bms_discharge=0")
     end
 end
 
@@ -683,7 +675,6 @@ end
 
 function AntBMS:setDataAge()
     self.timeOfLastRequiredData = util.getCurrentTime()
-    return true
 end
 
 function AntBMS:clearDataAge()
