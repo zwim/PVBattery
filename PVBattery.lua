@@ -208,11 +208,13 @@ function PVBattery:updateState(date, P_Grid, P_VenusE)
     return self:setState(state.idle)
 end
 
+-- luacheck: ignore self
 function PVBattery:isSellingMoreThan(P_Grid, limit)
     limit = limit or 0
     return -P_Grid > limit
 end
 
+-- luacheck: ignore self
 function PVBattery:isBuyingMoreThan(P_Grid, limit)
     limit = limit or 0
     return P_Grid > limit
@@ -354,8 +356,8 @@ function PVBattery:turnOffBestInverterAndThenTurnOnBestCharger(P_Grid, P_VenusE)
     return false
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.cell_diff] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.cell_diff] = function(self, P_Grid, P_VenusE)
     self:turnOffBestInverterAndThenTurnOnBestCharger(P_Grid, P_VenusE)
 
     for _, BMS in pairs(self.BMS) do
@@ -367,8 +369,8 @@ PVBattery[state.cell_diff] = function(self, P_Grid, P_VenusE, date)
     end
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.low_cell] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.low_cell] = function(self, P_Grid, P_VenusE)
     self:turnOffBestInverterAndThenTurnOnBestCharger(P_Grid, P_VenusE)
 
     for _, Inverter in pairs(self.Inverter) do
@@ -391,20 +393,20 @@ function PVBattery:setChargeOrDischarge(P_Grid, P_VenusE)
     return state.idle
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.idle] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.idle] = function(self, P_Grid, P_VenusE)
     local expected_state = self:setChargeOrDischarge(P_Grid, P_VenusE)
---    if expected_state ~= state.idle then
+    if expected_state ~= state.charge and expected_state ~= state.discharge then
         for _, BMS in pairs(self.BMS) do
             BMS:disableDischarge()
         end
---    end
+    end
 end
 
 PVBattery[state.idle_full] = PVBattery[state.idle]
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.charge] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.charge] = function(self, P_Grid, P_VenusE)
     local expected_state = self:setChargeOrDischarge(P_Grid, P_VenusE)
     if expected_state == state.charge then
         for _, BMS in pairs(self.BMS) do
@@ -423,8 +425,8 @@ PVBattery[state.charge] = function(self, P_Grid, P_VenusE, date)
     end
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.balance] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.balance] = function(self, P_Grid, P_VenusE)
     local needs_balancing, is_full
     for _, BMS in pairs(self.BMS) do
         if BMS:needsBalancing() then
@@ -441,8 +443,8 @@ PVBattery[state.balance] = function(self, P_Grid, P_VenusE, date)
     end
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.discharge] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.discharge] = function(self, P_Grid, P_VenusE)
     local expected_state = self:setChargeOrDischarge(P_Grid, P_VenusE)
     if expected_state == state.discharge then
         for _, BMS in pairs(self.BMS) do
@@ -457,8 +459,8 @@ PVBattery[state.discharge] = function(self, P_Grid, P_VenusE, date)
     end
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.full] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.full] = function(self, P_Grid, P_VenusE)
     for _, Charger in pairs(self.Charger) do
         Charger:stopCharge()
     end
@@ -471,8 +473,8 @@ PVBattery[state.full] = function(self, P_Grid, P_VenusE, date)
     self:setState(state.idle_full)
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.rescue_charge] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.rescue_charge] = function(self, P_Grid, P_VenusE)
     for _, Charger in pairs(self.Charger) do
         if Charger.BMS:needsRescueCharge() then
             Charger:startCharge()
@@ -480,8 +482,8 @@ PVBattery[state.rescue_charge] = function(self, P_Grid, P_VenusE, date)
     end
 end
 
--- luacheck: ignore self P_Grid P_VenusE date
-PVBattery[state.shutdown] = function(self, P_Grid, P_VenusE, date)
+-- luacheck: ignore self P_Grid P_VenusE
+PVBattery[state.shutdown] = function(self, P_Grid, P_VenusE)
     print("state -> shutdown")
     for _, Charger in pairs(self.Charger) do
         if Charger:getPowerState() == "on" then

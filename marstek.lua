@@ -180,11 +180,13 @@ function Marstek:readACPower()
     "Battery Power", registers.readACPower.unit
 end
 
+-- luacheck: ignore self
 function Marstek:isDischargingMoreThan(power, limit)
     limit = limit or 0
     return power > limit
 end
 
+-- luacheck: ignore self
 function Marstek:isChargingMoreThan(power, limit)
     limit = limit or 0
     return -power > limit
