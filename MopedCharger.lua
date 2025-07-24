@@ -263,14 +263,7 @@ local MyCharger = MopedCharger
 
 MyCharger:init()
 
-if not Profiler then
-    -- this is the outer loop, a safety-net if the inner loop is broken with `break`
-    while true do
-        util:cleanLogs()
-        MyCharger:main()
-    end
-else -- if Profiler
-    MyCharger:main(1)
-    Profiler.stop()
-    Profiler.report("test-profiler.log")
+while true do
+    util:cleanLogs()
+    MyCharger:main()
 end

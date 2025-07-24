@@ -70,7 +70,7 @@ function P1meter:_get_data_coroutine(cmd)
             return false
         end
     end
-    local x = client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    local _ = client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
     local content = {}
     while true do
         client:settimeout(0)   -- do not block

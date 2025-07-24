@@ -2,7 +2,6 @@
 local config = require("configuration")
 local json = require("dkjson")
 local util = require("util")
-local socket = require("socket")
 local http = require("socket.http")
 
 local host = "192.168.0.49"
@@ -87,7 +86,7 @@ end
 
 function Fronius:_get_RealtimeData_coroutine(cmd)
     local path = self.urlPath .. cmd
-    local socket, err = socket.connect(self.host, self.port or 80)
+    local socket, err = require("socket").connect(self.host, self.port or 80)
     if not socket then
         util:log("Error opening connection to", self.host, ":", err)
         return false
