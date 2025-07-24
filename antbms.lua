@@ -315,14 +315,6 @@ function AntBMS:getData(force)
                     body = body .. partial
                 end
 
---[[                    if #body >= 4 then
-                    while not (body:byte(1) == 0xaa and body:byte(2) == 0x55
-                               and body:byte(3) == 0xaa and body:byte(4) == 0xff)
-                          and #body >= 4 do
-                        body = body:sub(2)
-                    end
-                end
-]]
                 local header_end = body:find("\r\n\r\n", 1, true)
                 if header_end then
                     body = body:sub(header_end + 4)
@@ -444,15 +436,6 @@ function AntBMS:getData_coroutine(force)
             body = body .. partial
         end
 
---[[
-        if #body >= 4 then
-            while not (body:byte(1) == 0xaa and body:byte(2) == 0x55
-                       and body:byte(3) == 0xaa and body:byte(4) == 0xff)
-                  and #body >= 4 do
-                body = body:sub(2)
-            end
-        end
-]]
         local header_end = body:find("\r\n\r\n", 1, true)
         if header_end then
             body = body:sub(header_end + 4)
