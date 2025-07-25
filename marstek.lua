@@ -7,6 +7,7 @@ local Marstek = {
     ip = nil, -- IP-Adresse des ELFIN WL11A
     port = nil, -- Modbus TCP Port
     slaveId = nil, -- Slave ID
+    ACPower = 0,
 }
 
 function Marstek:new(o)

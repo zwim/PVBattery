@@ -114,11 +114,13 @@ end
 
 -- sleeps 'time' seconds
 function util.sleep_time(time)
-    if time > 0 then
-        local sec = math.floor(time)
-        local nsec = (time - sec) * 1e9
-        posix.time.nanosleep({tv_sec = sec, tv_nsec = nsec})
+    if time <= 0 then
+        return
     end
+
+    local sec = math.floor(time)
+    local nsec = (time - sec) * 1e9
+    posix.time.nanosleep({tv_sec = sec, tv_nsec = nsec})
 end
 
 -- returns time in seconds

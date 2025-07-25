@@ -226,7 +226,7 @@ function PVBattery:turnOffBestCharger(P_Grid, P_VenusE)
 
     -- If we sell more than 20W and VenusE is charging then
     if self:isSellingMoreThan(10) and self.VenusE:isChargingMoreThan(0) then
-        print("Error: req_power " .. P_Grid .. " < 10 and VenusE is Charging")
+        print("Error: req_power " .. P_Grid .. " < 10W and VenusE is Charging")
     end
 
     for i, Charger in pairs(self.Charger) do
@@ -461,9 +461,6 @@ PVBattery[state.discharge] = function(self, P_Grid, P_VenusE)
                 end
             end
         end
-    else
-        print("debugging")
-        self:setChargeOrDischarge(P_Grid, P_VenusE)
     end
 end
 
