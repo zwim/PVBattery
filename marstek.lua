@@ -176,22 +176,25 @@ function Marstek:readACCurrent()
 end
 -- negative meanse that the battery is discharching
 function Marstek:readACPower()
-    return self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACPower),
-    "Battery Power", registers.readACPower.unit
+    self.ACPower = self:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACPower)
+    return self.ACPower, "Battery Power", registers.readACPower.unit
 end
 
 -- luacheck: ignore self
-function Marstek:isDischargingMoreThan(power, limit)
+function Marstek:isDischargingMoreThan(limit)
     limit = limit or 0
-    return power > limit
+    return self.ACPower > limit
 end
 
 -- luacheck: ignore self
-function Marstek:isChargingMoreThan(power, limit)
+function Marstek:isChargingMoreThan(limit)
     limit = limit or 0
-    return -power > limit
+    return -self.ACPower > limit
 end
 
+function Marstek:isIdle()
+    return self.ACPower == 0
+end
 
 return Marstek
 

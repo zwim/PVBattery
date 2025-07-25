@@ -209,22 +209,25 @@ function PVBattery:updateState(date, P_Grid, P_VenusE)
 end
 
 -- luacheck: ignore self
-function PVBattery:isSellingMoreThan(P_Grid, limit)
+function PVBattery:isSellingMoreThan(limit)
     limit = limit or 0
-    return -P_Grid > limit
+    return -self.P_Grid > limit
 end
 
 -- luacheck: ignore self
-function PVBattery:isBuyingMoreThan(P_Grid, limit)
+function PVBattery:isBuyingMoreThan(limit)
     limit = limit or 0
-    return P_Grid > limit
+    return self.P_Grid > limit
 end
 
 function PVBattery:turnOffBestCharger(P_Grid, P_VenusE)
-    local charger_num = 0 -- xxx P_VenusE fehlt noch TODO
+    local charger_num = 0
     local charger_power = 0
 
-    if P_Grid <= 0 then print("Error: req_power " .. P_Grid .. "<0") end
+    -- If we sell more than 20W and VenusE is charging then
+    if self:isSellingMoreThan(10) and self.VenusE:isChargingMoreThan(0) then
+        print("Error: req_power " .. P_Grid .. " < 10 and VenusE is Charging")
+    end
 
     for i, Charger in pairs(self.Charger) do
         if Charger:getPowerState() == "on" and
@@ -260,7 +263,7 @@ function PVBattery:turnOffBestInverter(P_Grid, P_VenusE)
             if Inverter.BMS:getDischargeState() ~= "off" and Inverter:getPowerState() ~= "off" then
                 -- Inverter delivers min_power (positive), VenusE delivers power (positive)
                 local max_power = Inverter:getMaxPower()
-                if P_VenusE < max_power or (P_VenusE >= 0 and self:isBuyingMoreThan(P_Grid, 50)) then
+                if P_VenusE < max_power or (P_VenusE >= 0 and self:isBuyingMoreThan(50)) then
                     util:log("debug xxx "..i, "P_VenusE ".. P_VenusE, "P_Grid "..P_Grid, "max_power "..max_power)
                     inverter_num = i
                     inverter_power = Inverter:getPower()
@@ -302,7 +305,7 @@ function PVBattery:turnOffBestChargerAndThenTurnOnBestInverter(P_Grid, P_VenusE)
                 local min_power = math.max(Inverter.min_power, Inverter:getMaxPower())
                 -- Inverter delivers min_power (positive), VenusE delivers power (negative)
                 -- If req_power is positive, we buy energy
-                if self.VenusE:isDischargingMoreThan(P_VenusE, min_power)
+                if self.VenusE:isDischargingMoreThan(min_power)
                     or (min_power < P_Grid and min_power > inverter_power) then
                     if Inverter.BMS:getDischargeState() ~= "on" or Inverter:getPowerState() ~= "on" then
                         inverter_num = i
@@ -383,10 +386,12 @@ end
 PVBattery[state.low_battery] = PVBattery[state.low_cell]
 
 function PVBattery:setChargeOrDischarge(P_Grid, P_VenusE)
-    if self:isSellingMoreThan(P_Grid, 20) or self.VenusE:isChargingMoreThan(P_VenusE, 100) then
+    if (self:isSellingMoreThan(20) and self.VenusE:isIdle())
+            or self.VenusE:isChargingMoreThan(100) then
         self:turnOffBestInverterAndThenTurnOnBestCharger(P_Grid, P_VenusE)
         return state.charge
-    elseif self:isBuyingMoreThan(P_Grid, 20) or self.VenusE:isDischargingMoreThan(P_VenusE, 100) then
+    elseif (self:isBuyingMoreThan(0) and self.VenusE:isIdle())
+            or self.VenusE:isDischargingMoreThan(100) then
         self:turnOffBestChargerAndThenTurnOnBestInverter(P_Grid, P_VenusE)
         return state.discharge
     end
@@ -456,6 +461,9 @@ PVBattery[state.discharge] = function(self, P_Grid, P_VenusE)
                 end
             end
         end
+    else
+        print("debugging")
+        self:setChargeOrDischarge(P_Grid, P_VenusE)
     end
 end
 
@@ -641,8 +649,8 @@ function PVBattery:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_strin
     newstate = self:updateState(date, P_Grid, P_VenusE)
 
     local log_string
-    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, P_VenusE=%5.0fW",
-        date_string, P_Grid, P_Load, P_VenusE)
+    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, Battery=%5.0fW, P_VenusE=%5.0fW",
+        date_string, P_Grid, P_Load, self.BMS[1].v.CurrentPower or 0, P_VenusE)
     log_string = log_string .. string.format(" %8s -> %8s", oldstate, newstate)
 
     if oldstate ~= newstate then
@@ -758,6 +766,8 @@ function PVBattery:main(profiling_runs)
             util:log(string.format("Load %8f W", P_Load))
             util:log(string.format("Roof %8f W", P_PV))
             util:log(string.format("VenusE %8f W", P_VenusE))
+
+            self.P_Grid = P_Grid
 
             -- update state, as the battery may have changed or the user could have changed something manually
             self:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)

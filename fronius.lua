@@ -122,7 +122,9 @@ function Fronius:_get_RealtimeData_coroutine(cmd)
 end
 
 function Fronius:getPowerFlowRealtimeData_coroutine()
-    if self:getDataAge(GetPowerFlowRealtimeData_cmd) < config.update_interval then return true end
+    if self:getDataAge(GetPowerFlowRealtimeData_cmd) < config.update_interval then
+        return true
+    end
     self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData_coroutine(GetPowerFlowRealtimeData_cmd)
     self:setDataAge(GetPowerFlowRealtimeData_cmd)
     return true

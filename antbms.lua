@@ -97,7 +97,6 @@ local AntBMS = {
         "14",
         "15",
     },
---    BalancedStatusText[0] = "Off",
 
     answer = {},
     rescue_charge = false, -- flag if battery is to low
@@ -151,8 +150,8 @@ function AntBMS:_sendCommand(cmd)
     end
 end
 
-function AntBMS:reboot()
-    self:_sendCommand("reboot")
+function AntBMS:restart()
+    self:_sendCommand("restart")
 end
 
 function AntBMS:toggleAutoBalance()
@@ -283,7 +282,7 @@ function AntBMS:getData(force)
 
     self.answer = {}
     while #self.answer < BMS_DATA_SIZE and retries > 0 do
-        for try = 1, 4 do -- try to read a few times
+        for try = 1, 8 do -- try to read a few times
             if not self.socket then
                 self.socket = socket.tcp()
                 self.socket:settimeout(5)
@@ -334,6 +333,7 @@ function AntBMS:getData(force)
                 if #body >= BMS_DATA_SIZE then
                     break
                 end
+
             end
 
             if #body >= BMS_DATA_SIZE then
@@ -341,8 +341,15 @@ function AntBMS:getData(force)
             end
 
             os.execute("date")
-            os.execute("echo 'Could not read bms.data --- try again (" .. try .. "/4) in 5 seconds.'")
+            print("Could not read bms.data --- try again (" .. try .. "/4) in 5 seconds.")
+            if try == 4 then
+                print("Try to restart AntBMS")
+                self:restart();
+                util.sleep_time(5) -- wait
+            end
+
             util.sleep_time(5) -- wait
+
         end --for
 
         if self.socket then
@@ -356,8 +363,8 @@ function AntBMS:getData(force)
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute("date")
-            os.execute("echo 'Could not read bsm.data --- reboot ESP32 --- echo sleeping "..
-                ESP32_RESET_SLEEP_TIME .. "'")
+            print("Could not read bsm.data --- reboot ESP32 --- sleeping "..
+                ESP32_RESET_SLEEP_TIME)
             util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)
             return false
         end
@@ -365,10 +372,6 @@ function AntBMS:getData(force)
         for n = 1, #body do
             table.insert(self.answer, body:byte(n))
         end
-
---        if #body >= BMS_DATA_SIZE then
---            break
---        end
 
         checksum = self:isChecksumOk()
         if checksum then
@@ -592,6 +595,20 @@ function AntBMS:isBatteryFull()
     return false
 end
 
+function AntBMS:isBatteryChargingMoreThan(limit)
+    if self:getData() then
+        limit = limit or 0
+        return self.v.CurrentPower > limit
+    end
+end
+
+function AntBMS:isBatteryDischargingMoreThan(limit)
+    if self:getData() then
+        limit = limit or 0
+        return -self.v.CurrentPower > limit
+    end
+end
+
 -- This is the usual way of reading new parameters
 function AntBMS:getParameters()
     if not self.host or self.host == "" then
@@ -608,7 +625,7 @@ function AntBMS:getParameters()
             code = tonumber(code)
             if code and body then break end
             os.execute("date")
-            os.execute("echo Could not get bms parameters")
+            print("Could not get bms parameters")
             util:log("Could not get bms paramters")
 
             util.sleep_time(1)
@@ -620,7 +637,7 @@ function AntBMS:getParameters()
             os.execute(ESP32_HARD_RESET_COMMAND)
             util:log("BMS hard reset")
             os.execute("date")
-            os.execute("echo sleeping " .. ESP32_RESET_SLEEP_TIME)
+            print("sleeping " .. ESP32_RESET_SLEEP_TIME)
             util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)
             return false
         end
@@ -759,7 +776,6 @@ function AntBMS:needsRescueCharge()
 end
 
 function AntBMS:recoveredFromRescueCharge()
-
     if not self.rescue_charge then
         return true
     end
