@@ -386,7 +386,7 @@ end
 PVBattery[state.low_battery] = PVBattery[state.low_cell]
 
 function PVBattery:setChargeOrDischarge(P_Grid, P_VenusE)
-    if (self:isSellingMoreThan(20) and self.VenusE:isIdle())
+    if (self:isSellingMoreThan(30) and self.VenusE:isIdle())
             or self.VenusE:isChargingMoreThan(100) then
         self:turnOffBestInverterAndThenTurnOnBestCharger(P_Grid, P_VenusE)
         return state.charge
@@ -718,7 +718,7 @@ function PVBattery:main(profiling_runs)
         -- Positive values mean VenusE is discharging
         -- Nagative values mean power is charging
         local P_VenusE = self.VenusE:readACPower()
-        P_VenusE = P_VenusE and math.floor(P_VenusE)
+        P_VenusE = P_VenusE and math.floor(P_VenusE) or 0
         local VenusE_SOC = self.VenusE:readBatterySOC()
 
         local repeat_request = 5
@@ -739,7 +739,6 @@ function PVBattery:main(profiling_runs)
 
         -- Defautlt to 0 % or 0 W if no marstek is found.
         self.VenusE_SOC = VenusE_SOC and math.floor(VenusE_SOC) or 0
-        P_VenusE = P_VenusE or 0
 
         -- Normally P_PV comes from panel and P_AC is less, so use the smaller one
         if P_PV and P_AC then

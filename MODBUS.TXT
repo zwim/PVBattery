@@ -1,0 +1,44 @@
+Modbus tcp senden von 1200W
+
+00 01 00 00 00 06 01 06 10 00 04 B0
+
+00 01             // Transaction ID
+00 00             // Protocol ID
+00 06             // Length
+01                // Unit ID
+06                // Function Code (Write Single Register)
+10 00             // Register Address (0x1000)
+04 B0             // Value (1200 W)
+
+Antwort
+
+00 01 00 00 00 06 01 06 10 00 04 B0
+
+
+
+------------------------------------------------------------------------------
+
+LESEN
+
+00 01 00 00 00 06 01 03 10 01 00 01
+
+
+00 01	Transaktions-ID
+00 00	Protokoll-ID
+00 06	Länge: 6 Bytes folgen
+01	    Unit-ID
+03      Funktion: Read Holding Registers
+10 01	Registeradresse (0x1001)
+
+Antwort beim Lesen
+ID ist die gleiche wie beim senden
+
+00 01 00 00 00 05 01 03 02 04 B0
+
+00 01	Transaktions-ID
+00 00	Protokoll-ID
+00 05	Länge: 5 Bytes folgen
+01	    Unit-ID
+03	    Funktionscode
+02	    Byte-Anzahl der Daten = 2
+04 B0	Datenwert = 0x04B0 = 1200 Dezimal
