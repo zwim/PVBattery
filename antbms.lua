@@ -344,7 +344,7 @@ function AntBMS:getData(force)
             print("Could not read bms.data --- try again (" .. try .. "/4) in 5 seconds.")
             if try == 4 then
                 print("Try to restart AntBMS")
-                self:restart();
+                self:restart()
                 util.sleep_time(5) -- wait
             end
 
