@@ -2,7 +2,7 @@
 #
 #
 
-mkdir /opt/PVBattery
+mkdir -p /opt/PVBattery > /dev/null
 
 rsync -a *.lua /opt/PVBattery/
 rsync -a *.html /opt/PVBattery/
