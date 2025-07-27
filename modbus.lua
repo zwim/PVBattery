@@ -52,7 +52,7 @@ function Modbus:checkResponse(request, response, err)
     end
     if response:byte(3) ~= request:byte(3)
         or response:byte(4) ~= request:byte(4) then
-        print("Marstek: Falsche TProtokoll-ID in Antwort")
+        print("Marstek: Falsche Protokoll-ID in Antwort")
     end
 
     if response:byte(7) ~= request:byte(7) then
@@ -123,8 +123,9 @@ function Modbus:readHoldingRegisters(ip, port, slaveId, quantity, reg)
     return value * reg.gain
 end
 
-function Modbus:writeHoldingRegisters(ip, port, slaveId, reg, value)
+function Modbus:writeHoldingRegisters(ip, port, slaveId, quant, reg, value)
     if not self:ensureConnection(ip, port) then return false end
+    if quant ~= 1 then return false end
 
     local startAddress = reg.adr
     local size = tonumber(reg.typ:sub(2))
@@ -159,7 +160,7 @@ function Modbus:writeHoldingRegisters(ip, port, slaveId, reg, value)
         request = request .. string.char(valueBytes[i])
     end
 
-    local response, err = self:sendRequest(request, 8, ip, port)
+    local response, err = self:sendRequest(request, #request, ip, port)
     if not self:checkResponse(request, response, err) then
         return nil
     end
