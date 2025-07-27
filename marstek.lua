@@ -8,6 +8,8 @@ local Marstek = {
     port = nil, -- Modbus TCP Port
     slaveId = nil, -- Slave ID
     ACPower = 0,
+    MIN_DISCHARGE_LIMIT = 800,
+    MAX_DISCHARGE_LIMIT = 2500,
 }
 
 function Marstek:new(o)
@@ -103,8 +105,8 @@ function Marstek:readMaxDischargePower()
 end
 
 function Marstek:writeMaxDischargePower(value)
-    if self.maxDischargePower == 800 then
-        print("Marstek: Power was fixed at 800W, change it in Marstek-App before!")
+    if self.maxDischargePower == self.MIN_DISCHARGE_LIMIT then
+        print("Marstek: Power was fixed at "..self.MIN_DISCHARGE_LIMIT.."W, change it in Marstek-App before!")
     end
     return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.maxDischargePower, value)
 end
@@ -193,6 +195,7 @@ printValue(VenusE:readChargingCutoff())
 printValue(VenusE:readDischargingCutoff())
 
 
-if not arg[0]:find("marstek.lua") then
+ -- the line below does it betther than "if not arg[0]:find("marstek.lua")"
+if debug.getinfo(2, "S").short_src ~= debug.getinfo(1, "S").short_src then
     return Marstek
 end
