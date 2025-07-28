@@ -2,6 +2,7 @@
 local json = require("dkjson")
 local lfs = require("lfs")
 local posix = require("posix")
+local socket = require("socket")
 
 if not table.unpack then
     table.unpack = unpack
@@ -285,5 +286,60 @@ function util.deleteRunningInstances(name)
 
     return nb_deleted
 end
+
+function util.http_get_coroutine(connection, path, size)
+--    local sock, host, port = connections.socket, connections.host, connections.port
+    size = size or 2^15
+    local ok, err
+    if not connections.sock then
+        connections.sock, err = socket.tcp()
+        if not connections.sock then
+            return nil, err .. " socket creation failed"
+        end
+    end
+
+    connections.sock:settimeout(2)
+    connections.sock:setoption("keepalive", true)
+    ok, err = connections.sock:connect(connections.host, connections.port or 80)
+    if not ok then
+        connections.sock:close()
+        connections.socket = nil
+        return nil, err
+    end
+
+    connections.sock:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    connections.sock:settimeout(0)
+
+    local content = {}
+    while true do
+        connections.socket:settimeout(0)   -- do not block
+        local s, status, partial = connections.sock:receive(size)
+        if s and s ~= "" then
+            table.insert(content, s)
+        end
+        if partial and partial ~= "" then
+            table.insert(content, partial)
+        end
+
+        if status == "timeout" then
+            coroutine.yield(connections.sock)
+        elseif status == "closed" then
+            connections.sock:close()
+            connections.socket = nil
+            break
+        end
+    end
+--    sock:close() -- todo test to remove this
+--    connections.socket = nil
+
+    local body = table.concat(content)
+    local header_end = body:find("\r\n\r\n", 1, true)
+    if header_end then
+        body = body:sub(header_end + 4)
+    end
+
+    return body
+end
+
 
 return util
