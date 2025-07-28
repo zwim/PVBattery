@@ -795,10 +795,12 @@ function AntBMS:recoveredFromRescueCharge()
 end
 
 function AntBMS:needsBalancing(balance_threshold)
-    balance_threshold = balance_threshold or 75
     if self:getData() then
+        balance_threshold = balance_threshold or math.floor(config.bat_SOC_full * 0.80)
         if self.v.SOC > balance_threshold then
-            if self.v.CellDiff >= config.max_cell_diff or self.v.HighestVoltage >= config.bat_highest_voltage then
+            if self.v.CellDiff >= config.max_cell_diff - config.max_cell_diff_hysteresis then
+                return true
+            elseif self.v.HighestVoltage >= config.bat_highest_voltage then
                 return true
             elseif math.abs(self.v.Current) <= 1.0 then
                 if self.v.CellDiff >= self.minCellDiff then

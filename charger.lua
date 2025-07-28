@@ -24,7 +24,7 @@ function Charger:startCharge()
     self:toggle("on")
 end
 
-function Charger:safeStartCharger()
+function Charger:safeStartCharge()
     if self:getPowerState() ~= "on" then self:startCharge() end
 end
 
@@ -32,7 +32,7 @@ function Charger:stopCharge()
     self:toggle("off")
 end
 
-function Charger:safeStopCharger()
+function Charger:safeStopCharge()
     if self:getPowerState() ~= "off" then self:stopCharge() end
 end
 
