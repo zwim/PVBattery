@@ -300,7 +300,6 @@ function util.http_get_coroutine(connection, path, size)
 
     local content = {}
     while true do
-        connection.socket:settimeout(0)   -- do not block
         local s, status, partial = connection.socket:receive(size)
         if s and s ~= "" then
             table.insert(content, s)

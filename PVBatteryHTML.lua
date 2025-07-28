@@ -1,4 +1,4 @@
-return function(self, config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
+return function(self, config, VERSION)
     local ChargerPowerCache = {}
     local InverterPowerCache = {}
 
@@ -7,14 +7,14 @@ return function(self, config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
         ChargerPowerCache[i] = self.Charger[i]:getPower()
         sinks = sinks + (ChargerPowerCache[i] or 0)
     end
-    sinks = sinks + math.max(-P_VenusE, 0)
+    sinks = sinks + math.max(-self.P_VenusE, 0)
 
-    local sources = P_PV or 0
+    local sources = self.P_PV or 0
     for  i = 1, #self.Inverter do
         InverterPowerCache[i] = self.Inverter[i]:getPower()
         sources = sources + (InverterPowerCache[i] or 0)
     end
-    sources = sources + math.max(P_VenusE, 0)
+    sources = sources + math.max(self.P_VenusE, 0)
 
     local SOC_string = "<br>SOC:"
     for  i = 1, #self.BMS do
@@ -34,11 +34,11 @@ return function(self, config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
         {"_$SUNSET$", self.sunset},
         {"_$FRONIUS_ADR$", config.FRONIUS_ADR},
         {"_$STATE_OF_OPERATION$", (self._state or "") .. SOC_string},
-        {"_$P_GRID$", string.format("%5.0f", P_Grid)},
-        {"_$P_SELL_GRID$", P_Grid < 0 and string.format("%5.0f", -P_Grid) or "0"},
-        {"_$P_BUY_GRID$", P_Grid > 0 and string.format("%5.0f", P_Grid) or "0"},
-        {"_$P_LOAD$", string.format("%5.0f", P_Load)},
-        {"_$P_ROOF$", string.format("%5.0f", P_PV)},
+        {"_$P_GRID$", string.format("%5.0f", self.P_Grid)},
+        {"_$P_SELL_GRID$", self.P_Grid < 0 and string.format("%5.0f", -self.P_Grid) or "0"},
+        {"_$P_BUY_GRID$", self.P_Grid > 0 and string.format("%5.0f", self.P_Grid) or "0"},
+        {"_$P_LOAD$", string.format("%5.0f", self.P_Load)},
+        {"_$P_ROOF$", string.format("%5.0f", self.P_PV)},
         {"_$BMS1_INFO$", "http://" .. self.BMS[1].host .. "/show"},
         {"_$BMS1_BALANCE_OFF$", "http://" .. self.BMS[1].host .. "/balance.off"},
         {"_$BMS1_BALANCE_ON$", "http://" .. self.BMS[1].host .. "/balance.on"},
@@ -60,9 +60,9 @@ return function(self, config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
             string.format("%5.0f", InverterPowerCache[2])},
         {"_$GARAGE_INVERTER$", self.Inverter[2].host},
         {"_$VENUS_CHARGE_POWER$",
-            string.format("%5.0f", math.max(-P_VenusE, 0))},
+            string.format("%5.0f", math.max(-self.P_VenusE, 0))},
         {"_$VENUS_DISCHARGE_POWER$",
-            string.format("%5.0f", math.max(P_VenusE, 0))},
+            string.format("%5.0f", math.max(self.P_VenusE, 0))},
  --       {"_$MOPED_CHARGER_POWER",
  --           string.format("%7.2f", ChargerPowerCache[3])},
  --       {"_$MOPED_CHARGER", self.Charger[3].switch_host},
@@ -78,7 +78,7 @@ return function(self, config, P_Grid, P_Load, P_PV, P_VenusE, VERSION)
             string.format("%5.0f", sources)})
 
     table.insert(TEMPLATE_PARSER, {"_$POWER_CONSUMED$",
-            string.format("%5.0f", P_Grid + sources - sinks)})
+            string.format("%5.0f", self.P_Grid + sources - sinks)})
 
 --    local date = os.date("*t")
 --    TEMPLATE_PARSER[1][2] = string.format("%d/%d/%d-%02d:%02d:%02d",

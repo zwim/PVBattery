@@ -131,7 +131,7 @@ function Switch:getPower()
         return (0/0)
     end
 
-    local Power = self.decoded and self.decoded.StatusSNS and
+    local Power = self.decoded and type(self.decoded) == "table" and self.decoded.StatusSNS and
         self.decoded.StatusSNS.ENERGY and self.decoded.StatusSNS.ENERGY.Power or (0/0)
 
     if Power and Power > 20 then
@@ -154,7 +154,8 @@ function Switch:getPowerState()
         self:getPower() -- update max_power
     end
 
-    local power_state = self.decoded and self.decoded.Status and self.decoded.Status.Power or ""
+    local power_state = self.decoded and type(self.decoded) == "table" and self.decoded.Status and
+        self.decoded.Status.Power or ""
     if power_state == 0 or power_state == "0" or power_state:find("^0.") then
         return "off"
     elseif power_state == 1 or power_state == "1" or power_state:find("^1.") then
