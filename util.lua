@@ -174,17 +174,6 @@ function util:cleanLogs()
     end
 end
 
-function util.hourToTime(h)
-    local hour, min, sec
-
-    hour = math.floor(h)
-    h = (h - hour) * 60
-    min = math.floor(h)
-    h = (h - min) * 60
-    sec = math.floor(h + 0.5)
-    return hour, min, sec
-end
-
 function util.hostname()
     local file = io.popen("hostname")
     local output = file:read('*all')
@@ -288,32 +277,31 @@ function util.deleteRunningInstances(name)
 end
 
 function util.http_get_coroutine(connection, path, size)
---    local sock, host, port = connections.socket, connections.host, connections.port
     size = size or 2^15
     local ok, err
-    if not connections.sock then
-        connections.sock, err = socket.tcp()
-        if not connections.sock then
+    if not connection.socket then
+        connection.socket, err = socket.tcp()
+        if not connection.socket then
             return nil, err .. " socket creation failed"
         end
     end
 
-    connections.sock:settimeout(2)
-    connections.sock:setoption("keepalive", true)
-    ok, err = connections.sock:connect(connections.host, connections.port or 80)
+    connection.socket:settimeout(2)
+    connection.socket:setoption("keepalive", true)
+    ok, err = connection.socket:connect(connection.host, connection.port or 80)
     if not ok then
-        connections.sock:close()
-        connections.socket = nil
+        connection.socket:close()
+        connection.socket = nil
         return nil, err
     end
 
-    connections.sock:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
-    connections.sock:settimeout(0)
+    connection.socket:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    connection.socket:settimeout(0)
 
     local content = {}
     while true do
-        connections.socket:settimeout(0)   -- do not block
-        local s, status, partial = connections.sock:receive(size)
+        connection.socket:settimeout(0)   -- do not block
+        local s, status, partial = connection.socket:receive(size)
         if s and s ~= "" then
             table.insert(content, s)
         end
@@ -322,15 +310,15 @@ function util.http_get_coroutine(connection, path, size)
         end
 
         if status == "timeout" then
-            coroutine.yield(connections.sock)
+            coroutine.yield(connection.socket)
         elseif status == "closed" then
-            connections.sock:close()
-            connections.socket = nil
+            connection.socket:close()
+            connection.socket = nil
             break
         end
     end
 --    sock:close() -- todo test to remove this
---    connections.socket = nil
+--    connection.socket = nil
 
     local body = table.concat(content)
     local header_end = body:find("\r\n\r\n", 1, true)

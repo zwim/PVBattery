@@ -16,6 +16,7 @@ local P1meter = {
     host = host,
     port = port,
     urlPath = urlPath,
+    socket = nil, -- tcp.socket, will be filled automatically
     url = "",
     Data = {},
     Request = {},

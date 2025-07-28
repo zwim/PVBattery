@@ -24,6 +24,7 @@ local Fronius = {
     port = port,
     urlPath = urlPath,
     url = "",
+    socket = nil, -- tcp.socket, will be filled automatically
     Data = {},
     Request = {},
     timeOfLastRequiredData = {}, -- no data yet

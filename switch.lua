@@ -1,7 +1,6 @@
 
 local config = require("configuration")
 local json = require ("dkjson")
-local socket = require("socket")
 local util = require("util")
 
 local http = require("socket.http")

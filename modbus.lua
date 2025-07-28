@@ -160,7 +160,7 @@ function Modbus:writeHoldingRegisters(ip, port, slaveId, quant, reg, value)
         request = request .. string.char(valueBytes[i])
     end
 
-    local response, err = self:sendRequest(request, #request, ip, port)
+    local response, err = self:sendRequest(request, 8, ip, port)
     if not self:checkResponse(request, response, err) then
         return nil
     end
