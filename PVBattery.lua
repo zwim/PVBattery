@@ -1,5 +1,5 @@
 
-local VERSION = "V4.7.0"
+local VERSION = "V4.7.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -354,6 +354,7 @@ function PVBattery:turnOffBestInverterAndThenTurnOnBestCharger()
     if charger_num > 0 then
         util:log(string.format("Activate charger: %s with %5.2f W",
                 charger_num, charger_power))
+
         self.Charger[charger_num]:startCharge()
         return true
     end
@@ -391,12 +392,10 @@ end
 PVBattery[state.low_battery] = PVBattery[state.low_cell]
 
 function PVBattery:setChargeOrDischarge()
-    if (self:isSellingMoreThan(30) and self.VenusE:isIdle())
-            or self.VenusE:isChargingMoreThan(100) then
+    if (self:isSellingMoreThan(30) and self.VenusE:isIdle()) or self.VenusE:isChargingMoreThan(100) then
         self:turnOffBestInverterAndThenTurnOnBestCharger()
         return state.charge
-    elseif (self:isBuyingMoreThan(0) and self.VenusE:isIdle())
-            or self.VenusE:isDischargingMoreThan(100) then
+    elseif (self:isBuyingMoreThan(0) and self.VenusE:isIdle()) or self.VenusE:isDischargingMoreThan(100) then
         self:turnOffBestChargerAndThenTurnOnBestInverter()
         return state.discharge
     end
@@ -449,9 +448,11 @@ PVBattery[state.balance] = function(self)
         if BMS:needsBalancing() then
             BMS:enableDischarge()
             BMS:setAutoBalance(true)
+            return
         end
         if BMS:isBatteryFull() then
             self:setState(state.full)
+            return
         end
     end
     local expected_state = self:setChargeOrDischarge()
