@@ -24,6 +24,7 @@ local Fronius = {
     port = port,
     urlPath = urlPath,
     url = "",
+    socket = nil, -- tcp.socket, will be filled automatically
     Data = {},
     Request = {},
     timeOfLastRequiredData = {}, -- no data yet
@@ -85,40 +86,17 @@ function Fronius:getMeterRealtimeData()
 end
 
 function Fronius:_get_RealtimeData_coroutine(cmd)
-    local path = self.urlPath .. cmd
-    local socket, err = require("socket").connect(self.host, self.port or 80)
-    if not socket then
-        util:log("Error opening connection to", self.host, ":", err)
+    if not self.host or self.host == "" then
         return false
     end
-    socket:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
-    local content = {}
-    while true do
-        socket:settimeout(0)   -- do not block
-        local s, status, partial = socket:receive(2^15)
-        if s then
-            s = s:gsub("^.*\r\n\r\n","") -- remove header
-            if s ~= "" then
-                table.insert(content, s)
-            end
-        end
-        if partial then
-            partial = partial:gsub("^.*\r\n\r\n","") -- remove header
-            if partial ~= "" then
-                table.insert(content, partial)
-            end
-        end
 
-        if status == "timeout" then
-            coroutine.yield(socket)
-        elseif status == "closed" then
-            break
-        end
+    local path = self.urlPath .. cmd
+    local body, err = util.http_get_coroutine(self, path, nil)
+    if not body then
+        util:log("[Fronius:_get_RealtimeData_coroutine] Error getting data from", self.host, ":", err)
+        return false
     end
-    socket:close()
-    local body = table.concat(content)
-
-    return body and json.decode(body) or {}
+    return json.decode(body) or {}
 end
 
 function Fronius:getPowerFlowRealtimeData_coroutine()

@@ -195,7 +195,7 @@ printValue(VenusE:readChargingCutoff())
 printValue(VenusE:readDischargingCutoff())
 
 
- -- the line below does it betther than "if not arg[0]:find("marstek.lua")"
+ -- the line below does it better than "if not arg[0]:find("marstek.lua")"
 if debug.getinfo(2, "S").short_src ~= debug.getinfo(1, "S").short_src then
     return Marstek
 end

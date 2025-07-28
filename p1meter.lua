@@ -16,6 +16,7 @@ local P1meter = {
     host = host,
     port = port,
     urlPath = urlPath,
+    socket = nil, -- tcp.socket, will be filled automatically
     url = "",
     Data = {},
     Request = {},
@@ -59,46 +60,16 @@ function P1meter:getData()
     return true
 end
 
-local client = nil
 function P1meter:_get_data_coroutine(cmd)
     local path = self.urlPath .. cmd
-    local err
-    if not client then
-        client, err = socket.connect(self.host, self.port or 80)
-        if not client then
-            util:log("Error opening connection to", self.host, ":", err)
-            return false
-        end
+    local body, err = util.http_get_coroutine(self, path, nil)
+    if not body then
+        util:log("[P1meter:_get_data_coroutine] Error getting data from", self.host, ":", err)
+        return false
     end
-    local _ = client:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
-    local content = {}
-    while true do
-        client:settimeout(0)   -- do not block
-        local s, status, partial = client:receive(2^15)
-        if s then
-            s = s:gsub("^.*\r\n\r\n","") -- remove header
-            if s ~= "" then
-                table.insert(content, s)
-            end
-        end
-        if partial then
-            partial = partial:gsub("^.*\r\n\r\n","") -- remove header
-            if partial ~= "" then
-                table.insert(content, partial)
-            end
-        end
-
-        if status == "timeout" then
-            coroutine.yield(client)
-        elseif status == "closed" then
-            break
-        end
-    end
-    client:close()
-    local body = table.concat(content)
-
-    return body and json.decode(body) or {}
+    return json.decode(body) or {}
 end
+
 
 function P1meter:getData_coroutine()
     if self:getDataAge() < config.update_interval then return true end
