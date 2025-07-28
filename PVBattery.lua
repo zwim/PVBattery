@@ -378,7 +378,7 @@ end
 -- luacheck: ignore self
 PVBattery[state.low_cell] = function(self)
     if self:turnOffBestInverterAndThenTurnOnBestCharger() then
-        self.setState(state.charge)
+        self:setState(state.charge)
     end
 
     for _, Inverter in pairs(self.Inverter) do
@@ -488,7 +488,7 @@ PVBattery[state.full] = function(self)
     for _, BMS in pairs(self.BMS) do
         BMS:setAutoBalance(false)
         BMS:disableDischarge()
-        self:setStage(state.balance)
+        self:setState(state.balance)
     end
 end
 
@@ -506,9 +506,7 @@ end
 PVBattery[state.shutdown] = function(self)
     print("state -> shutdown")
     for _, Charger in pairs(self.Charger) do
-        if Charger:getPowerState() == "on" then
-            Charger:stopCharge()
-        end
+        Charger:safeStopCharge()
     end
     for _, Inverter in pairs(self.Inverter) do
         if Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off"
@@ -528,10 +526,10 @@ PVBattery[state.force_discharge] = function(self)
             if power_state ~= discharge_state then
                 if Inverter:getPowerState() ~= "off" then
                     Inverter:startDischarge()
-                    self:setStage(state.discharge)
+                    self:setState(state.discharge)
                 else
                     Inverter:stopDischarge()
-                    self:setStage(state.idle)
+                    self:setState(state.recalculate)
                 end
             end
         end
@@ -658,14 +656,16 @@ function PVBattery:showCacheDataAge(verbose)
     util:log(string.format("Savings: %5f s, sequential %5f s, parallel %5f s)", total - max_age, total, max_age))
 end
 
-function PVBattery:outputTheLog(date, date_string, oldstate, newstate)
-
+function PVBattery:refreshCache()
     self:clearCache()
-    oldtime = util.getCurrentTime()
+    local oldtime = util.getCurrentTime()
     self:fillCache()
     print("time:", util.getCurrentTime() - oldtime)
     self:showCacheDataAge()
+    self:getCurrentValues()
+end
 
+function PVBattery:outputTheLog(date_string, oldstate, newstate)
     local log_string
     log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, Battery=%5.0fW, P_VenusE=%5.0fW",
         date_string, self.P_Grid, self.P_Load, self.BMS[1].v.CurrentPower or 0, self.P_VenusE)
@@ -697,9 +697,6 @@ function PVBattery:getCurrentValues()
         util.sleep_time(1) -- try again in 1 second
         if not P_Grid or not P_Load or not P_PV then
             util:log("Communication error: repeat request:", repeat_request)
-            self:clearCache()
-            self:fillCache()
-            self:showCacheDataAge()
             P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
         end
         if not P_VenusE then
@@ -766,16 +763,11 @@ function PVBattery:main(profiling_runs)
             util:log("Sun set at " .. self.sunset)
             short_sleep = 1
         end
-        self:clearCache()
-        local oldtime = util.getCurrentTime()
-        self:fillCache()
-        print("time:", util.getCurrentTime() - oldtime)
-        self:showCacheDataAge()
 
         -- Update Fronius
         util:log("\n-------- Total Overview:")
 
-        self:getCurrentValues()
+        self:refreshCache()
 
         if not self.P_Grid or not self.P_Load or not self.P_PV or not self.P_VenusE then
             short_sleep = 4
@@ -788,7 +780,6 @@ function PVBattery:main(profiling_runs)
             rescue_stop = math.floor(60/4) + 1
         end
 
-
         if not skip_loop then
             util:log(string.format("Grid %8f W (%s)", self.P_Grid, self.P_Grid > 0 and "optaining" or "selling"))
             util:log(string.format("Load %8f W", self.P_Load))
@@ -800,7 +791,7 @@ function PVBattery:main(profiling_runs)
             newstate = self:updateState()
 
             -- update state, as the battery may have changed or the user could have changed something manually
-            self:outputTheLog(date, date_string, oldstate, newstate)
+            self:outputTheLog(date_string, oldstate, newstate)
 
             -- Here the dragons fly (aka the datastructure of the states knowk in)
             local stateHandler = self[self:getState()]
@@ -823,9 +814,10 @@ function PVBattery:main(profiling_runs)
             end
 
             date = os.date("*t")
-            self:outputTheLog(date, date_string, oldstate, newstate)
+            self:refreshCache()
+            self:outputTheLog(date_string, oldstate, newstate)
             if oldstate ~= newstate then
-                newstate = self:updateState()
+                self:updateState()
             end
         end
 
@@ -834,13 +826,9 @@ function PVBattery:main(profiling_runs)
             if Inverter.time_controlled then
                 local curr_hour = date.hour + date.min/60 + date.sec/3600
                 if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
-                    if Inverter:getPowerState() ~= "on" then
-                        Inverter:startDischarge()
-                    end
+                    Inverter:safeStartDischarge()
                 else
-                    if Inverter:getPowerState() ~= "off" then
-                        Inverter:stopDischarge()
-                    end
+                    Inverter:safeStopDischarge()
                 end
             end
         end

@@ -31,6 +31,10 @@ function Inverter:startDischarge(req_power)
     end
 end
 
+function Inverter:safeStartDischarge(req_power)
+    if self:getPowerState() ~= "on" then self:startDischarge(req_power) end
+end
+
 function Inverter:stopDischarge()
     if self.BMS then
         self.BMS:setPower(0)
@@ -38,6 +42,10 @@ function Inverter:stopDischarge()
     end
     self:toggle("off")
     self:clearDataAge()
+end
+
+function Inverter:safeStopDischarge()
+    if self:getPowerState() ~= "off" then self:stopDischarge() end
 end
 
 function Inverter:readyToDischarge()
