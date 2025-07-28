@@ -1,7 +1,6 @@
 
 local config = require("configuration")
 local json = require ("dkjson")
-local socket = require("socket")
 local util = require("util")
 
 local http = require("socket.http")
@@ -10,6 +9,7 @@ http.TIMEOUT=5
 local Switch = {
     socket = nil, -- tcp.socket, will be filled automatically
     host = nil,
+    port = 80,
     timeOfLastRequiredData = 0, -- no data requiered yet
     max_power = 0,
 }
@@ -80,56 +80,21 @@ function Switch:_getStatus_coroutine()
     if not self.host or self.host == "" then
         return false
     end
-
     if self:getDataAge() < config.update_interval and self.decoded then
         return true
     end
 
-    local ok, err
-    self.socket = socket.tcp()
-    self.socket:settimeout(2)
-    self.socket:setoption("keepalive", true)
-    ok, err = self.socket:connect(self.host, 80)
-    if not ok then
-        util:log("Error opening connection to", self.host, ":", err)
-        print("Error opening connection to", self.host, ":", err)
-        self.socket = nil
+    local body, err = util.http_get_coroutine(self, "/cm?cmnd=status0", READ_DATA_SIZE)
+    if not body then
+        util:log("[Switch:_getStatus_coroutine] Error opening connection to", self.host, ":", err)
+        print("[Switch:_getStatus_coroutine] Error opening connection to", self.host, ":", err)
         return false
     end
 
-    local path = "/cm?cmnd=status0"
-    self.socket:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
-    self.socket:settimeout(0)   -- do not block
-
-    local body = ""
-    while true do
-        local s, status, partial = self.socket:receive(READ_DATA_SIZE)
-        if s and s ~= "" then
-            body = body .. s
-        end
-        if partial and partial ~= "" then
-            body = body .. partial
-        end
-
-        if #body >= READ_DATA_SIZE or status == "closed" then
-            self.socket:close()
-            self.socket = nil
-            break
-        elseif status == "timeout" then
-            coroutine.yield(self.socket)
-        end
-    end
-
-    local header_end = body:find("\r\n\r\n", 1, true)
-    if header_end then
-        body = body:sub(header_end + 4)
-    end
-    self.decoded = body and json.decode(body) or {}
-
+    self.decoded = json.decode(body) or {}
     self:setDataAge()
     return true
 end
-
 
 function Switch:getEnergyTotal()
     if not self:_getStatus() then

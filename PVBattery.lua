@@ -444,7 +444,13 @@ PVBattery[state.balance] = function(self, P_Grid, P_VenusE)
         end
     end
     if not needs_balancing and not is_full then
-        self:setChargeOrDischarge(P_Grid, P_VenusE)
+        local expected_state = self:setChargeOrDischarge(P_Grid, P_VenusE)
+        if expected_state == state.charge then
+            return self:setState(state.charge)
+        elseif expected_state == state.discharge then
+            return self:setState(state.discharge)
+        end
+        return self:getState()
     end
 end
 
@@ -630,7 +636,8 @@ function PVBattery:showCacheDataAge(verbose)
     local total, max_age = 0, 0
     local function report(name, age)
         log(string.format("%s: %5f s", name, age))
-        total = total + age; max_age = math.max(max_age, age)
+        total = total + age
+        max_age = math.max(max_age, age)
     end
     for _, B in pairs(self.BMS)     do report("BMS "     ..B.host, B:getDataAge()) end
     for _, C in pairs(self.Charger) do report("Charger " ..C.host, C:getDataAge()) end
@@ -705,7 +712,9 @@ function PVBattery:main(profiling_runs)
             short_sleep = 1
         end
         self:clearCache()
+        oldtime = util.getCurrentTime()
         self:fillCache()
+        print("time:", util.getCurrentTime() - oldtime)
         self:showCacheDataAge()
 
         -- Update Fronius
@@ -779,7 +788,9 @@ function PVBattery:main(profiling_runs)
             end
 
             self:clearCache()
+            oldtime = util.getCurrentTime()
             self:fillCache()
+            print("time:", util.getCurrentTime() - oldtime)
             self:showCacheDataAge()
 
             self:outputTheLog(P_Grid, P_Load, P_PV, P_VenusE, date, date_string)

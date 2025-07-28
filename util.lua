@@ -2,6 +2,7 @@
 local json = require("dkjson")
 local lfs = require("lfs")
 local posix = require("posix")
+local socket = require("socket")
 
 if not table.unpack then
     table.unpack = unpack
@@ -173,17 +174,6 @@ function util:cleanLogs()
     end
 end
 
-function util.hourToTime(h)
-    local hour, min, sec
-
-    hour = math.floor(h)
-    h = (h - hour) * 60
-    min = math.floor(h)
-    h = (h - min) * 60
-    sec = math.floor(h + 0.5)
-    return hour, min, sec
-end
-
 function util.hostname()
     local file = io.popen("hostname")
     local output = file:read('*all')
@@ -285,5 +275,59 @@ function util.deleteRunningInstances(name)
 
     return nb_deleted
 end
+
+function util.http_get_coroutine(connection, path, size)
+    size = size or 2^15
+    local ok, err
+    if not connection.socket then
+        connection.socket, err = socket.tcp()
+        if not connection.socket then
+            return nil, err .. " socket creation failed"
+        end
+    end
+
+    connection.socket:settimeout(2)
+    connection.socket:setoption("keepalive", true)
+    ok, err = connection.socket:connect(connection.host, connection.port or 80)
+    if not ok then
+        connection.socket:close()
+        connection.socket = nil
+        return nil, err
+    end
+
+    connection.socket:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
+    connection.socket:settimeout(0)
+
+    local content = {}
+    while true do
+        connection.socket:settimeout(0)   -- do not block
+        local s, status, partial = connection.socket:receive(size)
+        if s and s ~= "" then
+            table.insert(content, s)
+        end
+        if partial and partial ~= "" then
+            table.insert(content, partial)
+        end
+
+        if status == "timeout" then
+            coroutine.yield(connection.socket)
+        elseif status == "closed" then
+            connection.socket:close()
+            connection.socket = nil
+            break
+        end
+    end
+--    sock:close() -- todo test to remove this
+--    connection.socket = nil
+
+    local body = table.concat(content)
+    local header_end = body:find("\r\n\r\n", 1, true)
+    if header_end then
+        body = body:sub(header_end + 4)
+    end
+
+    return body
+end
+
 
 return util
