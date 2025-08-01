@@ -469,10 +469,10 @@ PVBattery[state.discharge] = function(self)
     if expected_state == state.discharge then
         for _, BMS in pairs(self.BMS) do
             if BMS:isLowChargedOrNeedsRescue() then
-                for _, Charger in pairs(self.Charger) do
-                    if Charger.BMS == BMS then
-                       Charger:stopDischarge()
-                       self:setState(state.recalculate)
+                for _, Inverter in pairs(self.Inverter) do
+                    if Inverter.BMS == BMS then
+                        Inverter:stopDischarge()
+                        self:setState(state.recalculate)
                     end
                 end
             end
@@ -661,7 +661,7 @@ function PVBattery:refreshCache()
     self:clearCache()
     local oldtime = util.getCurrentTime()
     self:fillCache()
-    print("time:", util.getCurrentTime() - oldtime)
+--    print("time:", util.getCurrentTime() - oldtime)
     self:showCacheDataAge()
     self:getCurrentValues()
 end
