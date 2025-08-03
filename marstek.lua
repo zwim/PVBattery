@@ -48,7 +48,7 @@ registers.DischargingCutoff      = {adr = 44001, typ = "u16", gain = 0.1, unit =
 registers.maxChargePower         = {adr = 44002, typ = "u16", gain = 1 , unit = "W"}
 registers.maxDischargePower      = {adr = 44003, typ = "u16", gain = 1, unit = "W"}
 
-registers.GridStandards      = {adr = 44100, typ = "u16", gain = 1, unit = "number"}
+registers.GridStandards      = {adr = 44100, typ = "u16", gain = 1, unit = ""}
 
 
 function Marstek:readBatteryVoltage()
@@ -134,10 +134,25 @@ function Marstek:writeDischargingCutoff(value)
 end
 
 function Marstek:readGridStandards()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.DischargingCutoff),
-        "Discharge Cutoff", registers.DischargingCutoff.unit
+    local gridStd = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.GridStandards)
+    local country = {
+            [0] = "Auto 50/60",
+            "EN50549",
+            "nl-Netherlands",
+            "de-Germany",
+            "at-Austria",
+            "uk-England",
+            "es-Spain",
+            "pl-Poland",
+            "it-Italy",
+            "cn-China",
+        }
+    return gridStd, "Grid Standards: " ..country[gridStd], registers.GridStandards.unit
 end
 
+function Marstek:writeGridStandards(value)
+    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.GridStandards, value)
+end
 
 ------------- higher order methods
 
@@ -201,7 +216,8 @@ printValue(VenusE:readChargingCutoff())
 printValue(VenusE:readDischargingCutoff())
 
 printValue(VenusE:readGridStandards())
-
+printValue(VenusE:writeGridStandards(4))
+printValue(VenusE:readGridStandards())
 
 if not arg[0]:find("marstek.lua") then
     return Marstek

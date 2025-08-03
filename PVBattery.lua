@@ -142,32 +142,8 @@ function PVBattery:setState(new_state)
 end
 
 function PVBattery:updateState()
-    -- This means that our battery is ahead of all others, but only twice a day
 
-    for _, Charger in ipairs(self.Charger) do
-        if Charger:getPowerState() == "on" then
-            if Charger.BMS:isLowChargedOrNeedsRescue() and Charger.BMS:needsRescueCharge() then
-                return self:setState(state.rescue_charge)
-            else
-                return self:setState(state.charge)
-            end
-        end
-    end
-
-    for _, Inverter in ipairs(self.Inverter) do
-        local powerState = Inverter:getPowerState()
-        local dischargeState = Inverter.BMS:getDischargeState()
-        if not Inverter.time_controlled then
-            if powerState == "on" and dischargeState == "off" then
-                return self:setState(state.force_discharge)
-            end
-            if powerState ~= "off" and dischargeState ~= "off" then
-                return self:setState(state.discharge)
-            end
-        end
-    end
-
-    -- Helper to ensure BMS data is available
+      -- Helper to ensure BMS data is available
     local function ensureBMSData(BMS)
         for _ = 1, 5 do
             if BMS:getData() then return true end
@@ -177,6 +153,7 @@ function PVBattery:updateState()
         return BMS:getData()
     end
 
+
     for _, BMS in ipairs(self.BMS) do
         if ensureBMSData(BMS) then
             if BMS:isBatteryFull() then
@@ -184,14 +161,12 @@ function PVBattery:updateState()
                     return self:setState(state.idle_full)
                 end
                 return self:getState()
+            elseif BMS.v.SOC <= config.bat_SOC_min then
+                return self:setState(state.low_battery)
             elseif BMS:needsBalancing() then
                 return self:setState(state.balance)
             elseif BMS:isLowChargedOrNeedsRescue() and BMS:needsRescueCharge() then
                 return self:setState(state.rescue_charge)
-            elseif BMS.v.LowestVoltage < config.bat_lowest_voltage then
-                return self:setState(state.low_cell)
-            elseif BMS.v.SOC <= config.bat_SOC_min then
-                return self:setState(state.low_battery)
             elseif BMS.v.CellDiff > config.max_cell_diff then
                 return self:setState(state.cell_diff)
             elseif self:getState() == state.cell_diff
@@ -205,6 +180,24 @@ function PVBattery:updateState()
         end
     end
 
+    for _, Charger in ipairs(self.Charger) do
+        if Charger:getPowerState() == "on" then
+            return self:setState(state.charge)
+        end
+    end
+
+    for _, Inverter in ipairs(self.Inverter) do
+        local powerState = Inverter:getPowerState()
+        local dischargeState = Inverter.BMS:getDischargeState()
+        if not Inverter.time_controlled then
+            if powerState == "on" and dischargeState == "off" then
+                return self:setState(state.force_discharge)
+            end
+            if powerState == "on" and dischargeState == "on" then
+                return self:setState(state.discharge)
+            end
+        end
+    end
     return self:setState(state.idle)
 end
 
@@ -260,7 +253,7 @@ function PVBattery:turnOffBestInverter()
     local inverter_power = 0
     for i, Inverter in pairs(self.Inverter) do
         if not Inverter.time_controlled and Inverter.BMS then
-            if Inverter.BMS:getDischargeState() ~= "off" and Inverter:getPowerState() ~= "off" then
+            if Inverter.BMS:getDischargeState() == "on" and Inverter:getPowerState() == "on" then
                 -- Inverter delivers min_power (positive), VenusE delivers power (positive)
                 local max_power = Inverter:getMaxPower()
                 if self.P_VenusE < max_power or (self.P_VenusE >= 0 and self:isBuyingMoreThan(50)) then
@@ -308,7 +301,7 @@ function PVBattery:turnOffBestChargerAndThenTurnOnBestInverter()
                 -- If req_power is positive, we buy energy
                 if self.VenusE:isDischargingMoreThan(min_power)
                     or (min_power < self.P_Grid and min_power > inverter_power) then
-                    if Inverter.BMS:getDischargeState() ~= "on" or Inverter:getPowerState() ~= "on" then
+                    if Inverter.BMS:getDischargeState() == "off" or Inverter:getPowerState() == "off" then
                         inverter_num = i
                         inverter_power = min_power
                     end
@@ -407,8 +400,10 @@ PVBattery[state.idle] = function(self)
     local expected_state = self:setChargeOrDischarge()
     if expected_state == state.charge then
         self:setState(state.charge)
+        PVBattery[self:getState()](self)
     elseif expected_state == state.discharge then
         self:setState(state.discharge)
+        PVBattery[self:getState()](self)
     else
         for _, BMS in pairs(self.BMS) do
             BMS:disableDischarge()
@@ -420,12 +415,14 @@ end
 PVBattery[state.idle_full] = PVBattery[state.idle]
 
 -- luacheck: ignore self
-PVBattery[state.charge] = function(self)
-    local expected_state = self:setChargeOrDischarge()
+PVBattery[state.charge] = function(self, expected_state)
+    expected_state = expected_state or self:setChargeOrDischarge()
     self:setState(expected_state)
     if expected_state == state.charge then
         for _, BMS in pairs(self.BMS) do
-            if BMS:isBatteryFull() then
+            local is_full = BMS:isBatteryFull()
+            local needs_balancing = BMS:needsBalancing()
+            if is_full then
                 for _, Charger in pairs(self.Charger) do
                     if Charger.BMS == BMS then
                         Charger:stopCharge()
@@ -433,12 +430,22 @@ PVBattery[state.charge] = function(self)
                     end
                 end
             end
-            if BMS:needsBalancing() then
+            if needs_balancing then
                 BMS:enableDischarge()
                 BMS:setAutoBalance(true)
                 self:setState(state.balance)
             end
+            if not needs_balancing and not is_full then
+                for _, Charger in pairs(self.Charger) do
+                    if Charger.BMS == BMS then
+                        Charger:startCharge()
+                        self:setState(state.recalculate)
+                    end
+                end
+            end
         end
+    elseif expected_state == state.discharge then
+        PVBattery[state.discharge](self, expected_state)
     end
 end
 
@@ -464,8 +471,8 @@ PVBattery[state.balance] = function(self)
 end
 
 -- luacheck: ignore self
-PVBattery[state.discharge] = function(self)
-    local expected_state = self:setChargeOrDischarge()
+PVBattery[state.discharge] = function(self, expected_state)
+    expected_state = expected_state or self:setChargeOrDischarge()
     if expected_state == state.discharge then
         for _, BMS in pairs(self.BMS) do
             if BMS:isLowChargedOrNeedsRescue() then
@@ -475,8 +482,16 @@ PVBattery[state.discharge] = function(self)
                         self:setState(state.recalculate)
                     end
                 end
+            else
+                for _, Inverter in pairs(self.Inverter) do
+                    if Inverter.BMS == BMS then
+                        Inverter:startDischarge()
+                    end
+                end
             end
         end
+    elseif expected_state == state.charge then
+        PVBattery[state.charge](self, expected_state)
     end
 end
 
@@ -510,7 +525,7 @@ PVBattery[state.shutdown] = function(self)
         Charger:safeStopCharge()
     end
     for _, Inverter in pairs(self.Inverter) do
-        if Inverter:getPowerState() ~= "off" and Inverter.BMS:getDischargeState() ~= "off"
+        if Inverter:getPowerState() == "on" and Inverter.BMS:getDischargeState() == "on"
             and not Inverter.time_controlled then
             Inverter:stopDischarge()
         end
@@ -525,7 +540,7 @@ PVBattery[state.force_discharge] = function(self)
             local power_state = Inverter:getPowerState()
             local discharge_state = Inverter.BMS:getDischargeState()
             if power_state ~= discharge_state then
-                if Inverter:getPowerState() ~= "off" then
+                if Inverter:getPowerState() == "on" then
                     Inverter:startDischarge()
                     self:setState(state.discharge)
                 else
@@ -659,7 +674,7 @@ end
 
 function PVBattery:refreshCache()
     self:clearCache()
-    local oldtime = util.getCurrentTime()
+--    local oldtime = util.getCurrentTime()
     self:fillCache()
 --    print("time:", util.getCurrentTime() - oldtime)
     self:showCacheDataAge()
@@ -806,7 +821,8 @@ function PVBattery:main(profiling_runs)
 
             -- Update Fronius
             util:log("\n-------- Total Overview:")
-            self:getCurrentValues()
+            date = os.date("*t")
+            self:refreshCache()
 
             oldstate = newstate
             newstate = self:getState()
@@ -814,12 +830,7 @@ function PVBattery:main(profiling_runs)
                 newstate = self:updateState()
             end
 
-            date = os.date("*t")
-            self:refreshCache()
             self:outputTheLog(date_string, oldstate, newstate)
-            if oldstate ~= newstate then
-                self:updateState()
-            end
         end
 
         -- Do the time controlled switching
