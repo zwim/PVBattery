@@ -471,7 +471,9 @@ PVBattery[state.discharge] = function(self)
             if BMS:isLowChargedOrNeedsRescue() then
                 for _, Inverter in pairs(self.Inverter) do
                     if Inverter.BMS == BMS then
-                        Inverter:stopDischarge()
+                for _, Charger in pairs(self.Charger) do
+                    if Charger.BMS == BMS then
+                        Charger:stopDischarge()
                         self:setState(state.recalculate)
                     end
                 end
