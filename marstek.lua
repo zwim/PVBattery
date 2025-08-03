@@ -48,6 +48,8 @@ registers.DischargingCutoff      = {adr = 44001, typ = "u16", gain = 0.1, unit =
 registers.maxChargePower         = {adr = 44002, typ = "u16", gain = 1 , unit = "W"}
 registers.maxDischargePower      = {adr = 44003, typ = "u16", gain = 1, unit = "W"}
 
+registers.GridStandards      = {adr = 44100, typ = "u16", gain = 1, unit = "number"}
+
 
 function Marstek:readBatteryVoltage()
     return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryVoltage),
@@ -131,6 +133,10 @@ function Marstek:writeDischargingCutoff(value)
     return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.DischargingCutoff, value)
 end
 
+function Marstek:readGridStandards()
+    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.DischargingCutoff),
+        "Discharge Cutoff", registers.DischargingCutoff.unit
+end
 
 
 ------------- higher order methods
@@ -178,7 +184,7 @@ printValue(VenusE:readBatteryTotalEnergy())
 printValue(VenusE:readMaxDischargePower())
 printValue(VenusE:readMaxChargePower())
 
-printValue(VenusE:writeMaxDischargePower(2000))
+printValue(VenusE:writeMaxDischargePower(2500))
 printValue(VenusE:writeMaxChargePower(2500))
 
 printValue(VenusE:readMaxDischargePower())
@@ -194,8 +200,9 @@ printValue(VenusE:writeDischargingCutoff(15))
 printValue(VenusE:readChargingCutoff())
 printValue(VenusE:readDischargingCutoff())
 
+printValue(VenusE:readGridStandards())
 
- -- the line below does it better than "if not arg[0]:find("marstek.lua")"
-if debug.getinfo(2, "S").short_src ~= debug.getinfo(1, "S").short_src then
+
+if not arg[0]:find("marstek.lua") then
     return Marstek
 end
