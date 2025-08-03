@@ -798,7 +798,7 @@ function AntBMS:needsBalancing(balance_threshold)
     if self:getData() then
         balance_threshold = balance_threshold or math.floor(config.bat_SOC_full * 0.80)
         if self.v.SOC > balance_threshold then
-            if self.v.CellDiff >= config.max_cell_diff - config.max_cell_diff_hysteresis then
+            if self.v.CellDiff >= math.max(0, config.max_cell_diff - config.max_cell_diff_hysteresis) then
                 return true
             elseif self.v.HighestVoltage >= config.bat_highest_voltage then
                 return true
