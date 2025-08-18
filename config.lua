@@ -61,7 +61,7 @@ charge_finished_current = -0.3
 
 load_full_time_h = 2.5 -- time before sun set, to load battery at maximum
 
-sleep_time = 20 -- seconds to sleep per iteration
+sleep_time = 5 -- seconds to sleep per iteration
 
 update_interval = 15 -- time to keep old data before an update
 

@@ -70,8 +70,8 @@ end
 
 util.log = util.logToScreen
 
-function util.HexToNum(str)
-  if str ~= nil then
+function util.exToNum(str)
+  if str then
     return (str:gsub('..', function (cc)
         return string.char(tonumber(cc, 16))
     end))
@@ -80,7 +80,7 @@ function util.HexToNum(str)
 end
 
 function util.stringToHex(str)
-  if str ~= nil then
+  if str then
     return (str:gsub('.', function (c)
         if c == 0 then return "00" end
         return string.format('%02X', string.byte(c))
@@ -327,6 +327,8 @@ function util.http_get_coroutine(connection, path, size)
 
     return body
 end
+
+
 
 
 return util
