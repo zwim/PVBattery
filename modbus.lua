@@ -3,38 +3,37 @@ local socket = require("socket")
 
 local Modbus = {}
 
-local transactionId = 0x0001
+local transactionId = 0x0000 -- we will increment before first use
 
 function Modbus:ensureConnection(ip, port)
-    if not self.client then
-        self.client = socket.tcp()
-        self.client:settimeout(5)
-        self.client:setoption("keepalive", true)
-        local success, err = self.client:connect(ip, port)
-        if not success then
-            print("Fehler beim Verbinden: " .. err)
-            self.client = nil
-            return false
-        end
+    if self.client then self.client:close() end
+
+    self.client = socket.tcp()
+    self.client:settimeout(4)
+--    self.client:setoption("keepalive", true)
+    local success, err = self.client:connect(ip, port)
+    if not success then
+        print("Fehler beim Verbinden: " .. tostring(err))
+        self.client = nil
+        return false
     end
     return true
 end
 
-function Modbus:sendRequest(request, expectedLen, ip, port)
-    self.client:send(request)
-    local response, err = self.client:receive(expectedLen)
-    if not response then
-        print("Fehler beim Empfangen: " .. err .. " Versuche Reconnect")
-        self.client:close()
-        self.client = nil
-        if not self:ensureConnection(ip, port) then
-            return nil, "Verbindung fehlgeschlagen"
-        end
-        self.client:send(request)
-        response, err = self.client:receive(expectedLen)
+function Modbus:sendRequest(request, expectedLen)
+    local response, err, bytes_sent, last_byte
+    bytes_sent, err, last_byte = self.client:send(request)
+    if not bytes_sent then
+        print("Fehler beim Senden:", err)
+        -- Hier kannst du auf err reagieren, z.B. reconnect versuchen
+    elseif bytes_sent ~= #request then
+        print("Fehler Bytes gesendet falsche Anzahl:", bytes_sent, #request)
     end
+
+
+    response, err = self.client:receive(expectedLen)
     if not response then
-        return nil, "Empfang fehlgeschlagen: " .. err
+        return nil, "Empfang fehlgeschlagen: " .. tostring(err)
     end
     return response, nil
 end
@@ -42,31 +41,31 @@ end
 -- luacheck: ignore self
 function Modbus:checkResponse(request, response, err)
     if not response then
-        print("Marstek: " .. err)
+        print("Modbus: " .. tostring(err))
         return false
     end
 
-    if response:byte(1) ~= request:byte(1)
-        or response:byte(2) ~= request:byte(2) then
-        print("Marstek: Falscher Transaktionscode in Antwort")
+    if response:byte(1) ~= request:byte(1) or response:byte(2) ~= request:byte(2) then
+        print("Modbus: Falscher Transaktionscode in Antwort")
+        return false
     end
-    if response:byte(3) ~= request:byte(3)
-        or response:byte(4) ~= request:byte(4) then
+    if response:byte(3) ~= request:byte(3) or response:byte(4) ~= request:byte(4) then
         print("Marstek: Falsche Protokoll-ID in Antwort")
+        return false
     end
 
     if response:byte(7) ~= request:byte(7) then
-        print("Marstek: Falsche Unit-ID in Antwort")
+        print("Modbus: Falsche Unit-ID in Antwort")
+        return false
     end
 
     if response:byte(8) ~= request:byte(8) then
-        print("Marstek: Fehlerhafter Funktionscode in Antwort")
+        print("Modbus: Fehlerhafter Funktionscode in Antwort")
         return false
     end
 
     return true
 end
-
 
 function Modbus:readHoldingRegisters(ip, port, slaveId, quantity, reg)
     if not self:ensureConnection(ip, port) then return nil end
@@ -91,20 +90,23 @@ function Modbus:readHoldingRegisters(ip, port, slaveId, quantity, reg)
         bit.rshift(quantity, 8), bit.band(math.floor(bytes/2), 0xFF)
     )
 
-    local response, err = self:sendRequest(request, 9 + bytes, ip, port)
+    local response, err = self:sendRequest(request, 9 + bytes)
+
+    self.client:close()
+    self.client = nil
+
     if not self:checkResponse(request, response, err) then
-        return nil
+        return false
     end
 
     if #response < 9 then
-        print("Marstek: Ungültige Antwortlänge")
-        return nil
+        print("Modbus: Ungültige Antwortlänge")
+        return false
     end
 
-
     if response:byte(9) ~= bytes then
-        print("Marstek: Fehlerhafte Byteanzahl in Antwort")
-        return nil
+        print("Modbus: Fehlerhafte Byteanzahl in Antwort")
+        return false
     end
 
     local value = 0
@@ -160,7 +162,11 @@ function Modbus:writeHoldingRegisters(ip, port, slaveId, quant, reg, value)
         request = request .. string.char(valueBytes[i])
     end
 
-    local response, err = self:sendRequest(request, #request, ip, port)
+    local response, err = self:sendRequest(request, #request)
+
+    self.client:close()
+    self.client = nil
+
     if not self:checkResponse(request, response, err) then
         return nil
     end

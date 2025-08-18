@@ -34,7 +34,7 @@ return function(self, config, VERSION)
         {"_$SUNSET$", self.sunset},
         {"_$FRONIUS_ADR$", config.FRONIUS_ADR},
         {"_$STATE_OF_OPERATION$", (self._state or "") .. SOC_string},
-        {"_$P_GRID$", string.format("%5.0f", self.P_Grid)},
+        {"_$P_GRID$", string.format("%5.0f", self.P_Grid or 0)},
         {"_$P_SELL_GRID$", self.P_Grid < 0 and string.format("%5.0f", -self.P_Grid) or "0"},
         {"_$P_BUY_GRID$", self.P_Grid > 0 and string.format("%5.0f", self.P_Grid) or "0"},
         {"_$P_LOAD$", string.format("%5.0f", self.P_Load)},

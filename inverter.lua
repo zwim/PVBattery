@@ -1,4 +1,3 @@
--- Inverter.lua
 
 local Switch = require("switch")
 local AntBMS = require("antbms")
@@ -9,8 +8,7 @@ local Inverter = Switch:extend{
     bms_host = "",
     max_power = 0,
     min_power = 0,
-    -- will get initialized by new
-    BMS = nil,
+    BMS = nil, -- will get initialized by new
 }
 
 function Inverter:init()
@@ -27,7 +25,6 @@ function Inverter:startDischarge(req_power)
             util.sleep_time(1)
         end
         self:toggle("on")
-        self:clearDataAge()
     end
 end
 
@@ -38,10 +35,10 @@ end
 function Inverter:stopDischarge()
     if self.BMS then
         self.BMS:setPower(0)
+        self.BMS:disableDischarge()
         util.sleep_time(0.5)
     end
     self:toggle("off")
-    self:clearDataAge()
 end
 
 function Inverter:safeStopDischarge()

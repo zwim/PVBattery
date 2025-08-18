@@ -87,7 +87,6 @@ function Marstek:readACPower()
     return self.ACPower, "Battery Power", registers.readACPower.unit
 end
 
-
 function Marstek:readMaxChargePower()
     self.maxChargePower = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1,
         registers.maxChargePower)
@@ -98,7 +97,6 @@ end
 function Marstek:writeMaxChargePower(value)
     return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.maxChargePower, value)
 end
-
 
 function Marstek:readMaxDischargePower()
     self.maxDischargePower = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1,
@@ -112,7 +110,6 @@ function Marstek:writeMaxDischargePower(value)
     end
     return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.maxDischargePower, value)
 end
-
 
 function Marstek:readChargingCutoff()
     return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.ChargingCutoff),
@@ -174,13 +171,11 @@ end
 
 -----------------------------------------------------------------------------------------------------------
 
-
 local function printValue(value, name, unit)
     if value then
         print(string.format("%s: %s %s", name or "", tostring(value), unit or ""))
     end
 end
-
 
 -- Beispielaufruf
 local ip = "192.168.0.208" -- IP-Adresse des ELFIN WL11A

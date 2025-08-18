@@ -586,10 +586,11 @@ function AntBMS:isBatteryFull()
 
         if is_full then
             self.minCellDiff = config.minCellDiffBase + config.CellDiffHysteresis
+            return true
         else
             self.minCellDiff = config.minCellDiffBase
+            return false
         end
-        return is_full
     end
 
     return false
