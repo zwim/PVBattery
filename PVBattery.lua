@@ -111,6 +111,7 @@ function PVBattery:init()
             BMS = BMS,
         }
         table.insert(self.Inverter, Inverter)
+        mqtt_reader:clearRetainedMessages(self.Inverter.host)
         mqtt_reader:askHost(self.Inverter.host)
 
         for i = 1, #Device.charger_switches do
@@ -127,6 +128,7 @@ function PVBattery:init()
                 end
             end
             table.insert(self.Charger, Charger)
+            mqtt_reader:clearRetainedMessages(self.Charger.host)
             mqtt_reader:askHost(self.Charger.host)
         end
     end
@@ -160,10 +162,10 @@ function PVBattery:updateState()
     -- first check the critical parts of the battery
     for _, BMS in ipairs(self.BMS) do
         if ensureBMSData(BMS) then
-            if BMS.v.SOC <= config.bat_SOC_min then
-                return self:setState(state.low_battery)
-            elseif BMS:isLowChargedOrNeedsRescue() and BMS:needsRescueCharge() then
+            if BMS:isLowChargedOrNeedsRescue() and BMS:needsRescueCharge() then
                 return self:setState(state.rescue_charge)
+            elseif BMS.v.SOC <= config.bat_SOC_min then
+                return self:setState(state.low_battery)
             elseif BMS.v.CellDiff > config.max_cell_diff then
                 return self:setState(state.cell_diff)
             elseif self:getState() == state.cell_diff
@@ -270,7 +272,7 @@ function PVBattery:turnOffBestInverter()
             if Inverter.BMS:getDischargeState() == "on" and Inverter:getPowerState() == "on" then
                 -- Inverter delivers min_power (positive), VenusE delivers power (positive)
                 local max_power = Inverter:getMaxPower()
-                if self.P_VenusE < max_power or (self.P_VenusE >= 0 and self:isBuyingMoreThan(50)) then
+                if self.P_VenusE < max_power or (self.P_VenusE >= 0 and self:isSellingMoreThan(50)) then
                     util:log("debug xxx "..i, "P_VenusE ".. self.P_VenusE, "P_Grid "..self.P_Grid,
                         "max_power "..max_power)
                     inverter_num = i
@@ -423,8 +425,8 @@ function PVBattery:setChargeOrDischarge()
 end
 
 -- luacheck: ignore self
-PVBattery[state.idle] = function(self)
-    local expected_state = self:setChargeOrDischarge()
+PVBattery[state.idle] = function(self, expected_state)
+    expected_state = expected_state or self:setChargeOrDischarge()
     if expected_state == state.charge or expected_state == state.discharge then
         self[expected_state](self, expected_state)
     else
@@ -433,8 +435,13 @@ PVBattery[state.idle] = function(self)
         end
         for _, BMS in pairs(self.BMS) do
             BMS:disableDischarge()
-            self:setState(state.recalculate)
         end
+        for _, Inverter in ipairs(self.Inverter) do
+            if not Inverter.time_controlled then
+                Inverter:stopDischarge()
+            end
+        end
+        self:setState(state.recalculate)
     end
 end
 
@@ -523,8 +530,8 @@ PVBattery[state.discharge] = function(self, expected_state)
                 end
             end
         end
-    elseif expected_state == state.charge then
-        PVBattery[state.charge](self, expected_state)
+    else
+        PVBattery[expected_state](self, expected_state)
     end
 end
 

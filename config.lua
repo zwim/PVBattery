@@ -94,6 +94,14 @@ Device = {
         inverter_control = nil,
         inverter_time_controlled = "sunrise",
     },
+    { -- Device[3]
+        name = "Balkon Inverter",
+        BMS = nil,
+        charger_switches = {},
+        inverter_switch = "balkon-inverter.lan",
+        inverter_control = nil,
+        inverter_time_controlled = "sunrise",
+    },
 }
 
 -- compressor = "bzip2 -6"
