@@ -101,7 +101,7 @@ function Switch:getPower()
 
     local Power = state.power
 
-    if not Power and self:getPowerState() then
+    if not Power or self:getPowerState() == "" then
        return 0
     end
 
