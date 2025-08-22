@@ -45,9 +45,9 @@ local configuration = {
     cell_cell_diff_hysteresis = 0.020,
 
     lastFullPeriod = 5*24*3600, -- two days
-    minCellDiff = 0.003,
-    minCellDiffBase = 0.003,
-    CellDiffHysteresis = 0.003,
+    min_cell_diff = 0.003,
+    min_cell_diff_base = 0.003,
+    cell_diff_hysteresis = 0.003,
     minPower = 30,
     charge_finisched_current = -0.3,
 

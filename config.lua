@@ -46,16 +46,16 @@ bat_SOC_min_rescue = 10 -- start rescue charge
 bat_SOC_hysteresis = 3
 bat_voltage_hysteresis = 0.100
 
-bat_lowest_voltage = 2.900 -- lowest allowed voltage
-bat_lowest_rescue = 2.850 -- start rescue charge
+bat_lowest_voltage = 2.850 -- lowest allowed voltage
+bat_lowest_rescue = 2.800 -- start rescue charge
 bat_highest_voltage = 3.550 -- highest allowed voltage
-bat_high_voltage_hysteresis = 0.050 -- hysteresis on the high side
+bat_high_voltage_hysteresis = 0.100 -- hysteresis on the high side
 max_cell_diff = 0.150 -- maximum allowed cell diff
 max_cell_diff_hysteresis = 0.020
 
-minCellDiff = 0.003 -- 0.003
-minCellDiffBase = 0.003 -- 0.003
-CellDiffHysteresis = 0.003
+min_cell_diff = 0.003 -- 0.003
+min_cell_diff_base = 0.003 -- 0.003
+cell_diff_hysteresis = 0.003
 minPower = 30
 charge_finished_current = -0.3
 
@@ -67,6 +67,11 @@ update_interval = 15 -- time to keep old data before an update
 
 FRONIUS_ADR = "192.168.0.49"
 
+db_url    = "http://localhost:8086"
+db_token  = "ZWyI3Qh2E_LvX3EgifO_8cTbaBwyFktEfLwFxGiLffjX7HGQfDm7x4AzJuK7_1jp2Yfj6CzSat3Ozv4P8efLZQ=="
+db_org    = "Photovoltaik"
+db_bucket = "Leistung"
+
 Device = {
     { -- Device[1]
         name = "Battery Pack",
@@ -77,8 +82,8 @@ Device = {
 ---            "battery-charger3.lan",
         },
         charger_max_power = {
-            350,
-            300,
+            500,
+            340,
 --            200,
         },
         inverter_switch = "battery-inverter.lan",
