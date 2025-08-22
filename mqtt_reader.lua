@@ -6,8 +6,8 @@ local util = require("util")
 local mqtt_reader = {
     client,
     ioloop,
-    hosts = {},
 	states = {},
+    got_message_in_last_iteration = false,
 }
 
 function mqtt_reader:printStates()
@@ -53,7 +53,7 @@ QoS 2: Die Nachricht wird genau einmal zugestellt (Assured Delivery).
 				topic="+/#",
 				qos = 2,
 				callback = function(suback)
-					print("subscribed:", suback)
+					print("subscribed ro +/# with qos=2:", suback)
 				end,
 			}
 		end, -- connect
@@ -123,24 +123,14 @@ QoS 2: Die Nachricht wird genau einmal zugestellt (Assured Delivery).
 						self.states[topic].yesterday = decoded.statussns.energy.yesterday
 						self.states[topic].total = decoded.statussns.energy.total
 					elseif data == "RESULT" then
-						if decoded.power then
-							self.states[topic].switch1 = decoded.power
-						end
+--						if decoded.power then
+--							self.states[topic].switch1 = decoded.power
+--						end
 					elseif data == "POWER" then
 						self.states[topic].power = decoded.power
 					end
 				end
 			end
-
-	--[[
-			if topic == "Charger" then
-				print(prefix, topic, data, decoded, ".")
-				print(msg)
-				printStates(states)
-				print(" ")
-			end
-			]]
-	--			print(msg)
 		end,
 
 		error = function(err)
@@ -156,24 +146,26 @@ function mqtt_reader:askHost(host)
 	if not host or host == "" then return end
 	host = host:lower()
 
+	print("xxx1", host)
 	self.client:publish{
 		topic = "cmnd/" .. host .. "/Power",
 		payload = "",
 		qos = 2,
 	}
-	self.ioloop:iteration()
 	self.client:publish{
 		topic = "cmnd/" .. host .. "/Status",
 		payload = "",
 		qos = 2,
 	}
     self.ioloop:iteration()
+	print("xxx11")
 end
 
 function mqtt_reader:clearRetainedMessages(host)
 	if not host or host == "" then return end
 	host = host:lower()
 
+	print("xxx2", host)
 	self.client:publish{
 		topic = "+/" .. host .. "/#",
 		payload = "",
@@ -181,8 +173,17 @@ function mqtt_reader:clearRetainedMessages(host)
 		qos = 0,
 	}
 	self.ioloop:iteration()
+	print("xxx22")
 end
 
+function mqtt_reader:updateStates(wait_time)
+	wait_time = wait_time or 0.2
+    repeat
+        mqtt_reader.got_message_in_last_iteration = false
+        mqtt_reader.ioloop:iteration()
+        util.sleep_time(wait_time)
+    until not mqtt_reader.got_message_in_last_iteration
+end
 
 if arg[0]:find("mqtt_reader.lua") then
 

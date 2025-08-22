@@ -25,14 +25,13 @@ return function(self, config)
     end
     file:close()
 
-    for i = 1, #commands do
-        local command = commands[i]
+    for _, command in ipairs(commands) do
         local action, cfg_file
 
         if command:find("^bms para[a-z]* backup +") then
             action = "backup"
             cfg_file = command:gsub("^bms para[a-z]* backup +", "")
-            for _, BMS in pairs(self.BMS) do
+            for _, BMS in ipairs(self.BMS) do
                 BMS:getParameters()
             end
 
@@ -46,5 +45,4 @@ return function(self, config)
     end
 
     print(config.command_file_name)
-
 end

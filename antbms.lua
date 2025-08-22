@@ -108,7 +108,7 @@ AntBMS.wakeup = function() end
 function AntBMS:new(o)
     o = o or {}   -- create object if user does not provide one
     o.lastFullPeriod = o.lastFullPeriod or 2*24*3600 -- two days for now xxx
-    o.minCellDiff = o.minCellDiff or 0.03
+    o.min_cell_diff = o.min_cell_diff or 0.03
     o.minPower = o.minPower or 50
     setmetatable(o, self)
     self.__index = self
@@ -578,17 +578,17 @@ function AntBMS:isBatteryFull()
         local is_full
         if config.bat_SOC_max == 100 then
             is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
-                and self.v.CellDiff <= self.minCellDiff
+                and self.v.CellDiff <= self.min_cell_diff
                 and self.v.CurrentPower > config.charge_finished_current and self.v.CurrentPower <= self.minPower
         else
             is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
         end
 
         if is_full then
-            self.minCellDiff = config.minCellDiffBase + config.CellDiffHysteresis
+            self.min_cell_diff = config.min_cell_diff_base + config.cell_diff_hysteresis
             return true
         else
-            self.minCellDiff = config.minCellDiffBase
+            self.min_cell_diff = config.min_cell_diff_base
             return false
         end
     end
@@ -804,7 +804,7 @@ function AntBMS:needsBalancing(balance_threshold)
             elseif self.v.HighestVoltage >= config.bat_highest_voltage then
                 return true
             elseif math.abs(self.v.Current) <= 1.0 then
-                if self.v.CellDiff >= self.minCellDiff then
+                if self.v.CellDiff >= self.min_cell_diff then
                     return true
                 elseif not self:getDischargeState() then
                     return true
