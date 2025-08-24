@@ -163,7 +163,7 @@ function MopedCharger:main(profiling_runs)
         while (not P_Grid or not P_VenusE) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
             repeat_request = repeat_request - 1
-            util.sleep_time(1) -- try again in 1 second
+            util.sleepTime(1) -- try again in 1 second
 --            P_Grid, P_Load, P_PV = Fronius:getGridLoadPV()
             if not P_Grid then
                 P_Grid = P1meter:getCurrentPower()
@@ -242,9 +242,9 @@ function MopedCharger:main(profiling_runs)
         end
 
         if short_sleep then
-            util.sleep_time(short_sleep - (util.getCurrentTime() - _start_time))
+            util.sleepTime(short_sleep - (util.getCurrentTime() - _start_time))
         else
-            util.sleep_time(config.sleep_time - (util.getCurrentTime() - _start_time))
+            util.sleepTime(config.sleep_time - (util.getCurrentTime() - _start_time))
         end
     end -- end of inner loop
 end

@@ -11,7 +11,6 @@ local Switch = {
     socket = nil, -- tcp.socket, will be filled automatically
     host = nil,
     port = 80,
-    timeOfLastRequiredData = 0, -- no data requiered yet
     max_power = 0,
 }
 
@@ -33,9 +32,6 @@ function Switch:new(o)
 end
 
 function Switch:init()
-    if not self.timeOfLastRequiredData then
-        self.timeOfLastRequiredData = 0
-    end
     if not self.max_power then
         self.max_power = 0
     end
@@ -105,7 +101,7 @@ function Switch:getPower()
        return 0
     end
 
-    if Power and Power > 20 then
+    if Power > 20 then
         local weight = 0.2
         self.max_power = (1-weight)*self.max_power + weight*Power
     end
@@ -117,6 +113,8 @@ function Switch:getMaxPower()
 end
 
 function Switch:getPowerState()
+    mqtt_reader:updateStates()
+
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
     if not state then
@@ -151,6 +149,8 @@ function Switch:toggle(on)
     end
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
     local _ = http.request(url)
+    util.sleepTime(0.2)
+    mqtt_reader:updateStates()
 end
 
 return Switch
