@@ -200,13 +200,13 @@ function AntBMS:setPower(power)
 
     if power > 0 then
         self:enableDischarge()
-        util.sleep_time(1)
+        util.sleepTime(1)
     end
 
     self:_sendCommand(string.format("set?power=%d", math.floor(power)))
 
     if power == 0 then
-        util.sleep_time(1)
+        util.sleepTime(1)
         self:disableDischarge()
     end
 end
@@ -345,10 +345,10 @@ function AntBMS:getData(force)
             if try == 4 then
                 print("Try to restart AntBMS")
                 self:restart()
-                util.sleep_time(5) -- wait
+                util.sleepTime(5) -- wait
             end
 
-            util.sleep_time(5) -- wait
+            util.sleepTime(5) -- wait
 
         end --for
 
@@ -365,7 +365,7 @@ function AntBMS:getData(force)
             os.execute("date")
             print("Could not read bsm.data --- reboot ESP32 --- sleeping "..
                 ESP32_RESET_SLEEP_TIME)
-            util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)
+            util.sleepTime(ESP32_RESET_SLEEP_TIME + 1)
             return false
         end
 
@@ -629,7 +629,7 @@ function AntBMS:getParameters()
             print("Could not get bms parameters")
             util:log("Could not get bms paramters")
 
-            util.sleep_time(1)
+            util.sleepTime(1)
         end
         if not code or not body then
             -- maybe the BMS has lost internet connection, so reset the ESP32
@@ -639,7 +639,7 @@ function AntBMS:getParameters()
             util:log("BMS hard reset")
             os.execute("date")
             print("sleeping " .. ESP32_RESET_SLEEP_TIME)
-            util.sleep_time(ESP32_RESET_SLEEP_TIME + 1)
+            util.sleepTime(ESP32_RESET_SLEEP_TIME + 1)
             return false
         end
         for n = 1, #body do

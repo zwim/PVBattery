@@ -123,11 +123,13 @@ QoS 2: Die Nachricht wird genau einmal zugestellt (Assured Delivery).
 						self.states[topic].yesterday = decoded.statussns.energy.yesterday
 						self.states[topic].total = decoded.statussns.energy.total
 					elseif data == "RESULT" then
---						if decoded.power then
---							self.states[topic].switch1 = decoded.power
---						end
+						if decoded.power then
+							self.states[topic].switch1 = decoded.power
+						end
 					elseif data == "POWER" then
-						self.states[topic].power = decoded.power
+						if decoded.power then
+							self.states[topic].switch1 = decoded.power
+						end
 					end
 				end
 			end
@@ -146,7 +148,6 @@ function mqtt_reader:askHost(host)
 	if not host or host == "" then return end
 	host = host:lower()
 
-	print("xxx1", host)
 	self.client:publish{
 		topic = "cmnd/" .. host .. "/Power",
 		payload = "",
@@ -158,7 +159,7 @@ function mqtt_reader:askHost(host)
 		qos = 2,
 	}
     self.ioloop:iteration()
-	print("xxx11")
+    self.ioloop:iteration()
 end
 
 function mqtt_reader:clearRetainedMessages(host)
@@ -178,11 +179,14 @@ end
 
 function mqtt_reader:updateStates(wait_time)
 	wait_time = wait_time or 0.2
-    repeat
+    while true do
         mqtt_reader.got_message_in_last_iteration = false
         mqtt_reader.ioloop:iteration()
-        util.sleep_time(wait_time)
-    until not mqtt_reader.got_message_in_last_iteration
+		if not mqtt_reader.got_message_in_last_iteration then
+			break
+		end
+        util.sleepTime(wait_time)
+    end
 end
 
 if arg[0]:find("mqtt_reader.lua") then

@@ -8,7 +8,6 @@ local influx = {
     headers
     }
 
-
 function influx:init(url, token, org, bucket)
     if not url or not token or not org or not bucket then
         return
@@ -52,9 +51,11 @@ function influx:writeLine(device, datum, value)
         sink = ltn12.sink.table(response_body)
     }
 
-    -- Antwort ausgeben
-    print("Status Code:", status_code)
-    print("Response Body:", table.concat(response_body))
+    if status_code ~= 204 then
+        -- Antwort ausgeben
+        print("Status Code:", status_code)
+        print("Response Body:", table.concat(response_body))
+    end
 end
 
 return influx

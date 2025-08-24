@@ -128,7 +128,7 @@ function PVBattery:init()
                 BMS.wakeup = function()
                     print("Wakeup charge started")
                     Charger:startCharge()
-                    util.sleep_time(config.sleep_time)
+                    util.sleepTime(config.sleep_time)
                 end
             end
             table.insert(self.Charger, Charger)
@@ -173,7 +173,7 @@ function PVBattery:updateState()
     local function ensureBMSData(BMS)
         for _ = 1, 5 do
             if BMS:getData() then return true end
-            util.sleep_time(2)
+            util.sleepTime(2)
             print("Problem getting BMS data")
         end
         return BMS:getData()
@@ -209,7 +209,7 @@ function PVBattery:updateState()
             if power_state == "on" then
                 local discharge_state = Inverter.BMS:getDischargeState()
                 if discharge_state == "off" then
-                    printStackTrace(self)
+--                    printStackTrace(self)
                     return self:setState(state.force_discharge)
                 elseif discharge_state == "on" then
                     return self:setState(state.discharge)
@@ -749,6 +749,16 @@ function PVBattery:writeToDatabase()
 
     Influx:writeLine("Status", "Status", self:getState())
 
+
+    datum = "Energie"
+    Influx:writeLine("garage-inverter", datum, self.Inverter[1]:getEnergyTotal())
+    Influx:writeLine("battery-inverter", datum, self.Inverter[2]:getEnergyTotal())
+    Influx:writeLine("balkon-inverter", datum, self.Inverter[3]:getEnergyTotal())
+
+    Influx:writeLine("battery-charger", datum, self.Charger[1]:getEnergyTotal())
+    Influx:writeLine("battery-charger2", datum, self.Charger[2]:getEnergyTotal())
+
+
 end
 
 function PVBattery:getCurrentValues()
@@ -766,7 +776,7 @@ function PVBattery:getCurrentValues()
     local repeat_request = 5
     while (not self.P_Grid or not self.P_Load or not self.P_PV or not self.P_VenusE) and repeat_request > 0 do
         repeat_request = repeat_request - 1
-        util.sleep_time(1) -- try again in 1 second
+        util.sleepTime(1) -- try again in 1 second
         if not P_Grid or not P_Load or not P_PV then
             util:log("Communication error: repeat request:", repeat_request)
             P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
@@ -862,8 +872,11 @@ function PVBattery:main(profiling_runs)
             util:log(string.format("Roof %8f W", self.P_PV))
             util:log(string.format("VenusE %8f W", self.P_VenusE))
 
+            mqtt_reader:updateStates()
             local oldstate = self:getState()
             local newstate = self:updateState()
+
+            mqtt_reader:updateStates()
 
             -- update state, as the battery may have changed or the user could have changed something manually
             self:outputTheLog(date_string, oldstate, newstate)
@@ -912,9 +925,9 @@ function PVBattery:main(profiling_runs)
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
 
         if short_sleep then
-            util.sleep_time(short_sleep - (util.getCurrentTime() - _start_time))
+            util.sleepTime(short_sleep - (util.getCurrentTime() - _start_time))
         else
-            util.sleep_time(config.sleep_time - (util.getCurrentTime() - _start_time))
+            util.sleepTime(config.sleep_time - (util.getCurrentTime() - _start_time))
         end
     end -- end of inner loop
 end

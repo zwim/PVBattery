@@ -114,7 +114,7 @@ function util.printTime(str)
 end
 
 -- sleeps 'time' seconds
-function util.sleep_time(time)
+function util.sleepTime(time)
     if time <= 0 then
         return
     end

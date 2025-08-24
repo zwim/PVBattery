@@ -9,5 +9,5 @@ while true do
     print("(OH NO) Crash happend at:")
     os.execute("date")
 
-    util.sleep_time(1)
+    util.sleepTime(1)
 end

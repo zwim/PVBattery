@@ -67,10 +67,13 @@ update_interval = 15 -- time to keep old data before an update
 
 FRONIUS_ADR = "192.168.0.49"
 
-db_url    = "http://localhost:8086"
-db_token  = "ZWyI3Qh2E_LvX3EgifO_8cTbaBwyFktEfLwFxGiLffjX7HGQfDm7x4AzJuK7_1jp2Yfj6CzSat3Ozv4P8efLZQ=="
-db_org    = "Photovoltaik"
-db_bucket = "Leistung"
+-- db_url    = "http://localhost:8086"
+-- db_token  = "ZWyI3Qh2E_LvX3EgifO_8cTbaBwyFktEfLwFxGiLffjX7HGQfDm7x4AzJuK7_1jp2Yfj6CzSat3Ozv4P8efLZQ=="
+
+db_url    = "http://battery-control:8086"
+db_token  = "Xeq_91oWUcNVCNwE4JsMYJ7-2qT3HybpO5HoqmI40ZEWxZ0Uo6f6GFwg0DamnCPIQBVEXeHcVIy5Or4SbkBkEw=="
+db_org    = "PV"
+db_bucket = "Daten"
 
 Device = {
     { -- Device[1]
@@ -87,7 +90,6 @@ Device = {
 --            200,
         },
         inverter_switch = "battery-inverter.lan",
-        inverter_control = nil,
         inverter_min_power = 150,
         inverter_time_controlled = nil,
     },
@@ -96,7 +98,6 @@ Device = {
         BMS = nil,
         charger_switches = {},
         inverter_switch = "garage-inverter.lan",
-        inverter_control = nil,
         inverter_time_controlled = "sunrise",
     },
     { -- Device[3]
@@ -104,7 +105,6 @@ Device = {
         BMS = nil,
         charger_switches = {},
         inverter_switch = "balkon-inverter.lan",
-        inverter_control = nil,
         inverter_time_controlled = "sunrise",
     },
 }
