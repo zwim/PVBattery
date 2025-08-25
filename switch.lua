@@ -53,9 +53,11 @@ function Switch:updateStatus()
 
     local name = self.host:match("^(.*)%.")
     mqtt_reader.askHost(name)
+    mqtt_reader:updateStates()
 end
 
 function Switch:getEnergyTotal()
+    mqtt_reader:updateStates()
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
     if not state then
@@ -78,6 +80,8 @@ function Switch:getEnergyToday()
 end
 
 function Switch:getEnergyYesterday()
+    mqtt_reader:updateStates()
+
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
     if not state then
@@ -89,6 +93,8 @@ function Switch:getEnergyYesterday()
 end
 
 function Switch:getPower()
+    mqtt_reader:updateStates()
+
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
     if not state then

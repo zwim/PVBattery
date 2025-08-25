@@ -67,9 +67,11 @@ update_interval = 15 -- time to keep old data before an update
 
 FRONIUS_ADR = "192.168.0.49"
 
+mqtt_broker_uri = "battery-control.lan"
+mqtt_client_id = "PVBattery"
+
 -- db_url    = "http://localhost:8086"
 -- db_token  = "ZWyI3Qh2E_LvX3EgifO_8cTbaBwyFktEfLwFxGiLffjX7HGQfDm7x4AzJuK7_1jp2Yfj6CzSat3Ozv4P8efLZQ=="
-
 db_url    = "http://battery-control:8086"
 db_token  = "Xeq_91oWUcNVCNwE4JsMYJ7-2qT3HybpO5HoqmI40ZEWxZ0Uo6f6GFwg0DamnCPIQBVEXeHcVIy5Or4SbkBkEw=="
 db_org    = "PV"

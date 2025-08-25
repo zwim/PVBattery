@@ -14,48 +14,35 @@ function mqtt_reader:printStates()
 	if not next(self.states) then return end
 	for i, v in pairs(self.states) do
 		if type(v) == "table" and v and (v.switch1 or v.power) then
-			if i == "VenusE" then
-				local time = os.date("%Y-%m-%d %H:%M:%S", v.time)
-				print(time, i, v.switch1, v.power)
-			end
+			local time = os.date("%Y-%m-%d %H:%M:%S", v.time)
+			print(time, i, v.switch1, v.power)
+
 		end
 	end
 end
 
-function mqtt_reader:init(uri)
+function mqtt_reader:init(uri, id)
+	assert(id ~= nil and id ~= "")
 	-- create mqtt client
 	self.client = mqtt.client{
 	--[[
 		username = "stPwSVV73Eqw5LSv0iMXbc4EguS7JyuZR9lxU5uLxI5tiNM8ToTVqNpu85pFtJv9",
 		clean = true,
 	]]
+		id = id,
 		uri = uri,
 		clean = true,
 	}
-	print("created MQTT client", self.client)
 
 	self.client:on{
 		connect = function(connack)
 			if connack.rc ~= 0 then
 				print("connection to broker failed:", connack:reason_string(), connack)
 				return
+			else
+				print("connected to broker")
 			end
-	--		print("connected:", connack) -- successful connection
 
---[[
-QoS 0: Die Nachricht wird höchstens einmal zugestellt (Fire and Forget).
-QoS 1: Die Nachricht wird mindestens einmal zugestellt (Acknowledged Delivery).
-QoS 2: Die Nachricht wird genau einmal zugestellt (Assured Delivery).
-]]
-
-			-- subscribe to test topic and publish message after it
-			self.client:subscribe{
-				topic="+/#",
-				qos = 2,
-				callback = function(suback)
-					print("subscribed ro +/# with qos=2:", suback)
-				end,
-			}
 		end, -- connect
 
 		message = function(msg)
@@ -68,34 +55,29 @@ QoS 2: Die Nachricht wird genau einmal zugestellt (Assured Delivery).
 
 			self.got_message_in_last_iteration = true
 
-			local full_topic = msg.topic
-			local pos = full_topic:find("/")
+			local msg_topic = msg.topic
+			local pos = msg_topic:find("/")
 			if not pos then return end
 
-			local prefix = full_topic:sub(1, pos-1)
-			full_topic = full_topic:sub(pos+1)
+			local prefix = msg_topic:sub(1, pos-1)
+			msg_topic = msg_topic:sub(pos+1)
 
-			pos = full_topic:find("/")
+			pos = msg_topic:find("/")
 			if not pos then return end
 
-			local topic = full_topic:sub(1, pos-1):lower()
-			full_topic = full_topic:sub(pos+1)
+			local topic = msg_topic:sub(1, pos-1):lower()
+			msg_topic = msg_topic:sub(pos+1)
 
-			local data = full_topic
+			local data = msg_topic
 
-			if msg.payload then
-				msg.payload = msg.payload:lower()
-			end
+			msg.payload = msg.payload:lower()
+
 			local decoded = json.decode(msg.payload)
 			if self.states[topic] == nil then
 				self.states[topic] = {}
 			end
 
-			if topic == "battery-charger" then
---				print("xxx", string.format("%s|%s|%s", msg.topic, prefix, data))
---				print("xxx", msg.payload)
---				print("")
-			end
+--			print(prefix, topic, data)
 
 			if decoded and type(decoded) ~= "number" then
 				self.states[topic].time = util.getCurrentTime()
@@ -141,71 +123,104 @@ QoS 2: Die Nachricht wird genau einmal zugestellt (Assured Delivery).
 	}
 
 	self.ioloop = mqtt.get_ioloop()
-	self.ioloop:add(mqtt_reader.client)
+	self.ioloop:add(self.client)
+end
+
+function mqtt_reader:subscribe(topic, qos)
+	if not qos then qos = 0 end
+
+	topic = topic:match("^(.*)%.") or topic
+	topic = topic:lower()
+
+	if topic then
+		topic = "+/" .. topic .. "/#"
+	else
+		topic = "+/#"
+	end
+	--[[
+	QoS 0: Die Nachricht wird höchstens einmal zugestellt (Fire and Forget).
+	QoS 1: Die Nachricht wird mindestens einmal zugestellt (Acknowledged Delivery).
+	QoS 2: Die Nachricht wird genau einmal zugestellt (Assured Delivery).
+	]]
+	-- subscribe to test topic and publish message after it
+	self.client:subscribe{
+		topic = topic,
+		qos = qos,
+		callback = function(suback)
+			print("subscribed ro to " .. topic .. " with qos=", qos, suback)
+		end,
+	}
 end
 
 function mqtt_reader:askHost(host)
 	if not host or host == "" then return end
+	host = host:match("^(.*)%.") or host
 	host = host:lower()
 
 	self.client:publish{
 		topic = "cmnd/" .. host .. "/Power",
 		payload = "",
-		qos = 2,
+		qos = 0,
 	}
 	self.client:publish{
 		topic = "cmnd/" .. host .. "/Status",
 		payload = "",
-		qos = 2,
+		qos = 0,
 	}
-    self.ioloop:iteration()
     self.ioloop:iteration()
 end
 
-function mqtt_reader:clearRetainedMessages(host)
-	if not host or host == "" then return end
-	host = host:lower()
+function mqtt_reader:clearRetainedMessages(topic)
+	if not topic or topic == "" then return end
 
-	print("xxx2", host)
 	self.client:publish{
-		topic = "+/" .. host .. "/#",
+		topic = topic,
 		payload = "",
 		retain = true,
 		qos = 0,
 	}
 	self.ioloop:iteration()
-	print("xxx22")
 end
 
 function mqtt_reader:updateStates(wait_time)
 	wait_time = wait_time or 0.2
+	local got_message
     while true do
         mqtt_reader.got_message_in_last_iteration = false
         mqtt_reader.ioloop:iteration()
 		if not mqtt_reader.got_message_in_last_iteration then
 			break
 		end
+		got_message = true
         util.sleepTime(wait_time)
     end
+	return got_message
 end
 
 if arg[0]:find("mqtt_reader.lua") then
 
-	mqtt_reader:init("battery-control.lan")  -- "192.168.0.12"
+	mqtt_reader:init("battery-control.lan", "newone")  -- "192.168.0.12"
+	mqtt_reader:updateStates()
 
---	mqtt_reader:askHost("Moped-Inverter")
-	mqtt_reader:askHost("Battery-Charger")
---	mqtt_reader:askHost("Battery-Charger2")
---	mqtt_reader:askHost("Garage-Inverter")
---	mqtt_reader:askHost("Battery-Inverter")
+
+	mqtt_reader:subscribe("moped-charger.lan", 0)
+	util.sleepTime(1)
+	mqtt_reader:updateStates()
+	util.sleepTime(1)
+	mqtt_reader:askHost("moped-charger.lan")
+	mqtt_reader:updateStates()
+
+	util.sleepTime(1)
+
+	mqtt_reader:subscribe("garage-inverter.lan", 0)
+	util.sleepTime(1)
+	mqtt_reader:updateStates()
 
     print("now waiting for messages")
     while true do
         repeat
-            mqtt_reader.ioloop:iteration()
-            if mqtt_reader.got_message_in_last_iteration then
+            if mqtt_reader:updateStates() then
 	            mqtt_reader:printStates()
-				mqtt_reader.got_message_in_last_iteration = nil
 				os.execute("sleep 0.1")
             else
 				os.execute("sleep 1s")
@@ -214,7 +229,5 @@ if arg[0]:find("mqtt_reader.lua") then
         until (false)
     end
 end
-
-mqtt_reader:init("battery-control.lan")  -- "192.168.0.12"
 
 return mqtt_reader

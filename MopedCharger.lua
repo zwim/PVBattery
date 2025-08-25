@@ -1,6 +1,4 @@
 
-local CHARGER_IP = "moped-charger"
-
 --local Fronius = require("fronius")
 local P1meter = require("p1meter")
 local Marstek = require("marstek")
@@ -9,6 +7,7 @@ local SunTime = require("suntime/suntime")
 local ChargerClass = require("charger")
 
 local config = require("configuration")
+local mqtt_reader = require("mqtt_reader")
 local util = require("util")
 
 local MopedCharger = {
@@ -30,6 +29,7 @@ local MopedCharger = {
 function MopedCharger:init()
     config.config_file_name = "moped-config.lua"
     config.log_file_name = "/var/log/MopedCharger.log"
+    config:read()
 
     -- config.compressor = "bzip2 -6"
     config.compressor = "zstd -8 --rm -T3"
@@ -42,7 +42,8 @@ function MopedCharger:init()
 
     -- Uhhhohhh we need correct ephemerides ;-)
     local position = config.position
-    SunTime:setPosition(position.name, position.latitude, position.longitude, position.timezone, position.height, true)
+    SunTime:setPosition(position.name, position.latitude, position.longitude,
+        position.timezone, position.height, true)
 
     SunTime:setDate()
     SunTime:calculateTimes()
@@ -54,14 +55,19 @@ function MopedCharger:init()
     self.sunset = string.format("%02d:%02d:%02d", h, m, s)
     util:log("Sun set at " .. self.sunset)
 
+    mqtt_reader:init(config.mqtt_broker_uri, config.mqtt_client_id)
+
     -- IMPORTANT: Our authorative power meter, which shows if we produce or consume energy
 --    Fronius = Fronius:new{host = config.FRONIUS_ADR}
     self.P1meter = P1meter:new{host = "HW-p1meter.lan"}
     self.VenusE = Marstek:new({ip = "192.168.0.208", port=502, slaveId = 1})
 
     self.Charger = ChargerClass:new{
-        host = CHARGER_IP,
+        host = config.charger,
     }
+    mqtt_reader:subscribe(self.Charger.host, 0)
+    mqtt_reader:askHost(self.Charger.host)
+    mqtt_reader:updateStates()
 end
 
 function MopedCharger:getState() return self._state end
@@ -123,8 +129,6 @@ function MopedCharger:main(profiling_runs)
         date = os.date("*t")
         util:log("\n#############################################")
 
-        self.Charger:clearDataAge()
-
         local date_string = string.format("%d/%d/%d-%02d:%02d:%02d",
         last_date.year, last_date.month, last_date.day,
         last_date.hour, last_date.min, last_date.sec)
@@ -159,6 +163,12 @@ function MopedCharger:main(profiling_runs)
         -- Negative values mean VenusE is discharging
         local P_VenusE = self.VenusE:readACPower()
 
+        mqtt_reader:updateStates()
+        local power = self.Charger:getPower()
+        if power ~= 0 and power ~= power then
+            print("xxx", power)
+        end
+
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_VenusE) and repeat_request > 0 do
             util:log("Communication error: repeat request:", repeat_request)
@@ -190,6 +200,8 @@ function MopedCharger:main(profiling_runs)
         end
 
         if not skip_loop then
+            mqtt_reader:updateStates()
+
             old_power = curr_power
             curr_power = self.Charger:getPower()
             skip_loop = not curr_power or (curr_power ~= curr_power) -- ether nil or nan

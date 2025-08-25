@@ -92,6 +92,8 @@ function PVBattery:init()
 
     self.VenusE = Marstek:new({ip = "192.168.0.208", port=502, slaveId = 1})
 
+    mqtt_reader:init(config.mqtt_broker_uri, config.mqtt_client_id)
+
     self.BMS = {}
     self.Charger = {}
     self.Inverter = {}
@@ -113,9 +115,10 @@ function PVBattery:init()
             time_controlled = Device.inverter_time_controlled,
             BMS = BMS,
         }
+        print(Device.inverter_switch)
         table.insert(self.Inverter, Inverter)
-        mqtt_reader:clearRetainedMessages(self.Inverter.host)
-        mqtt_reader:askHost(self.Inverter.host)
+        mqtt_reader:subscribe(Device.inverter_switch, 1)
+        mqtt_reader:askHost(Device.inverter_switch)
         mqtt_reader:updateStates()
 
         for i = 1, #Device.charger_switches do
@@ -132,8 +135,8 @@ function PVBattery:init()
                 end
             end
             table.insert(self.Charger, Charger)
-            mqtt_reader:clearRetainedMessages(self.Charger.host)
-            mqtt_reader:askHost(self.Charger.host)
+            mqtt_reader:subscribe(Device.charger_switches[i], 1)
+            mqtt_reader:askHost(Device.charger_switches[i])
             mqtt_reader:updateStates()
         end
     end
@@ -584,9 +587,10 @@ PVBattery[state.shutdown] = function(self)
         Charger:safeStopCharge()
     end
     for _, Inverter in ipairs(self.Inverter) do
-        if Inverter:getPowerState() == "on" and Inverter.BMS:getDischargeState() == "on"
-            and not Inverter.time_controlled then
-            Inverter:stopDischarge()
+        if not Inverter.time_controlled then
+            if Inverter:getPowerState() == "on" and Inverter.BMS:getDischargeState() == "on"then
+                Inverter:stopDischarge()
+            end
         end
     end
 end
@@ -797,8 +801,8 @@ function PVBattery:getCurrentValues()
     -- Defautlt to 0 % or 0 W if no marstek is found.
     self.VenusE_SOC = VenusE_SOC and math.floor(VenusE_SOC) or 0
 
---    mqtt_reader:askHost("battery-inverter")
---    mqtt_reader:askHost("garage-inverter")
+    mqtt_reader:askHost("battery-inverter")
+    mqtt_reader:askHost("garage-inverter")
 
     mqtt_reader:updateStates()
 end
@@ -898,6 +902,7 @@ function PVBattery:main(profiling_runs)
             oldstate = newstate
             newstate = self:getState()
             if oldstate ~= newstate then
+                mqtt_reader:updateStates()
                 newstate = self:updateState()
                 self:outputTheLog(date_string, oldstate, newstate)
             end
