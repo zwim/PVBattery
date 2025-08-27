@@ -165,9 +165,6 @@ function MopedCharger:main(profiling_runs)
 
         mqtt_reader:updateStates()
         local power = self.Charger:getPower()
-        if power ~= 0 and power ~= power then
-            print("xxx", power)
-        end
 
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_VenusE) and repeat_request > 0 do
@@ -211,7 +208,7 @@ function MopedCharger:main(profiling_runs)
             end
         end
 
-        print("'skip_loop:"..tostring(skip_loop).."'",
+        print(date_string, "skip_loop:'"..tostring(skip_loop).."'",
               self:getGoal(), self:getState(), P_Grid, P_VenusE, curr_power, self.charger_max_power)
 
         if not skip_loop then

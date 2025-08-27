@@ -101,17 +101,18 @@ function Switch:getPower()
         return (0/0)
     end
 
-    local Power = state.power
+    local power = state.power
+    local power_state = self:getPowerState()
 
-    if not Power or self:getPowerState() == "" then
+    if not power or power_state == "" or power_state == "off" then
        return 0
     end
 
-    if Power > 20 then
+    if power > 20 then
         local weight = 0.2
-        self.max_power = (1-weight)*self.max_power + weight*Power
+        self.max_power = (1-weight)*self.max_power + weight*power
     end
-    return Power or (0/0)
+    return power or (0/0)
 end
 
 function Switch:getMaxPower()
