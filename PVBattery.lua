@@ -460,9 +460,9 @@ PVBattery[state.idle] = function(self, expected_state)
         for _, Charger in ipairs(self.Charger) do
             Charger:safeStopCharge()
         end
-        for _, BMS in ipairs(self.BMS) do
-            BMS:disableDischarge()
-        end
+--        for _, BMS in ipairs(self.BMS) do
+--            BMS:disableDischarge()
+--        end
         for _, Inverter in ipairs(self.Inverter) do
             if not Inverter.time_controlled then
                 Inverter:stopDischarge()
@@ -733,7 +733,6 @@ function PVBattery:outputTheLog(date_string, oldstate, newstate)
 
     end
     util:log(log_string)
-    pcall(function() self:generateHTML(config, VERSION) end)
 end
 
 function PVBattery:writeToDatabase()
@@ -884,8 +883,9 @@ function PVBattery:main(profiling_runs)
 
             -- update state, as the battery may have changed or the user could have changed something manually
             self:outputTheLog(date_string, oldstate, newstate)
-
             self:writeToDatabase()
+            pcall(function() self:generateHTML(config, VERSION) end)
+
 
             -- Here the dragons fly (aka the datastructure of the states knowk in)
             if not self:callStateHandler() then
@@ -906,6 +906,7 @@ function PVBattery:main(profiling_runs)
                 newstate = self:updateState()
                 self:outputTheLog(date_string, oldstate, newstate)
             end
+            pcall(function() self:generateHTML(config, VERSION) end)
 
         end
 

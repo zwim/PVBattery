@@ -53,8 +53,11 @@ function influx:writeLine(device, datum, value)
 
     if status_code ~= 204 then
         -- Antwort ausgeben
-        print("Status Code:", status_code)
-        print("Response Body:", table.concat(response_body))
+        print("[INFLUX] Status Code:", status_code)
+        local response = table.concat(response_body)
+        if response then
+            print("[INFLUX] Response Body:", response )
+        end
     end
 end
 
