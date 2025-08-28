@@ -19,7 +19,10 @@ function Inverter:init()
 end
 
 function Inverter:startDischarge(req_power)
-    if not self.BMS then return end
+    if not self.BMS then -- just an PV-Inverter
+        self:toggle("on")
+        return
+    end
 
     if self.time_controlled then
         self.BMS:setPower(req_power or 10) -- if no power requested, start with minimal power
@@ -37,7 +40,10 @@ function Inverter:startDischarge(req_power)
 end
 
 function Inverter:safeStartDischarge(req_power)
-    if self:getPowerState() ~= "on" then self:startDischarge(req_power) end
+    req_power = req_power or 100
+    if self:getPowerState() ~= "on" then
+        self:startDischarge(req_power)
+    end
 end
 
 function Inverter:stopDischarge()
@@ -50,7 +56,9 @@ function Inverter:stopDischarge()
 end
 
 function Inverter:safeStopDischarge()
-    if self:getPowerState() ~= "off" then self:stopDischarge() end
+    if self:getPowerState() ~= "off" then
+        self:stopDischarge()
+    end
 end
 
 function Inverter:readyToDischarge()

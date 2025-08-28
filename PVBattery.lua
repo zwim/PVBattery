@@ -911,13 +911,15 @@ function PVBattery:main(profiling_runs)
         end
 
         -- Do the time controlled switching
-        for _, Inverter in ipairs(self.Inverter) do
-            if Inverter.time_controlled then
-                local curr_hour = date.hour + date.min/60 + date.sec/3600
-                if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
-                    Inverter:safeStartDischarge()
-                else
-                    Inverter:safeStopDischarge()
+        do
+            local curr_hour = date.hour + date.min/60 + date.sec/3600
+            for _, Inverter in ipairs(self.Inverter) do
+                if Inverter.time_controlled then
+                    if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
+                        Inverter:safeStartDischarge()
+                    else
+                        Inverter:safeStopDischarge()
+                    end
                 end
             end
         end
