@@ -2,7 +2,6 @@
 local config = require("configuration")
 local json = require("dkjson")
 local util = require("util")
-local socket = require("socket")
 local http = require("socket.http")
 
 local host = "HW-p1meter-367096.lan"

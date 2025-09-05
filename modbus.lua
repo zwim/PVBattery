@@ -21,8 +21,8 @@ function Modbus:ensureConnection(ip, port)
 end
 
 function Modbus:sendRequest(request, expectedLen)
-    local response, err, bytes_sent, last_byte
-    bytes_sent, err, last_byte = self.client:send(request)
+    local response, err, bytes_sent
+    bytes_sent, err, _ = self.client:send(request)
     if not bytes_sent then
         print("Fehler beim Senden:", err)
         -- Hier kannst du auf err reagieren, z.B. reconnect versuchen

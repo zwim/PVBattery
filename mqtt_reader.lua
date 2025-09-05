@@ -4,8 +4,8 @@ local mqtt = require("mqtt")
 local util = require("util")
 
 local mqtt_reader = {
-    client,
-    ioloop,
+    client = nil,
+    ioloop = nil,
 	states = {},
     got_message_in_last_iteration = false,
 }
@@ -182,6 +182,7 @@ function mqtt_reader:clearRetainedMessages(topic)
 	self.ioloop:iteration()
 end
 
+-- luacheck: ignore self
 function mqtt_reader:updateStates(wait_time)
 	wait_time = wait_time or 0.2
 	local got_message
@@ -218,15 +219,12 @@ if arg[0]:find("mqtt_reader.lua") then
 
     print("now waiting for messages")
     while true do
-        repeat
-            if mqtt_reader:updateStates() then
-	            mqtt_reader:printStates()
-				os.execute("sleep 0.1")
-            else
-				os.execute("sleep 1s")
-			end
-
-        until (false)
+		if mqtt_reader:updateStates() then
+			mqtt_reader:printStates()
+			os.execute("sleep 0.1")
+		else
+			os.execute("sleep 1s")
+		end
     end
 end
 
