@@ -109,7 +109,7 @@ function AntBMS:new(o)
     o = o or {}   -- create object if user does not provide one
     o.lastFullPeriod = o.lastFullPeriod or 2*24*3600 -- two days for now xxx
     o.min_cell_diff = o.min_cell_diff or 0.03
-    o.minPower = o.minPower or 50
+    o.min_charge_power = o.min_charge_power or 50
     setmetatable(o, self)
     self.__index = self
     return o
@@ -579,7 +579,7 @@ function AntBMS:isBatteryFull()
         if config.bat_SOC_max == 100 then
             is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
                 and self.v.CellDiff <= self.min_cell_diff
-                and self.v.CurrentPower > config.charge_finished_current and self.v.CurrentPower <= self.minPower
+                and self.v.CurrentPower > config.charge_finished_current and self.v.CurrentPower <= self.min_charge_power
         else
             is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
         end

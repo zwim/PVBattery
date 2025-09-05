@@ -48,7 +48,7 @@ local configuration = {
     min_cell_diff = 0.003,
     min_cell_diff_base = 0.003,
     cell_diff_hysteresis = 0.003,
-    minPower = 30,
+    min_charge_power = 30,
     charge_finisched_current = -0.3,
 
     bat_SOC_hysteresis = 2,
