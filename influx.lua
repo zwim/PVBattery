@@ -1,11 +1,10 @@
 local http = require("socket.http")
 local ltn12 = require("ltn12")
-local url = require("socket.url")
 
 local influx = {
-    influx_url,
-    api_token,
-    headers
+    influx_url = nil,
+    api_token = nil,
+    headers = nil,
     }
 
 function influx:init(url, token, org, bucket)

@@ -164,7 +164,6 @@ function MopedCharger:main(profiling_runs)
         local P_VenusE = self.VenusE:readACPower()
 
         mqtt_reader:updateStates()
-        local power = self.Charger:getPower()
 
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_VenusE) and repeat_request > 0 do
