@@ -1,5 +1,5 @@
 
-local VERSION = "V4.9.0"
+local VERSION = "V4.9.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -32,8 +32,10 @@ local state = {
     full = "full",
     discharge = "discharge",
     low_battery = "low_battery",
-    low_cell = "low_cell",
-    cell_diff = "cell_diff",
+    low_cell = "low_cell", -- not needed as we do a rescue charge then
+    high_cell = "high_cell",
+    cell_diff_low = "cell_diff_low", -- cell diff and SOC > 50%
+    cell_diff_high = "cell_diff_high", -- cell diff and SOC <=50%
     rescue_charge = "rescue_charge",
     force_discharge = "force_discharge",
     shutdown = "shutdown", -- shut down all charging and discharging ...
@@ -104,7 +106,7 @@ function PVBattery:init()
                 host = Device.BMS,
                 lastFullPeriod = config.lastFullPeriod,
                 min_cell_diff = config.min_cell_diff,
-                minPower = config.minPower,
+                min_charge_power = config.min_charge_power,
             }
             table.insert(self.BMS, BMS)
         end
@@ -189,11 +191,17 @@ function PVBattery:updateState()
                 return self:setState(state.rescue_charge)
             elseif BMS.v.SOC <= config.bat_SOC_min then
                 return self:setState(state.low_battery)
+            elseif BMS.v.HighestVoltage >= config.bat_highest_voltage then
+                return self:setState(state.high_cell)
             elseif BMS.v.CellDiff > config.max_cell_diff then
-                return self:setState(state.cell_diff)
-            elseif self:getState() == state.cell_diff
+                if BMS.v.SOC > 50 then
+                    return self:setState(state.cell_diff_high)
+                else
+                    return self:setState(state.cell_diff_low)
+                end
+            elseif self:getState() == state.cell_diff_high
                 and BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
-                return self:setState(state.cell_diff)
+                return self:setState(state.cell_diff_high)
             end
         else
             return self:callStateHandler(state.shutdown)
@@ -344,7 +352,7 @@ function PVBattery:turnOffBestChargerAndThenTurnOnBestInverter()
                     end
                 end
             elseif not continue_discharge then
-                Inverter:stopDischarge()
+                Inverter:stopDischarge() -- this may change power state
             end
             if Inverter:getPowerState() == "on" then
                 already_discharging = true
@@ -398,27 +406,30 @@ function PVBattery:turnOffBestInverterAndThenTurnOnBestCharger()
 end
 
 -- luacheck: ignore self
-PVBattery[state.cell_diff] = function(self)
-    if self:turnOffBestInverterAndThenTurnOnBestCharger() then
-        self:setState(state.charge)
-    end
+PVBattery[state.cell_diff_high] = function(self)
+    self:turnOffBestCharger()
 
     for _, BMS in ipairs(self.BMS) do
         if BMS:getData() then
-            if BMS.v.SOC > config.bat_SOC_max - 5 then
+            if BMS.v.SOC > config.bat_SOC_max * 2/3 then
                 if BMS:needsBalancing() then
+                    -- we are alwayse here, as we have cell_diff
                     BMS:enableDischarge()
                     BMS:setAutoBalance(true)
+                else
+                    print("Houston we have another problem")
                 end
+            else
+                print("deadlock deadlock")
             end
         end
     end
+end
 
-    for _, Inverter in ipairs(self.Inverter) do
-        if not Inverter.time_controlled then
-            Inverter:stopDischarge()
-        end
-    end
+PVBattery[state.high_cell] = PVBattery[state.cell_diff_high]
+
+PVBattery[state.cell_diff_low] = function(self)
+    self:turnOffBestInverterAndThenTurnOnBestCharger()
 end
 
 -- luacheck: ignore self
@@ -442,10 +453,14 @@ function PVBattery:setChargeOrDischarge()
     if (self:isSellingMoreThan(30) and self.VenusE:isIdle()) or self.VenusE:isChargingMoreThan(100) then
         if self:turnOffBestInverterAndThenTurnOnBestCharger() then
             return state.charge
+        else
+            return state.recalculate
         end
     elseif (self:isBuyingMoreThan(0) and self.VenusE:isIdle()) or self.VenusE:isDischargingMoreThan(10) then
         if self:turnOffBestChargerAndThenTurnOnBestInverter() then
             return state.discharge
+        else
+            return state.recalculate
         end
     end
     return state.idle
@@ -456,7 +471,7 @@ PVBattery[state.idle] = function(self, expected_state)
     expected_state = expected_state or self:setChargeOrDischarge()
     if expected_state == state.charge or expected_state == state.discharge then
         self[expected_state](self, expected_state)
-    else
+    elseif expected_state ~= state.recalculate then
         for _, Charger in ipairs(self.Charger) do
             Charger:safeStopCharge()
         end
@@ -530,6 +545,7 @@ PVBattery[state.balance] = function(self)
             return
         end
     end
+
     if expected_state == state.charge then
         self:setState(state.charge)
     elseif expected_state == state.discharge then
@@ -553,7 +569,10 @@ PVBattery[state.discharge] = function(self, expected_state)
         end
         ]]
     else
-        PVBattery[expected_state](self, expected_state)
+        local handler = PVBattery[expected_state]
+        if handler then
+            handler(self, expected_state)
+        end
     end
 end
 
@@ -698,27 +717,10 @@ function PVBattery:fillCache()
     end
 end
 
-function PVBattery:showCacheDataAge(verbose)
-    local log = verbose and print or function() end
-    local total, max_age = 0, 0
-    local function report(name, age)
-        log(string.format("%s: %5f s", name, age))
-        total = total + age
-        max_age = math.max(max_age, age)
-    end
-    for _, B in ipairs(self.BMS)     do report("BMS "     ..B.host, B:getDataAge()) end
-    for _, C in ipairs(self.Charger) do report("Charger " ..C.host, C:getDataAge()) end
-    for _, I in ipairs(self.Inverter)do report("Inverter "..I.host, I:getDataAge()) end
-    report("Fronius "..Fronius.host, Fronius:getDataAge())
---    report("P1meter "..P1meter.host, P1meter:getDataAge())
-    util:log(string.format("Savings: %5f s, sequential %5f s, parallel %5f s)", total - max_age, total, max_age))
-end
-
 function PVBattery:refreshCache()
 --    local oldtime = util.getCurrentTime()
     self:fillCache()
---    print("time:", util.getCurrentTime() - oldtime)
-    self:showCacheDataAge()
+--    print("time:", util.getCurrentTime() - oldtime)    self:showCacheDataAge()
     self:getCurrentValues()
 end
 
@@ -905,6 +907,7 @@ function PVBattery:main(profiling_runs)
                 mqtt_reader:updateStates()
                 newstate = self:updateState()
                 self:outputTheLog(date_string, oldstate, newstate)
+                short_sleep = 2
             end
             pcall(function() self:generateHTML(config, VERSION) end)
 
@@ -914,7 +917,7 @@ function PVBattery:main(profiling_runs)
         do
             local curr_hour = date.hour + date.min/60 + date.sec/3600
             for _, Inverter in ipairs(self.Inverter) do
-                if Inverter.time_controlled then
+                if Inverter.time_controlled == "sunrise" then
                     if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
                         Inverter:safeStartDischarge()
                     else
