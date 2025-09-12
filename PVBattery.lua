@@ -202,6 +202,9 @@ function PVBattery:updateState()
             elseif self:getState() == state.cell_diff_high
                 and BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
                 return self:setState(state.cell_diff_high)
+            elseif self:getState() == state.cell_diff_low
+                and BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
+                return self:setState(state.cell_diff_low)
             end
         else
             return self:callStateHandler(state.shutdown)
@@ -413,7 +416,7 @@ PVBattery[state.cell_diff_high] = function(self)
         if BMS:getData() then
             if BMS.v.SOC > config.bat_SOC_max * 2/3 then
                 if BMS:needsBalancing() then
-                    -- we are alwayse here, as we have cell_diff
+                    -- we are always here, as we have cell_diff
                     BMS:enableDischarge()
                     BMS:setAutoBalance(true)
                 else
@@ -557,21 +560,12 @@ end
 PVBattery[state.discharge] = function(self, expected_state)
     expected_state = expected_state or self:setChargeOrDischarge()
     self:setState(expected_state)
-    if expected_state == state.discharge then
-
---[[        for _, BMS in ipairs(self.BMS) do
-                for _, Inverter in ipairs(self.Inverter) do
-                    if Inverter.BMS == BMS then
-                        Inverter:startDischarge()
-                    end
-                end
-            end
-        end
-        ]]
-    else
+    if expected_state ~= state.discharge then
         local handler = PVBattery[expected_state]
         if handler then
             handler(self, expected_state)
+        else
+            print("[PVBattery] no handler found for", expected_state)
         end
     end
 end
@@ -607,7 +601,7 @@ PVBattery[state.shutdown] = function(self)
     end
     for _, Inverter in ipairs(self.Inverter) do
         if not Inverter.time_controlled then
-            if Inverter:getPowerState() == "on" and Inverter.BMS:getDischargeState() == "on"then
+            if Inverter:getPowerState() == "on" and Inverter.BMS:getDischargeState() == "on" then
                 Inverter:stopDischarge()
             end
         end
@@ -633,21 +627,6 @@ PVBattery[state.force_discharge] = function(self)
         end
     end
 end
-
---[[
--- Prefetch all switch values
-function PVBattery:fillCache_sequential()
-    for _, BMS in pairs(self.BMS) do
-        BMS:getData()
-    end
-    for _, Inverter in pairs(self.Inverter) do
-        Inverter:_getStatus()
-    end
-    for _, Charger in pairs(self.Charger) do
-        Charger:_getStatus()
-    end
-end
-]]
 
 -- Prefetch all switch values
 function PVBattery:fillCache()
@@ -718,9 +697,7 @@ function PVBattery:fillCache()
 end
 
 function PVBattery:refreshCache()
---    local oldtime = util.getCurrentTime()
     self:fillCache()
---    print("time:", util.getCurrentTime() - oldtime)    self:showCacheDataAge()
     self:getCurrentValues()
 end
 
@@ -888,8 +865,7 @@ function PVBattery:main(profiling_runs)
             self:writeToDatabase()
             pcall(function() self:generateHTML(config, VERSION) end)
 
-
-            -- Here the dragons fly (aka the datastructure of the states knowk in)
+            -- Here the dragons fly (aka the datastructure of the states knocks in)
             if not self:callStateHandler() then
                 local error_msg = "Error: state '" .. tostring(self:getState()) .. "' not implemented yet"
                 util:log(error_msg)
