@@ -1,5 +1,5 @@
 
-local VERSION = "V4.9.1"
+local VERSION = "V4.9.1.x"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -863,7 +863,10 @@ function PVBattery:main(profiling_runs)
             -- update state, as the battery may have changed or the user could have changed something manually
             self:outputTheLog(date_string, oldstate, newstate)
             self:writeToDatabase()
-            pcall(function() self:generateHTML(config, VERSION) end)
+            local ok, result = pcall(function() self:generateHTML(config, VERSION) end)
+            if not ok then
+                print("Error on generateHTML", result)
+            end
 
             -- Here the dragons fly (aka the datastructure of the states knocks in)
             if not self:callStateHandler() then
