@@ -16,7 +16,6 @@ function mqtt_reader:printStates()
 		if type(v) == "table" and v and (v.switch1 or v.power) then
 			local time = os.date("%Y-%m-%d %H:%M:%S", v.time)
 			print(time, i, v.switch1, v.power)
-
 		end
 	end
 end
@@ -203,17 +202,17 @@ if arg[0]:find("mqtt_reader.lua") then
 	mqtt_reader:init("battery-control.lan", "newone")  -- "192.168.0.12"
 	mqtt_reader:updateStates()
 
-
+--[[
 	mqtt_reader:subscribe("moped-charger.lan", 0)
 	util.sleepTime(1)
 	mqtt_reader:updateStates()
 	util.sleepTime(1)
 	mqtt_reader:askHost("moped-charger.lan")
 	mqtt_reader:updateStates()
-
+]]
 	util.sleepTime(1)
 
-	mqtt_reader:subscribe("garage-inverter.lan", 0)
+	mqtt_reader:subscribe("battery-charger2.lan", 0)
 	util.sleepTime(1)
 	mqtt_reader:updateStates()
 
