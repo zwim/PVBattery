@@ -67,7 +67,7 @@ function MopedCharger:init()
     }
     mqtt_reader:subscribe(self.Charger.host, 0)
     mqtt_reader:askHost(self.Charger.host)
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
 end
 
 function MopedCharger:getState() return self._state end
@@ -110,7 +110,7 @@ local function sleepAndCallMQTT(start_time, short_sleep)
     repeat
         util.sleepTime(math.min(sleep_time, sleep_period))
         sleep_time = sleep_time - sleep_period
-        if mqtt_reader:updateStates(0.01) then -- got message
+        if mqtt_reader:processMessages(0.01) then -- got message
             return true
         end
     until sleep_time < 0
@@ -180,7 +180,7 @@ function MopedCharger:main(profiling_runs)
         -- Negative values mean VenusE is discharging
         local P_VenusE = self.VenusE:readACPower()
 
-        mqtt_reader:updateStates()
+        mqtt_reader:processMessages()
 
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_VenusE) and repeat_request > 0 do
@@ -214,7 +214,7 @@ function MopedCharger:main(profiling_runs)
         end
 
         if not short_sleep_skip_loop then
-            mqtt_reader:updateStates()
+            mqtt_reader:processMessages()
 
             old_power = curr_power
             curr_power = self.Charger:getPower()
