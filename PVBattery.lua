@@ -1,13 +1,17 @@
 
 local VERSION = "V4.9.3"
 
-
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
 --local Profiler = require("suntime/profiler")
 if Profiler then
     Profiler.start()
 end
+
+local config = require("configuration")
+local mqtt_reader = require("mqtt_reader")
+local util = require("util")
+local socket = require("socket")
 
 local AntBMS = require("antbms")
 local Fronius = require("fronius")
@@ -18,11 +22,6 @@ local ChargerClass = require("charger")
 local InverterClass = require("inverter")
 
 local Influx = require("influx")
-
-local config = require("configuration")
-local mqtt_reader = require("mqtt_reader")
-local util = require("util")
-local socket = require("socket")
 
 local state = {
     fail = "fail", -- unknown state
@@ -120,9 +119,7 @@ function PVBattery:init()
         }
         print(Device.inverter_switch)
         table.insert(self.Inverter, Inverter)
-        mqtt_reader:subscribe(Device.inverter_switch, 1)
-        mqtt_reader:askHost(Device.inverter_switch)
-        mqtt_reader:updateStates()
+        mqtt_reader:subscribeAndAskHost(Device.inverter_switch, 2)
 
         for i = 1, #Device.charger_switches do
             local Charger = ChargerClass:new{
@@ -138,9 +135,7 @@ function PVBattery:init()
                 end
             end
             table.insert(self.Charger, Charger)
-            mqtt_reader:subscribe(Device.charger_switches[i], 1)
-            mqtt_reader:askHost(Device.charger_switches[i])
-            mqtt_reader:updateStates()
+            mqtt_reader:subscribeAndAskHost(Device.charger_switches[i], 2)
         end
     end
 
@@ -160,18 +155,6 @@ function PVBattery:setState(new_state)
         self._state = state.fail
     end
     return self._state
-end
-
-local function printStackTrace(this)
-    local stackTrace = debug.traceback()
-    print("Stack Trace:")
-    print(stackTrace)
-    for i, v in pairs(this) do
-        print(i, v)
-    end
-    for i,v in pairs(mqtt_reader.states) do
-        print(i,v)
-    end
 end
 
 function PVBattery:updateState()
@@ -224,7 +207,6 @@ function PVBattery:updateState()
             if power_state == "on" then
                 local discharge_state = Inverter.BMS:getDischargeState()
                 if discharge_state == "off" then
---                    printStackTrace(self)
                     return self:setState(state.force_discharge)
                 elseif discharge_state == "on" then
                     return self:setState(state.discharge)
@@ -523,7 +505,12 @@ PVBattery[state.charge] = function(self, expected_state)
         ]]
         end
     elseif expected_state == state.discharge then
-        PVBattery[state.discharge](self, expected_state)
+        local handler = PVBattery[expected_state]
+        if handler then
+            handler(self, expected_state)
+        else
+            print("[PVBattery] no handler found for", expected_state)
+        end
     end
 end
 
@@ -559,6 +546,7 @@ end
 
 -- luacheck: ignore self
 PVBattery[state.discharge] = function(self, expected_state)
+--    print("state -> discharge") -- spams output
     expected_state = expected_state or self:setChargeOrDischarge()
     self:setState(expected_state)
     if expected_state ~= state.discharge then
@@ -627,6 +615,10 @@ PVBattery[state.force_discharge] = function(self)
             end
         end
     end
+end
+
+PVBattery[state.recalculate] = function(self, expected_state)
+    print("Ups now, i did it again")
 end
 
 -- Prefetch all switch values
@@ -699,7 +691,7 @@ end
 
 function PVBattery:refreshCache()
     self:fillCache()
-    self:getCurrentValues()
+    self:getCurrentValues(true)
 end
 
 function PVBattery:outputTheLog(date_string, oldstate, newstate)
@@ -744,7 +736,7 @@ function PVBattery:writeToDatabase()
 
 end
 
-function PVBattery:getCurrentValues()
+function PVBattery:getCurrentValues(ask)
     -- Positive values mean power going into Fronius;
     -- e.g. positive P_Grid we buy energy
     --      negative P_Grid we sell energy
@@ -780,10 +772,32 @@ function PVBattery:getCurrentValues()
     -- Defautlt to 0 % or 0 W if no marstek is found.
     self.VenusE_SOC = VenusE_SOC and math.floor(VenusE_SOC) or 0
 
-    mqtt_reader:askHost("battery-inverter")
-    mqtt_reader:askHost("garage-inverter")
+    if ask then
+        mqtt_reader:askHost("battery-inverter", 2)
+        mqtt_reader:askHost("garage-inverter", 2)
+        mqtt_reader:askHost("balkon-inverter", 2)
+    end
 
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
+end
+
+local function sleepAndCallMQTT(start_time, short_sleep)
+    local sleep_time
+    if short_sleep then
+        sleep_time = short_sleep - (util.getCurrentTime() - start_time)
+    else
+        sleep_time = config.sleep_time - (util.getCurrentTime() - start_time)
+    end
+
+    local sleep_period = 5
+    repeat
+        util.sleepTime(math.min(sleep_time, sleep_period))
+        sleep_time = sleep_time - sleep_period
+        if mqtt_reader:processMessages(0.01) then -- got message
+            return true
+        end
+    until sleep_time < 0
+    return false
 end
 
 local function sleepAndCallMQTT(start_time, short_sleep)
@@ -874,11 +888,11 @@ function PVBattery:main(profiling_runs)
             util:log(string.format("Roof %8f W", self.P_PV))
             util:log(string.format("VenusE %8f W", self.P_VenusE))
 
-            mqtt_reader:updateStates()
+            mqtt_reader:processMessages()
             local oldstate = self:getState()
             local newstate = self:updateState()
 
-            mqtt_reader:updateStates()
+            mqtt_reader:processMessages()
 
             -- update state, as the battery may have changed or the user could have changed something manually
             self:outputTheLog(date_string, oldstate, newstate)
@@ -903,12 +917,15 @@ function PVBattery:main(profiling_runs)
             oldstate = newstate
             newstate = self:getState()
             if oldstate ~= newstate then
-                mqtt_reader:updateStates()
+                mqtt_reader:processMessages()
                 newstate = self:updateState()
                 self:outputTheLog(date_string, oldstate, newstate)
                 short_sleep = 2
             end
-            pcall(function() self:generateHTML(config, VERSION) end)
+            local ok, result = pcall(function() self:generateHTML(config, VERSION) end)
+            if not ok then
+                print("Error on generateHTML", result)
+            end
         end
 
         -- Do the time controlled switching
