@@ -132,7 +132,6 @@ function Fronius:gotValidInverterRealtimeData()
         and self.Data.GetInverterRealtimeData.Body.Data.PAC
 end
 
--- todo add a getter if neccessary
 function Fronius:getGridLoadPV()
 
     if self:getPowerFlowRealtimeData() and self:gotValidPowerFlowRealtimeData() and
@@ -146,6 +145,16 @@ function Fronius:getGridLoadPV()
         return nil, nil, nil, nil
     end
 end
+
+function Fronius:getACPower()
+
+    if self:gotValidInverterRealtimeData() then
+        return self.Data.GetInverterRealtimeData.Body.Data.PAC.Value
+    else
+        return nil
+    end
+end
+
 
 --[[ usage:
 Fronius:GetPowerFlowRealtimeData()

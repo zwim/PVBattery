@@ -13,9 +13,15 @@ local Marstek = {
 }
 
 function Marstek:new(o)
-    o = o or {}   -- create object if user does not provide one
-    setmetatable(o, self)
+    o = o or {}
+    setmetatable(o, self)  -- __index inside new()self.__index = self
     self.__index = self
+    if o.host then
+        o.host = o.host:lower()
+    end
+    if o.init then
+        o:init()
+    end
     return o
 end
 
@@ -40,7 +46,15 @@ registers.readInternalTemperature = {adr = 35000, typ = "s16", gain = 0.1, unit 
 registers.readMaxCellTemperature  = {adr = 35010, typ = "s16", gain = 0.1, unit = "°C"}
 registers.readMinCellTemperature  = {adr = 35011, typ = "s16", gain = 0.1, unit = "°C"}
 
+registers.backupFunction          = {adr = 41200, typ = "u16", gain = 1, unit = ""}
 
+registers.rs485ControlMode = {adr = 42000, typ = "u16", gain = 1, unit = ""}
+
+registers.forcibleChargeDischarge = {adr = 42010, typ = "u16", gain = 1, unit = ""}
+registers.forcibleChargePower     = {adr = 42020, typ = "u16", gain = 1, unit = "W"}
+registers.forcibleDischargePower  = {adr = 42021, typ = "u16", gain = 1, unit = "W"}
+
+registers.userWorkMode            = {adr = 43000, typ = "u16", gain = 1, unit = ""}
 
 registers.ChargingCutoff         = {adr = 44000, typ = "u16", gain = 0.1, unit = "%"}
 registers.DischargingCutoff      = {adr = 44001, typ = "u16", gain = 0.1, unit = "%"}
@@ -81,7 +95,7 @@ function Marstek:readACCurrent()
     return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACCurrent),
         "Battery Current", registers.readACCurrent.unit
 end
--- negative meanse that the battery is discharching
+-- negative means that the battery is discharching
 function Marstek:readACPower()
     self.ACPower = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACPower)
     return self.ACPower, "Battery Power", registers.readACPower.unit
@@ -120,7 +134,6 @@ function Marstek:writeChargingCutoff(value)
     return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.ChargingCutoff, value)
 end
 
-
 function Marstek:readDischargingCutoff()
     return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.DischargingCutoff),
         "Discharge Cutoff", registers.DischargingCutoff.unit
@@ -151,6 +164,35 @@ function Marstek:writeGridStandards(value)
     return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.GridStandards, value)
 end
 
+-- 0:manual, 1:anti-feed, 2:trade
+function Marstek:writeUserWorkMode(value)
+    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.userWorkMode, value)
+end
+
+-- 0:stop, 1:charge, 2:discharge
+function Marstek:writeForcibleChargeDischarge(value)
+    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.forcibleChargeDischarge, value)
+end
+
+function Marstek:writeForcibleChargePower(value)
+    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.forcibleChargePower, value)
+end
+
+function Marstek:writeForcibleDischargePower(value)
+    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.forcibleDischargePower, value)
+end
+
+function Marstek:writeRs485ControlMode(enable)
+    local value
+    if enable == 1 or enable == true then
+        value = 0x55aa
+    else
+        value = 0x55bb
+    end
+    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.rs485ControlMode, value)
+end
+
+
 ------------- higher order methods
 
 -- luacheck: ignore self
@@ -171,49 +213,57 @@ end
 
 -----------------------------------------------------------------------------------------------------------
 
+
 local function printValue(value, name, unit)
     if value then
         print(string.format("%s: %s %s", name or "", tostring(value), unit or ""))
     end
 end
 
--- Beispielaufruf
-local ip = "192.168.0.208" -- IP-Adresse des ELFIN WL11A
-local port = 502 -- Modbus TCP Port
-local slaveId = 1 -- Slave ID
+local function init()
+    -- Beispielaufruf
+    local ip = "192.168.0.208" -- IP-Adresse des ELFIN WL11A
+    local port = 502 -- Modbus TCP Port
+    local slaveId = 1 -- Slave ID
 
 
-local VenusE = Marstek:new({ip = ip, port=port, slaveId = slaveId})
+    local VenusE = Marstek:new({ip = ip, port=port, slaveId = slaveId})
 
-printValue(VenusE:readBatterySOC())
-printValue(VenusE:readBatteryVoltage())
-printValue(VenusE:readBatteryCurrent())
-printValue(VenusE:readBatteryPower())
-printValue(VenusE:readBatteryTotalEnergy())
+    printValue(VenusE:readBatterySOC())
+    printValue(VenusE:readBatteryVoltage())
+    printValue(VenusE:readBatteryCurrent())
+    printValue(VenusE:readBatteryPower())
+    printValue(VenusE:readBatteryTotalEnergy())
 
-printValue(VenusE:readMaxDischargePower())
-printValue(VenusE:readMaxChargePower())
+    printValue(VenusE:readMaxDischargePower())
+    printValue(VenusE:readMaxChargePower())
 
-printValue(VenusE:writeMaxDischargePower(2500))
-printValue(VenusE:writeMaxChargePower(2500))
+    printValue(VenusE:writeMaxDischargePower(2500))
+    printValue(VenusE:writeMaxChargePower(2500))
 
-printValue(VenusE:readMaxDischargePower())
-printValue(VenusE:readMaxChargePower())
+    printValue(VenusE:readMaxDischargePower())
+    printValue(VenusE:readMaxChargePower())
 
 
-printValue(VenusE:readChargingCutoff())
-printValue(VenusE:readDischargingCutoff())
+    printValue(VenusE:readChargingCutoff())
+    printValue(VenusE:readDischargingCutoff())
 
-printValue(VenusE:writeChargingCutoff(100))
-printValue(VenusE:writeDischargingCutoff(15))
+    printValue(VenusE:writeChargingCutoff(100))
+    printValue(VenusE:writeDischargingCutoff(15))
 
-printValue(VenusE:readChargingCutoff())
-printValue(VenusE:readDischargingCutoff())
+    printValue(VenusE:readChargingCutoff())
+    printValue(VenusE:readDischargingCutoff())
 
-printValue(VenusE:readGridStandards())
-printValue(VenusE:writeGridStandards(4))
-printValue(VenusE:readGridStandards())
-
-if not arg[0]:find("marstek.lua") then
-    return Marstek
+    printValue(VenusE:readGridStandards())
+    printValue(VenusE:writeGridStandards(4))
+    printValue(VenusE:readGridStandards())
 end
+if arg[0]:find("marstek.lua") then
+    init()
+end
+
+
+return Marstek
+
+
+

@@ -1,127 +1,119 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Energy Flow</title>
-    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" user-scalable="yes">
-    <meta http-equiv="refresh" content="10">
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Energy Flow</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .left, .right {
+      flex: 1;
+      padding: 20px;
+    }
+    .left { background-color: #f0f0f0; }
+    .right { background-color: #d0d0d0; }
+    table { border-collapse: collapse; width: 100%; }
+    td { padding: 4px; }
+    hr { border: none; border-top: 1px solid #999; }
+    a { color: #004080; }
+  </style>
 </head>
 <body>
 
-<h1>Energy Flow _$Vx.y.z$</h1>
-Now _$DATE$<br>
-Sun rise at _$SUNRISE$<br>
-Sun set at _$SUNSET$<br>
-<br>
+<h1>Energy Flow <span id="Vx_y_z">_</span></h1>
+<p>Now <span id="DATE">_</span></p>
+<p>Sun rise at <span id="SUNRISE">_</span></p>
+<p>Sun set at <span id="SUNSET">_</span></p>
+<p>Status: <span id="STATE_OF_OPERATION">_</span></p>
 
-Status: _$STATE_OF_OPERATION$
+<p>obtain from <a id="FRONIUS_ADR" href="#">Grid</a> = <span id="P_BUY_GRID">_</span> W</p>
+<p>sell to <a id="FRONIUS_ADR2" href="#">Grid</a> = <span id="P_SELL_GRID">_</span> W</p>
+<p>Consumption = <span id="POWER_CONSUMED">_</span> W</p>
 
-<table>
-   <tr>
-      <br>
-      <td align="right">optain from <a href="http://_$FRONIUS_ADR$">Grid</a></td>
-      <td>=</td>
-      <td align="right">  _$P_BUY_GRID$ W</td>
-    </tr>
-   <tr>
-      <td></td>
-      <td></td>
-      <th> Sources </th>
-      <td width = 10%></td>
-      <td></td>
-      <td></td>
-      <th> Sinks </th>
-   </tr>
-   <tr>
-      <td align="right"><a href="http://_$FRONIUS_ADR$">Roof</a></td>
-      <td>=</td>
-      <td align="right">  _$P_ROOF$ W</td>
-      <td></td>
-   </tr>
-   <tr>
-      <td align="right"><a href="http://_$GARAGE_INVERTER$">Garage Inverter</a></td>
-      <td>=</td>
-      <td align="right">   _$GARAGE_INVERTER_POWER$ W</td>
-      <td></td>
-      <td align="right"><a href="http://_$BATTERY_CHARGER1$">Battery Charger1</a></td>
-      <td>=</td>
-      <td align="right"> _$BATTERY_CHARGER1_POWER$ W</td>
-   </tr>
-   <tr>
-      <td align="right"><a href="http://_$BATTERY_INVERTER$">Battery Inverter</a></td>
-      <td>=</td>
-      <td align="right"> _$BATTERY_INVERTER_POWER$ W</td>
-      <td></td>
-      <td align="right"><a href="http://_$BATTERY_CHARGER2$">Battery Charger2</a></td>
-      <td>=</td>
-      <td align="right"> _$BATTERY_CHARGER2_POWER$ W</td>
-   </tr>
-   <tr>
-      <td align="right"><a href="http://_$BALKON_INVERTER$">Balkon Inverter</a></td>
-      <td>=</td>
-      <td align="right"> _$BALKON_INVERTER_POWER$ W</td>
-      <td></td>
-      <td align="right"></td>
-      <td>=</td>
-      <td align="right"></td>
-   </tr>
+<div class="container">
+  <div class="left">
+    <h2>Sources</h2>
+    <table>
+      <tr><td></td><td></td><th>Sources</th></tr>
+      <tr><td align="right"><a id="ROOF_LINK" href="#">Roof</a></td><td>=</td><td align="right" id="P_ROOF">_</td></tr>
+      <tr><td align="right"><a id="GARAGE_INVERTER_LINK" href="#">Garage Inverter</a></td><td>=</td><td align="right" id="GARAGE_INVERTER_POWER">_</td></tr>
+      <tr><td align="right"><a id="BATTERY_INVERTER_LINK" href="#">Battery Inverter</a></td><td>=</td><td align="right" id="BATTERY_INVERTER_POWER">_</td></tr>
+      <tr><td align="right"><a id="BALKON_INVERTER_LINK" href="#">Balkon Inverter</a></td><td>=</td><td align="right" id="BALKON_INVERTER_POWER">_</td></tr>
+      <tr><td align="right">Venus1 discharge</td><td>=</td><td align="right" id="VENUS1_DISCHARGE_POWER">_</td></tr>
+      <tr><td align="right">Venus2 discharge</td><td>=</td><td align="right" id="VENUS2_DISCHARGE_POWER">_</td></tr>
+      <tr><td colspan="3"><hr></td></tr>
+      <tr><td align="right">Total Source</td><td>=</td><td align="right" id="POWER_SOURCES">_</td></tr>
+    </table>
+  </div>
 
-   <tr>
-      <td align="right">Venus discharge</td>
-      <td>=</td>
-      <td align="right"> _$VENUS_DISCHARGE_POWER$ W</td>
-      <td></td>
-      <td align="right">Venus charge</td>
-      <td>=</td>
-      <td align="right"> _$VENUS_CHARGE_POWER$ W</td>
-   </tr>
-   <tr>
-      <td> <hr> </td>
-      <td> <hr></td>
-      <td> <hr> </td>
-      <td></td>
-      <td> <hr> </td>
-      <td> <hr> </td>
-      <td> <hr> </td>
-   </tr>
-   <tr>
-      <td align="right">        Total Source</td>
-      <td>=</td>
-      <td align="right">  _$POWER_SOURCES$ W</td>
-      <td></td>
-      <td align="right">          Total Sink</td>
-      <td>=</td>
-      <td align="right">  _$POWER_SINKS$ W</td>
-   </tr>
-   <tr>
-      <td></td>
-      <td></td>
-      <td></td>
-   </tr>
-   <tr>
-      <br>
-      <td align="right">sell to <a href="http://_$FRONIUS_ADR$">Grid</a></td>
-      <td>=</td>
-      <td align="right">  _$P_SELL_GRID$ W</td>
-   </tr>
-   <tr>
-      <td align="right">Consumption</td>
-      <td>=</td>
-      <td align="right">  _$POWER_CONSUMED$ W</td>
-    </tr>
-</table>
-
+  <div class="right">
+    <h2>Sinks</h2>
+    <table>
+      <tr><td></td><td></td><th>Sinks</th></tr>
+      <tr><td align="right"><a id="BATTERY_CHARGER1_LINK" href="#">Battery Charger1</a></td><td>=</td><td align="right" id="BATTERY_CHARGER1_POWER">_</td></tr>
+      <tr><td align="right"><a id="BATTERY_CHARGER2_LINK" href="#">Battery Charger2</a></td><td>=</td><td align="right" id="BATTERY_CHARGER2_POWER">_</td></tr>
+      <tr><td align="right">Venus1 charge</td><td>=</td><td align="right" id="VENUS1_CHARGE_POWER">_</td></tr>
+      <tr><td align="right">Venus2 charge</td><td>=</td><td align="right" id="VENUS2_CHARGE_POWER">_</td></tr>
+      <tr><td colspan="3"><hr></td></tr>
+      <tr><td align="right">Total Sink</td><td>=</td><td align="right" id="POWER_SINKS">_</td></tr>
+    </table>
+  </div>
+</div>
 
 <br>
-<a href="_$BMS1_INFO$">Battery1 Status</a>
-<br>
-<br>
-<a href="_$BMS1_BALANCE_TOGGLE$">Battery1 Balancer TOGGLE</a>
-<br>
-<a href="_$BMS1_BALANCE_ON$">Battery1 Balancer ON</a>
-<br>
-<a href="_$BMS1_BALANCE_OFF$">Battery1 Balancer OFF</a>
+<a id="BMS1_INFO" href="#">Battery1 Status</a><br><br>
+<a id="BMS1_BALANCE_TOGGLE" href="#">Battery1 Balancer TOGGLE</a><br>
+<a id="BMS1_BALANCE_ON" href="#">Battery1 Balancer ON</a><br>
+<a id="BMS1_BALANCE_OFF" href="#">Battery1 Balancer OFF</a><br><br>
 
-<br>
 <a href="http://battery-control:8086">Influx</a>
-</body></html>
+
+<script>
+async function update() {
+  try {
+    const res = await fetch('/PVBattery.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error(res.status);
+    const d = await res.json();
+
+    const ids = [
+      "Vx_y_z","DATE","SUNRISE","SUNSET","STATE_OF_OPERATION",
+      "P_BUY_GRID","P_SELL_GRID","POWER_CONSUMED",
+      "P_ROOF","GARAGE_INVERTER_POWER","BATTERY_INVERTER_POWER",
+      "BALKON_INVERTER_POWER",
+      "VENUS1_DISCHARGE_POWER","VENUS2_DISCHARGE_POWER",
+      "POWER_SOURCES",
+      "BATTERY_CHARGER1_POWER","BATTERY_CHARGER2_POWER",
+      "VENUS1_CHARGE_POWER",
+      "VENUS2_CHARGE_POWER","POWER_SINKS"
+    ];
+    ids.forEach(id => { if(d[id]!==undefined) document.getElementById(id).textContent=d[id]; });
+
+    const link=(id,url)=>{const e=document.getElementById(id);if(e&&url)e.href='http://'+url;};
+    link("FRONIUS_ADR", d.FRONIUS_ADR);
+    link("FRONIUS_ADR2", d.FRONIUS_ADR);
+    link("ROOF_LINK", d.FRONIUS_ADR);
+    link("GARAGE_INVERTER_LINK", d.GARAGE_INVERTER);
+    link("BATTERY_INVERTER_LINK", d.BATTERY_INVERTER);
+    link("BALKON_INVERTER_LINK", d.BALKON_INVERTER);
+    link("BATTERY_CHARGER1_LINK", d.BATTERY_CHARGER1);
+    link("BATTERY_CHARGER2_LINK", d.BATTERY_CHARGER2);
+
+    ["BMS1_INFO","BMS1_BALANCE_TOGGLE","BMS1_BALANCE_ON","BMS1_BALANCE_OFF"].forEach(id=>{
+      const e=document.getElementById(id); if(e&&d[id]) e.href=d[id];
+    });
+  } catch(e){ console.warn("update failed:", e); }
+}
+
+update();
+setInterval(update, 5000);
+</script>
+</body>
+</html>

@@ -3,8 +3,7 @@
 
 local util = require("util")
 
-
-return function(self, config)
+return function(self)
     local file_name = config.command_file_name or "/tmp/PVCommands"
 
     local file = io.open(file_name, "r")

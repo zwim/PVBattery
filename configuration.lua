@@ -1,4 +1,6 @@
 
+local LOGLEVEL = 3
+
 local lfs = require("lfs")
 local util = require("util")
 
@@ -14,10 +16,8 @@ local configuration = {
     -- But be aware, the last file is the one to be checked continually
     -- during PVBattery run.
     config_file_name = "config.lua", -- the config file
-
     command_file_name = "/tmp/PVCommands", -- a file containing commands for PVBattery
-
-    use_wget = false,
+    loglevel = LOGLEVEL,
 
     host = util.hostname(),
 
@@ -31,6 +31,7 @@ local configuration = {
 
     log_file_name = "/var/log/PVBattery.log",
     html_main = "/var/www/localhost/htdocs/index.html",
+    html_json = "/var/www/localhost/htdocs/PVBattery.json",
     html_battery = "/var/www/localhost/htdocs/battery.html",
 
     bat_SOC_min = 15, -- Percent
@@ -64,8 +65,24 @@ local configuration = {
 
     Device = {
         { -- Device[1]
+            name = "P1Meter",
+            typ = "smartmeter",
+            brand = "homewizard",
+            host = "HW-p1meter.lan",
+            ip = nil,
+        },
+        { -- Device[1]
+            name = "PV-Dach",
+            typ = "inverter",
+            brand = "Fronius",
+            inverter_switch = "192.168.0.49",
+        },
+        { -- Device[3]
             name = "Battery Pack",
+            typ = "battery",
+            brand = "custom",
             BMS = "battery-bms.lan",
+            ip = nil,
             charger_switches = {
                 "battery-charger.lan",
                 "battery-charger2.lan",
@@ -76,26 +93,71 @@ local configuration = {
             },
             inverter_switch = "battery-inverter.lan",
             inverter_min_power = 150,
+            inverter_max_power = 160,
             inverter_time_controlled = nil,
+            SOC_min = 25,
+            SOC_max = 100,
+            leave_mode = "stop",
         },
-        { -- Device[2]
-            name = "Garage Inverter",
+        { -- Device[4]
+            name = "VenusE 1",
+            typ = "battery",
+            brand = "marstek",
+            host = "Venus_E1_modbus",
+            -- ip = "192.168.0.208",
+            port = 502,
+            slaveId = 1,
+            charge_max_power = 2492,
+            discharge_max_power = 2492,
+            SOC_min = 15,
+            SOC_max = 100,
+            leave_mode = "auto",
+        },
+        { -- Device[5]
+            name = "VenusE 2",
+            typ = "battery",
+            brand = "marstek",
+            host = "Venus_E2_modbus",
+            -- ip = "192.168.0.161",
+            port = 502,
+            slaveId = 1,
+            charge_max_power = 2492,
+            discharge_max_power = 2492,
+            SOC_min = 15,
+            SOC_max = 100,
+            leave_mode = "stop",
+        },
+        { -- Device[6]
+            name = "Balkon Inverter",
+            typ = "inverter",
+            brand = "Envertech",
             BMS = nil,
-            charger_switches = {},
-            inverter_switch = "garage-inverter.lan",
+            inverter_switch = "balkon-inverter.lan",
             inverter_time_controlled = "sunrise",
         },
-        { -- Device[3]
-            name = "Balkon Inverter",
+        { -- Device[7]
+            name = "Garage Inverter",
+            typ = "inverter",
+            brand = "Envertech",
             BMS = nil,
-            charger_switches = {},
-            inverter_switch = "balkon-inverter.lan",
+            inverter_switch = "garage-inverter.lan",
             inverter_time_controlled = "sunrise",
         },
     },
 
     -- compressor = "bzip2 -6",
     compressor = "zstd -8 --rm -T3",
+
+    mqtt_broker_uri = "battery-control.lan",
+    mqtt_client_id = "PVBatteryV",
+
+    -- db_url    = "http://localhost:8086",
+    -- db_token  = "ZWyI3Qh2E_LvX3EgifO_8cTbaBwyFktEfLwFxGiLffjX7HGQfDm7x4AzJuK7_1jp2Yfj6CzSat3Ozv4P8efLZQ==",
+    db_url    = "http://battery-control:8086",
+    db_token  = "Xeq_91oWUcNVCNwE4JsMYJ7-2qT3HybpO5HoqmI40ZEWxZ0Uo6f6GFwg0DamnCPIQBVEXeHcVIy5Or4SbkBkEw==",
+    db_org    = "PV",
+    db_bucket = "Daten",
+
 }
 
 function configuration:needUpdate()

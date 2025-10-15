@@ -1,5 +1,8 @@
 
-local VERSION = "V4.9.3"
+-- ###############################################################
+-- CONFIGURATION
+-- ###############################################################
+local VERSION = "V5.0.0"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -8,53 +11,45 @@ if Profiler then
     Profiler.start()
 end
 
-local config = require("configuration")
+local MIN_CHARGE_POWER = 20
+local MIN_DISCHARGE_POWER = 20
+
+------------------------------------------------------------------
+
+-- luacheck: globals config
+config = require("configuration") -- this one is global
+
 local mqtt_reader = require("mqtt_reader")
 local util = require("util")
-local socket = require("socket")
 
-local AntBMS = require("antbms")
-local Fronius = require("fronius")
---local P1meter = require("p1meter")
-local Marstek = require("marstek")
 local SunTime = require("suntime/suntime")
-local ChargerClass = require("charger")
-local InverterClass = require("inverter")
 
 local Influx = require("influx")
 
-local state = {
-    fail = "fail", -- unknown state
-    recalculate = "recalculate",
-    idle = "idle",
-    charge = "charge",
-    balance = "balance", -- during charge or on the high side
-    full = "full",
-    discharge = "discharge",
-    low_battery = "low_battery",
-    low_cell = "low_cell", -- not needed as we do a rescue charge then
-    high_cell = "high_cell",
-    cell_diff_low = "cell_diff_low", -- cell diff and SOC > 50%
-    cell_diff_high = "cell_diff_high", -- cell diff and SOC <=50%
-    rescue_charge = "rescue_charge",
-    force_discharge = "force_discharge",
-    shutdown = "shutdown", -- shut down all charging and discharging ...
-}
+local BaseClass = require("BaseClass")
+local CustomBattery = require("CustomBattery")
+local MarstekBattery = require("MarstekBattery")
+local EnvertechInverter = require("EnvertechInverter")
+local FroniusInverter = require("FroniusInverter")
+local Homewizard = require("Homewizard")
 
-local PVBattery = {
-    BMS = {},
-    Charger = {},
-    Inverter = {},
-
+local PVBattery = BaseClass:extend{
+    __name = "PVBattery",
+    __loglevel = 3,
     _state = "", -- no state yet
 
     -- very coarse default sunrise and sunset
     sunrise = 6,
     sunset = 18,
+
+    P_Grid = 0,
+    P_Load = 0,
+    P_PV = 0,
+    P_AC = 0,
 }
 
 -------------------- extend functions from this file
-PVBattery.generateHTML = require("PVBatteryHTML")
+PVBattery.generateJSON = require("PVBatteryJSON")
 PVBattery.serverCommands = require("servercommands")
 --------------------
 
@@ -66,9 +61,8 @@ local function formatSunEvent(label, hourVal)
     return str
 end
 
-
 function PVBattery:init()
-    config:read()
+--    config:read()
     util:setLog(config.log_file_name or "PVBattery.log")
     util:setCompressor(config.compressor)
 
@@ -87,627 +81,332 @@ function PVBattery:init()
     self.sunset  = formatSunEvent("Sun set", SunTime.set)
 
     -- IMPORTANT: Our authorative power meter, which shows if we produce or consume energy
-    Fronius = Fronius:new{host = config.FRONIUS_ADR}
---    P1meter = P1meter:new{host = "HW-p1meter-367096.lan"}
+--    self.P1meter = P1meter:new{host = "HW-p1meter.lan"}
 
     -- Init all device configurations
 
-    self.VenusE = Marstek:new({ip = "192.168.0.208", port=502, slaveId = 1})
-
     mqtt_reader:init(config.mqtt_broker_uri, config.mqtt_client_id)
 
-    self.BMS = {}
-    self.Charger = {}
+    self.Battery = {}      -- all batteries
+    self.SmartBattery = {} -- a subset of stupid custom batteries from all batteries
+    self.USPBattery = {}   -- a subset of smart batteries from all batteries
+
     self.Inverter = {}
+    self.Smartmeter = {}
     for _, Device in ipairs(config.Device) do
-        local BMS
-        if Device.BMS ~= nil then
-            BMS = AntBMS:new{
-                host = Device.BMS,
-                lastFullPeriod = config.lastFullPeriod,
-                min_cell_diff = config.min_cell_diff,
-                min_charge_power = config.min_charge_power,
-            }
-            table.insert(self.BMS, BMS)
-        end
-
-        local Inverter = InverterClass:new {
-            host = Device.inverter_switch,
-            min_power = Device.inverter_min_power,
-            time_controlled = Device.inverter_time_controlled,
-            BMS = BMS,
-        }
-        print(Device.inverter_switch)
-        table.insert(self.Inverter, Inverter)
-        mqtt_reader:subscribeAndAskHost(Device.inverter_switch, 2)
-
-        for i = 1, #Device.charger_switches do
-            local Charger = ChargerClass:new{
-                host = Device.charger_switches[i],
-                max_power = Device.charger_max_power[i],
-                BMS = BMS,
-            }
-            if BMS then
-                BMS.wakeup = function()
-                    print("Wakeup charge started")
-                    Charger:startCharge()
-                    util.sleepTime(config.sleep_time)
-                end
+        local typ = Device.typ:lower()
+        local brand = Device.brand:lower()
+        if typ == "battery" then
+            if  brand == "custom" then
+                local cBatt = CustomBattery:new{Device = Device}
+                table.insert(self.Battery, cBatt)
+                table.insert(self.USPBattery, cBatt)
+            elseif brand == "marstek" then
+                local mBatt = MarstekBattery:new{Device = Device}
+                table.insert(self.Battery, mBatt)
+                table.insert(self.SmartBattery, mBatt)
+            else
+                assert(false, "Wrong configuration, battery brand not known")
             end
-            table.insert(self.Charger, Charger)
-            mqtt_reader:subscribeAndAskHost(Device.charger_switches[i], 2)
+        elseif typ == "inverter" then
+            if brand == "envertech" then
+                local eInv = EnvertechInverter:new{Device = Device}
+                table.insert(self.Inverter, eInv)
+            elseif brand == "fronius" then
+                table.insert(self.Inverter, FroniusInverter:new{Device = Device})
+            else
+                assert(false, "Wrong configuration, inverter brand not known")
+            end
+        elseif typ == "smartmeter" then
+            table.insert(self.Smartmeter, Homewizard:new{Device = Device})
         end
     end
 
     -- Influx:init("http://localhost:8086", "", "Photovoltaik", "Leistung")
-    Influx:init(config.db_url, config.db_token, config.db_org, config.db_bucket)
+--    Influx:init(config.db_url, config.db_token, config.db_org, config.db_bucket) -- xx
+
+    -- self.SmartBattery[2//]:take(200)
+    -- self.SmartBattery[1]:take(200)
+
+    self:log(0, "Initialisation completed")
 end
 
-function PVBattery:getState()
-    return self._state or state.fail
+function PVBattery:getValues()
+    -- Attention, this accesses self.SmartBattery and self.USPBattery as well
+    for _, Battery in ipairs(self.Battery) do
+--        local start_time
+--        start_time = util.getCurrentTime()
+        Battery.SOC = Battery:getSOC(true) or 0 -- force recalculation
+--        print("time SOC: ", util.getCurrentTime() - start_time, Battery.SOC .. "%")
+--        start_time = util.getCurrentTime()
+        Battery.state = Battery:getState() or {}
+--        print("time state: ", util.getCurrentTime() - start_time)
+    end
 end
 
-function PVBattery:setState(new_state)
-    if state[new_state] == new_state then
-        self._state = new_state
-    else
-        print("Error wrong state selected", new_state)
-        self._state = state.fail
-    end
-    return self._state
-end
+local P_exzess_old = 0
+function PVBattery:doTheMagic()
+    local battery_string = ""
 
-function PVBattery:updateState()
-      -- Helper to ensure BMS data is available
-    local function ensureBMSData(BMS)
-        for _ = 1, 5 do
-            if BMS:getData() then return true end
-            util.sleepTime(2)
-            print("Problem getting BMS data")
-        end
-        return BMS:getData()
+    self.P_Battery = 0
+    for _, Battery in ipairs(self.Battery) do
+        Battery.power = Battery:getPower() -- negative, if dischargeing
+        self.P_Battery = self.P_Battery + Battery.power
+        battery_string = battery_string .. string.format("%s: %5.0f   ", Battery.Device.name, Battery.power)
     end
+    self:log(3, "Battery ... ", battery_string)
 
-    -- first check the critical parts of the battery
-    for _, BMS in ipairs(self.BMS) do
-        if ensureBMSData(BMS) then
-            if BMS:isLowChargedOrNeedsRescue() and BMS:needsRescueCharge() then
-                return self:setState(state.rescue_charge)
-            elseif BMS.v.SOC <= config.bat_SOC_min then
-                return self:setState(state.low_battery)
-            elseif BMS.v.HighestVoltage >= config.bat_highest_voltage then
-                return self:setState(state.high_cell)
-            elseif BMS.v.CellDiff > config.max_cell_diff then
-                if BMS.v.SOC > 50 then
-                    return self:setState(state.cell_diff_high)
-                else
-                    return self:setState(state.cell_diff_low)
-                end
-            elseif self:getState() == state.cell_diff_high
-                and BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
-                return self:setState(state.cell_diff_high)
-            elseif self:getState() == state.cell_diff_low
-                and BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
-                return self:setState(state.cell_diff_low)
-            end
-        else
-            return self:callStateHandler(state.shutdown)
-        end
+--[[
+    self:log(3, "     ------")
+    self:log(3, "Inverter: " .. string.format("%5.1f", P_Inverter), "Battery: " .. string.format("%5.1f", P_Battery))
+
+    local status_string = ""
+    for _, Battery in ipairs(self.Battery) do
+        status_string = status_string .. Battery.Device.name .. ": " .. self.listValues(Battery:getState()) .. "   "
     end
-
-    for _, Charger in ipairs(self.Charger) do
-        if Charger:getPowerState() == "on" then
-            return self:setState(state.charge)
-        end
-    end
-
     for _, Inverter in ipairs(self.Inverter) do
-        if not Inverter.time_controlled then
-            local power_state = Inverter:getPowerState()
-            if power_state == "on" then
-                local discharge_state = Inverter.BMS:getDischargeState()
-                if discharge_state == "off" then
-                    return self:setState(state.force_discharge)
-                elseif discharge_state == "on" then
-                    return self:setState(state.discharge)
-                end
-            end
+        status_string = status_string .. Inverter.Device.name .. ": " .. self.listValues(Inverter:getState()) .. "   "
+    end
+    self:log(3, "Status:", status_string)
+]]
+    -- P_exzess is the power we could
+    --     store in our batteries if negative
+    --     reclaim from our batteries if positive
+
+    local inverter_string = ""
+    local P_Inverter = 0
+    self.P_Grid = 0
+    for _, Inverter in ipairs(self.Inverter) do
+        local power, Grid, Load, PV, AC  = Inverter:getPower()
+        if Grid then
+            self.P_Load, self.P_PV, self.P_AC = Load, PV, AC
         end
+        P_Inverter = P_Inverter + power
+        inverter_string = inverter_string .. string.format("%s: %5.0f   ", Inverter.Device.name, power)
+    end
+    self:log(3, "Inverter ... ", inverter_string)
+
+    local value , is_data_old = self.Smartmeter[1]:getPower()
+
+    if is_data_old then
+        self:log(1, "P1Meter: no new data")
+        return
     end
 
-    -- Do the not so critical battery care
-    for _, BMS in ipairs(self.BMS) do
-        if ensureBMSData(BMS) then
-            if BMS:needsBalancing() then
-                return self:setState(state.balance)
-            end
-        end
-    end
+    self.P_Grid = value
 
-    return self:setState(state.idle)
-end
+    self:log(3, "P_Grid ... ", self.P_Grid)
 
-function PVBattery:callStateHandler(new_state)
-    local stateHandler = self[new_state or self._state]
-    if stateHandler then
-        stateHandler(self) -- execute the state
-        return self._state
-    end
-    return false
-end
+--    self.P_Grid = self.P_Grid < 2000 -- simulate 2000 W form PV
 
--- luacheck: ignore self
-function PVBattery:isSellingMoreThan(limit)
-    limit = limit or 0
-    return -self.P_Grid > limit
-end
+    local P_exzess = self.P_Grid + self.P_Battery
+    self:log(1, string.format("P_exzess: %5.1f, %5.1f", P_exzess, P_exzess_old))
 
--- luacheck: ignore self
-function PVBattery:isBuyingMoreThan(limit)
-    limit = limit or 0
-    return self.P_Grid > limit
-end
-
-function PVBattery:turnOffBestCharger()
-    local charger_num = 0
-    local charger_power = 0
-
-    -- If we sell more than 20W and VenusE is charging then
-    if self:isSellingMoreThan(10) and self.VenusE:isChargingMoreThan(0) then
-        print("Error: req_power " .. self.P_Grid .. " < 10W and VenusE is Charging")
-    end
-
-    for i, Charger in ipairs(self.Charger) do
-        if Charger:getPowerState() == "on" and
-            not (Charger.BMS:isLowChargedOrNeedsRescue() and Charger.BMS:needsRescueCharge()) then
-            -- process only activated chargers
-            local charging_power = Charger:getPower() or math.huge
-            if charging_power > self.P_Grid or charging_power > charger_power then
-                -- either one charging power that is larger than requested power (✓)
-                -- or the largest charging power (✓)
-                charger_num = i
-                charger_power = charging_power
-            end
-        end
-    end
-
-    -- allow a small power buy instead of a bigger power sell.
-    -- Only activate one inverter, as the current is only estimated-
-    if charger_num > 0 then
-        util:log(string.format("Deactivate Charger: %s with %s W",
-                charger_num, charger_power))
-        self.Charger[charger_num]:stopCharge()
-        return true
-    end
-    return false
-end
-
-function PVBattery:turnOffBestInverter()
-    local inverter_num = 0
-    for i, Inverter in ipairs(self.Inverter) do
-        if not Inverter.time_controlled and Inverter.BMS then
-            if Inverter.BMS:getDischargeState() == "on" and Inverter:getPowerState() == "on" then
-                -- Inverter delivers min_power (positive), VenusE delivers power (positive)
-                local max_power = Inverter:getMaxPower()
-                if self.P_VenusE < max_power or (self.P_VenusE >= 0 and self:isSellingMoreThan(50)) then
-                    util:log("debug xxx "..i, "P_VenusE ".. self.P_VenusE, "P_Grid "..self.P_Grid,
-                        "max_power "..max_power)
-                    inverter_num = i
-                    break
-                end
-            end
-            local _, continue_discharge = Inverter.BMS:readyToDischarge()
-            if not continue_discharge then
-                util:log("got you sucker xxx")
-                inverter_num = i
-                break
-            end
-        end
-    end
-
-    if inverter_num > 0 then
-        util:log(string.format("Deactivate inverter: %s", inverter_num))
-        self.Inverter[inverter_num]:stopDischarge()
-        return true
-    end
-    return false
-end
-
-
-function PVBattery:turnOffBestChargerAndThenTurnOnBestInverter()
-    if self:turnOffBestCharger() then -- Is there a charger to turn off?
+    if math.abs(self.P_Grid) < 10 then
         return false
     end
 
-    local inverter_num = 0
-    local inverter_power = 0
-    local already_discharging = false
-
-    for i, Inverter in ipairs(self.Inverter) do
-        if not Inverter.time_controlled then
-            local start_discharge, continue_discharge = Inverter.BMS:readyToDischarge()
-            if start_discharge then
-                local min_power = math.max(Inverter.min_power, Inverter:getMaxPower())
-                -- Inverter delivers min_power (positive), VenusE delivers power (negative)
-                -- If req_power is positive, we buy energy
-                if self.VenusE:isDischargingMoreThan(min_power)
-                    or (min_power < self.P_Grid and min_power > inverter_power) then
-                    if Inverter.BMS:getDischargeState() == "off" or Inverter:getPowerState() == "off" then
-                        inverter_num = i
-                        inverter_power = min_power
-                    end
-                end
-            elseif not continue_discharge then
-                Inverter:stopDischarge() -- this may change power state
+    -- if at least one battery does not, what is expected, turn it of and retrun early
+    -- we get here soon again ;)
+    local clear_any_battery
+    if P_exzess > MIN_DISCHARGE_POWER then -- discharge batteries
+        for _, Battery in ipairs(self.Battery) do
+            if Battery.state.take then
+                Battery:take(0)
+                clear_any_battery = "taken"
             end
-            if Inverter:getPowerState() == "on" then
-                already_discharging = true
+        end
+    elseif P_exzess < -MIN_CHARGE_POWER then -- charge batteries
+        for _, Battery in ipairs(self.Battery) do
+            if Battery.state.give then
+                Battery:give(0)
+                clear_any_battery = "given"
             end
         end
     end
-
-    -- Only activate one inverter, as the current is only estimated-
-    if inverter_num > 0 then
-        util:log(string.format("Activate inverter: %s with %5.2f W",
-                inverter_num, inverter_power))
-        self.Inverter[inverter_num]:startDischarge(self.P_Grid)
+    if clear_any_battery then
+        self:log(3, clear_any_battery)
         return true
     end
-    return already_discharging
-end
 
-function PVBattery:turnOffBestInverterAndThenTurnOnBestCharger()
-    if self:turnOffBestInverter() then -- no inverter running
+    if math.abs(P_exzess - P_exzess_old) < 10 then
         return false
     end
 
-    local charger_num = 0
-    local charger_power = 0
-    local already_charging = false
 
-    for i, Charger in ipairs(self.Charger) do
-        local max_power = Charger:getMaxPower() or 0
-        if (max_power < -self.P_Grid and max_power > charger_power) or max_power < -self.P_VenusE then
-            if Charger:readyToCharge() then
-                local power_state = Charger:getPowerState()
-                if  power_state == "off" then
-                    charger_num = i
-                    charger_power = max_power
-                elseif power_state == "on" then
-                    already_charging = true
-                end
-            end
-        end
-    end
+    P_exzess_old = P_exzess
 
-    -- Activate one charger, as the current is only estimated.
-    if charger_num > 0 then
-        util:log(string.format("Activate charger: %s with %5.2f W",
-                charger_num, charger_power))
-
-        self.Charger[charger_num]:startCharge()
-        return true
-    end
-    return already_charging
-end
-
--- luacheck: ignore self
-PVBattery[state.cell_diff_high] = function(self)
-    self:turnOffBestCharger()
-
-    for _, BMS in ipairs(self.BMS) do
-        if BMS:getData() then
-            if BMS.v.SOC > config.bat_SOC_max * 2/3 then
-                if BMS:needsBalancing() then
-                    -- we are always here, as we have cell_diff
-                    BMS:enableDischarge()
-                    BMS:setAutoBalance(true)
-                else
-                    print("Houston we have another problem")
+    if P_exzess > MIN_DISCHARGE_POWER then -- discharge batteries
+        for _, Battery in ipairs(self.USPBattery) do
+            local max_discharge_power_power = -Battery.Inverter:getMaxPower() -- negative, maximal discharge of the USP
+            if P_exzess + max_discharge_power_power > 0 then
+                local state = Battery.state
+                if state.idle or state.give or state.can_give then
+                    Battery:give(math.abs(P_exzess))
+                    mqtt_reader:sleepAndCallMQTT(2)
+                    Battery.power = Battery:getPower() -- negative, if dischargeing
+                    self:log(2, "GIVE", Battery.Device.name, Battery.power)
+                    P_exzess = P_exzess - Battery.power
                 end
             else
-                print("deadlock deadlock")
+                P_exzess = P_exzess + Battery.power -- because we stop battery soon
+                Battery:give(0)
+                Battery.power = 0
+                self:log(2, "GIVE", Battery.Device.name, 0)
             end
         end
-    end
-end
 
-PVBattery[state.high_cell] = PVBattery[state.cell_diff_high]
-
-PVBattery[state.cell_diff_low] = function(self)
-    self:turnOffBestInverterAndThenTurnOnBestCharger()
-end
-
--- luacheck: ignore self
-PVBattery[state.low_cell] = function(self)
-    if self:turnOffBestInverterAndThenTurnOnBestCharger() then
-        self:setState(state.charge)
-    end
-
-    for _, Inverter in ipairs(self.Inverter) do
-        if not Inverter.time_controlled then
-            if Inverter.BMS:isLowChargedOrNeedsRescue() then
-                Inverter:stopDischarge()
+        local sum_remaining_SOC = 0
+        for _, Battery in ipairs(self.SmartBattery) do
+            sum_remaining_SOC = sum_remaining_SOC + math.max(0, Battery.SOC - Battery.Device.SOC_min)
+            Battery.batt_req_power = 0
+        end
+        if sum_remaining_SOC > 1 then
+            local nb_batteries = #self.SmartBattery
+            local not_distributed_power = P_exzess -- positive
+            -- first distribute power depending on SOC
+            for _, Battery in ipairs(self.SmartBattery) do
+                local p = 0
+                if Battery.SOC >= Battery.Device.SOC_min then
+                    p = P_exzess * (Battery.SOC - Battery.Device.SOC_min) / sum_remaining_SOC -- proportional share
+                    if p > Battery.Device.discharge_max_power then
+                        p = Battery.Device.discharge_max_power
+                        nb_batteries = nb_batteries - 1
+                    end
+                    if p < MIN_CHARGE_POWER then
+                        p = 0 -- no power for now
+                    end
+                end
+                Battery.batt_req_power = p -- is positive or zero
+                not_distributed_power = not_distributed_power - p -- should be and stay positive
             end
-        end
-    end
-end
 
-PVBattery[state.low_battery] = PVBattery[state.low_cell]
-
-function PVBattery:setChargeOrDischarge()
-    if (self:isSellingMoreThan(30) and self.VenusE:isIdle()) or self.VenusE:isChargingMoreThan(100) then
-        if self:turnOffBestInverterAndThenTurnOnBestCharger() then
-            return state.charge
-        else
-            return state.recalculate
-        end
-    elseif (self:isBuyingMoreThan(0) and self.VenusE:isIdle()) or self.VenusE:isDischargingMoreThan(10) then
-        if self:turnOffBestChargerAndThenTurnOnBestInverter() then
-            return state.discharge
-        else
-            return state.recalculate
-        end
-    end
-    return state.idle
-end
-
--- luacheck: ignore self
-PVBattery[state.idle] = function(self, expected_state)
-    expected_state = expected_state or self:setChargeOrDischarge()
-    if expected_state == state.charge or expected_state == state.discharge then
-        self[expected_state](self, expected_state)
-    elseif expected_state ~= state.recalculate then
-        for _, Charger in ipairs(self.Charger) do
-            Charger:safeStopCharge()
-        end
---        for _, BMS in ipairs(self.BMS) do
---            BMS:disableDischarge()
---        end
-        for _, Inverter in ipairs(self.Inverter) do
-            if not Inverter.time_controlled then
-                Inverter:stopDischarge()
-            end
-        end
-        self:setState(state.recalculate)
-    end
-end
-
--- luacheck: ignore self
-PVBattery[state.charge] = function(self, expected_state)
-    expected_state = expected_state or self:setChargeOrDischarge()
-    self:setState(expected_state)
-    if expected_state == state.charge then
-        for _, BMS in ipairs(self.BMS) do
-            local is_full = BMS:isBatteryFull()
-            local needs_balancing = BMS:needsBalancing()
-            if is_full then
-                for _, Charger in ipairs(self.Charger) do
-                    if Charger.BMS == BMS then
-                        Charger:stopCharge()
-                        self:setState(state.recalculate)
+nb_batteries = - 1 -- keine nachvewrteilugn
+            -- if there is not_distributed_power and
+            while not_distributed_power > MIN_DISCHARGE_POWER and nb_batteries > 0 do
+                local remaining_power = not_distributed_power / nb_batteries
+                if remaining_power < MIN_DISCHARGE_POWER then
+                    remaining_power = not_distributed_power -- give it all to one
+                end
+                for _, Battery in ipairs(self.SmartBattery) do
+                    if Battery.Device.charge_max_power > Battery.batt_req_power then -- may get some power too
+                        local power_to_add = remaining_power
+                        if Battery.Device.discharge_max_power < Battery.batt_req_power + power_to_add   then
+                            power_to_add = Battery.batt_req_power + power_to_add - Battery.Device.discharge_max_power
+                        end
+                        Battery.batt_req_power = Battery.batt_req_power + power_to_add
+                        not_distributed_power = not_distributed_power - power_to_add
+                        nb_batteries = nb_batteries - 1
+                        if not_distributed_power <= 0 or nb_batteries < 1 then
+                            break
+                        end
                     end
                 end
             end
-            if needs_balancing then
-                BMS:enableDischarge()
-                BMS:setAutoBalance(true)
-                self:setState(state.balance)
+        end -- sum_remaining_SOC
+
+        for _, Battery in ipairs(self.SmartBattery) do
+            Battery.batt_req_power = math.min(Battery.batt_req_power, Battery.Device.discharge_max_power)
+            Battery:give(math.floor(Battery.batt_req_power))
+            self:log(2, "GIVE", Battery.Device.name, Battery.batt_req_power)
+            Battery.power = Battery.batt_req_power
+        end
+
+    elseif P_exzess < -MIN_CHARGE_POWER then -- charge batteries
+
+        for _, Battery in ipairs(self.USPBattery) do
+            local max_charger_power = math.min(Battery.Charger[1]:getMaxPower(),Battery.Charger[2]:getMaxPower())
+            if   P_exzess + max_charger_power < 0 then
+                local state = Battery.state
+                if state.idle or state.take or state.can_take then
+                    Battery:take(math.abs(P_exzess))
+                    mqtt_reader:sleepAndCallMQTT(2)
+                    Battery.power = Battery:getPower() -- negative if dischargeing
+                    self:log(2, "TAKE", Battery.Device.name, Battery.power)
+                    P_exzess = P_exzess - Battery.power
+                end
+            else
+                P_exzess = P_exzess + Battery.power
+                Battery:take(0)
+                Battery.power = 0
+                self:log(2, "TAKE", Battery.Device.name, 0)
             end
---[[            if not needs_balancing and not is_full then
-                for _, Charger in ipairs(self.Charger) do
-                    if Charger.BMS == BMS then
-                        Charger:startCharge()
-                        self:setState(state.recalculate)
+        end
+
+        local sum_missing_SOC = 0
+        for _, Battery in ipairs(self.SmartBattery) do
+            sum_missing_SOC = sum_missing_SOC + math.max(0, Battery.Device.SOC_max - Battery.SOC)
+            Battery.batt_req_power = 0
+        end
+        if sum_missing_SOC > 1 then
+            local nb_batteries = #self.SmartBattery
+            local not_distributed_power = P_exzess --negative
+            -- first distribute power depending on SOC
+            for _, Battery in ipairs(self.SmartBattery) do
+                local p = 0
+                if Battery.SOC <= Battery.Device.SOC_max then
+                    p = (P_exzess * (Battery.Device.SOC_max - Battery.SOC) / sum_missing_SOC) -- proportional share
+                    if p < -Battery.Device.charge_max_power then
+                        p = -Battery.Device.charge_max_power
+                        nb_batteries = nb_batteries - 1
+                    end
+                    if p > -MIN_CHARGE_POWER then
+                        p = 0 -- no power for now
+                    end
+                end
+                Battery.batt_req_power = p -- is negative
+                not_distributed_power = not_distributed_power - p -- should be and stay negative
+            end
+
+            -- if there is not_distributed_power and
+            while not_distributed_power < -MIN_CHARGE_POWER and nb_batteries > 0 do
+                self:log(3, "distributing Power: " .. not_distributed_power)
+                local remaining_power = not_distributed_power / nb_batteries
+                if remaining_power > -MIN_CHARGE_POWER then
+                    remaining_power = not_distributed_power
+                end
+                for _, Battery in ipairs(self.SmartBattery) do
+                    if -Battery.Device.charge_max_power < Battery.batt_req_power then -- may get some power too
+                        local power_to_add = remaining_power
+                        if -Battery.Device.charge_max_power > Battery.batt_req_power + power_to_add   then
+                            power_to_add = Battery.batt_req_power + power_to_add - Battery.Device.charge_max_power
+                        end
+                        Battery.batt_req_power = Battery.batt_req_power + power_to_add
+                        not_distributed_power = not_distributed_power - power_to_add
+                        nb_batteries = nb_batteries - 1
+                        if not_distributed_power >= 0 or nb_batteries < 1 then
+                            break
+                        end
                     end
                 end
             end
-        ]]
-        end
-    elseif expected_state == state.discharge then
-        local handler = PVBattery[expected_state]
-        if handler then
-            handler(self, expected_state)
-        else
-            print("[PVBattery] no handler found for", expected_state)
+
+        end -- sum_missing_SOC
+        for _, Battery in ipairs(self.SmartBattery) do
+            Battery.batt_req_power = math.min(Battery.batt_req_power, Battery.Device.discharge_max_power)
+            Battery:take(math.floor(math.max(0, -Battery.batt_req_power)))
+            self:log(2, "TAKE", Battery.Device.name, Battery.batt_req_power)
+            Battery.power = Battery.batt_req_power
         end
     end
+    return true
 end
 
--- luacheck: ignore self
-PVBattery[state.balance] = function(self)
-    local expected_state = self:setChargeOrDischarge()
-
-    if expected_state == state.idle then
-        for _, Charger in ipairs(self.Charger) do
-            Charger:stopCharge()
-            self:setState(state.recalculate)
-        end
-    end
-
-    for _, BMS in ipairs(self.BMS) do
-        if BMS:needsBalancing() then
-            BMS:enableDischarge()
-            BMS:setAutoBalance(true)
-            return
-        end
-        if BMS:isBatteryFull() then
-            self:setState(state.full)
-            return
-        end
-    end
-
-    if expected_state == state.charge then
-        self:setState(state.charge)
-    elseif expected_state == state.discharge then
-        self:setState(state.discharge)
-    end
-end
-
--- luacheck: ignore self
-PVBattery[state.discharge] = function(self, expected_state)
---    print("state -> discharge") -- spams output
-    expected_state = expected_state or self:setChargeOrDischarge()
-    self:setState(expected_state)
-    if expected_state ~= state.discharge then
-        local handler = PVBattery[expected_state]
-        if handler then
-            handler(self, expected_state)
-        else
-            print("[PVBattery] no handler found for", expected_state)
-        end
-    end
-end
-
--- luacheck: ignore self
-PVBattery[state.full] = function(self)
-    for _, Charger in ipairs(self.Charger) do
-        Charger:stopCharge()
-    end
-
-    for _, BMS in ipairs(self.BMS) do
-        BMS:setAutoBalance(false)
-        BMS:disableDischarge()
-        self:setState(state.balance)
-    end
-end
-
--- luacheck: ignore self
-PVBattery[state.rescue_charge] = function(self)
-    for _, Charger in ipairs(self.Charger) do
-        if Charger.BMS:needsRescueCharge() then
-            Charger:startCharge()
-            self:setState(state.recalculate)
-        end
-    end
-end
-
--- luacheck: ignore self
-PVBattery[state.shutdown] = function(self)
-    print("state -> shutdown")
-    for _, Charger in ipairs(self.Charger) do
-        Charger:safeStopCharge()
-    end
-    for _, Inverter in ipairs(self.Inverter) do
-        if not Inverter.time_controlled then
-            if Inverter:getPowerState() == "on" and Inverter.BMS:getDischargeState() == "on" then
-                Inverter:stopDischarge()
-            end
-        end
-    end
-end
-
-PVBattery[state.force_discharge] = function(self)
-    print("state -> force_discharge")
-
-    for _, Inverter in ipairs(self.Inverter) do
-        if not Inverter.time_controlled then
-            local power_state = Inverter:getPowerState()
-            local discharge_state = Inverter.BMS:getDischargeState()
-            if power_state ~= discharge_state then
-                if Inverter:getPowerState() == "on" then
-                    Inverter:startDischarge()
-                    self:setState(state.discharge)
-                else
-                    Inverter:stopDischarge()
-                    self:setState(state.recalculate)
-                end
-            end
-        end
-    end
-end
-
-PVBattery[state.recalculate] = function(self, expected_state)
-    print("Ups now, i did it again")
-end
-
--- Prefetch all switch values
-function PVBattery:fillCache()
-    local threads = {}
-    local socket_to_thread = {}
-    local readable_sockets = {}
-
-    local function addThread(co)
-        table.insert(threads, { co = co })
-    end
-
-    -- Alle Coroutine-Erzeugungen
-    for _, BMS in ipairs(self.BMS) do
-        addThread(coroutine.create(function() return BMS:getData_coroutine() end))
-    end
-    addThread(coroutine.create(function() return Fronius:getPowerFlowRealtimeData_coroutine() end))
-    -- addThread(coroutine.create(function() return P1meter:getData_coroutine() end))
-
-    -- Erste Runde: starten der Coroutinen und Zuordnung zu Sockets
-    for i = #threads, 1, -1 do
-        local thread = threads[i]
-        local ok, result = coroutine.resume(thread.co)
-
-        if not ok then
-            util:log("Coroutine error:", result)
-            table.remove(threads, i)
-        elseif type(result) == "boolean" then
-            -- Keine Socket, Coroutine ist fertig
-            table.remove(threads, i)
-        else
-            local sock_id = tostring(result)
-            socket_to_thread[sock_id] = thread.co
-            table.insert(readable_sockets, result)
-        end
-    end
-
-    local timeout = util.getCurrentTime() + config.update_interval
-    while #readable_sockets > 0 and util.getCurrentTime() < timeout do
-        local ready = socket.select(readable_sockets, nil, 1)
-
-        for _, sock in ipairs(ready) do
-            local sock_id = tostring(sock)
-            local thread = socket_to_thread[sock_id]
-
-            if thread then
-                local ok, result = coroutine.resume(thread)
-
-                if not ok then
-                    util:log("Coroutine resume error:", result)
-                    socket_to_thread[sock_id] = nil
-                elseif type(result) == "boolean" then
-                    -- Coroutine ist fertig
-                    socket_to_thread[sock_id] = nil
-                else
-                    socket_to_thread[sock_id] = thread
-                end
-            end
-        end
-
-        readable_sockets = {}
-        for sock_id in ipairs(socket_to_thread) do
-            local sock = socket.fromtostring and socket.fromtostring(sock_id)
-            if sock then
-                table.insert(readable_sockets, sock)
-            end
-        end
-    end
-end
-
-function PVBattery:refreshCache()
-    self:fillCache()
-    self:getCurrentValues(true)
-end
-
-function PVBattery:outputTheLog(date_string, oldstate, newstate)
+function PVBattery:outputTheLog(date_string)
     local log_string
-    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, Battery=%5.0fW, P_VenusE=%5.0fW",
-        date_string, self.P_Grid or 0, self.P_Load or 0, self.BMS[1].v.CurrentPower or 0, self.P_VenusE or 0)
-    log_string = log_string .. string.format(" %8s -> %8s", oldstate, newstate)
+    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, Battery=%5.0fW, P_VenusE1=%5.0fW, P_VenusE1=%5.0fW",
+        date_string, self.P_Grid or 0, self.P_Load or 0,
+        self.Battery[1].power or 0,
+        self.Battery[2].power or 0,
+        self.Battery[3].power or 0)
 
-    if oldstate ~= newstate then
-        print(log_string)
-
-    end
     util:log(log_string)
 end
 
 function PVBattery:writeToDatabase()
+    print("no influx for now")
+    if true then return end
+
     local datum = "Leistung"
     Influx:writeLine("garage-inverter", datum, self.Inverter[1]:getPower())
     Influx:writeLine("battery-inverter", datum, self.Inverter[2]:getPower())
@@ -720,10 +419,10 @@ function PVBattery:writeToDatabase()
     Influx:writeLine("P_Grid", datum, self.P_Grid)
     Influx:writeLine("P_Load", datum, self.P_Load)
 
-    Influx:writeLine("P_VenusE", datum, self.P_VenusE)
+    Influx:writeLine("P_VenusE", datum, self.SmartBattery[1].power)
+    Influx:writeLine("P_VenusE2", datum, self.SmartBattery[2].power)
 
     Influx:writeLine("Status", "Status", self:getState())
-
 
     datum = "Energie"
     Influx:writeLine("garage-inverter", datum, self.Inverter[1]:getEnergyTotal())
@@ -732,91 +431,6 @@ function PVBattery:writeToDatabase()
 
     Influx:writeLine("battery-charger", datum, self.Charger[1]:getEnergyTotal())
     Influx:writeLine("battery-charger2", datum, self.Charger[2]:getEnergyTotal())
-
-
-end
-
-function PVBattery:getCurrentValues(ask)
-    -- Positive values mean power going into Fronius;
-    -- e.g. positive P_Grid we buy energy
-    --      negative P_Grid we sell energy
-    local P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
-
-    -- Positive values mean VenusE is discharging
-    -- Nagative values mean power is charging
-    local P_VenusE = self.VenusE:readACPower()
-    P_VenusE = P_VenusE and math.floor(P_VenusE) or 0
-    local VenusE_SOC = self.VenusE:readBatterySOC()
-
-    local repeat_request = 5
-    while (not self.P_Grid or not self.P_Load or not self.P_PV or not self.P_VenusE) and repeat_request > 0 do
-        repeat_request = repeat_request - 1
-        util.sleepTime(1) -- try again in 1 second
-        if not P_Grid or not P_Load or not P_PV then
-            util:log("Communication error: repeat request:", repeat_request)
-            P_Grid, P_Load, P_PV, P_AC = Fronius:getGridLoadPV()
-        end
-        if not P_VenusE then
-            P_VenusE = self.VenusE:readACPower()
-        end
-    end
-
-    -- Normally P_PV comes from panel and P_AC is less, so use the smaller one
-    if P_PV and P_AC then
-        P_PV = math.min(P_PV, P_AC)
-    end
-    self.P_Grid = P_Grid
-    self.P_Load = P_Load
-    self.P_PV = P_PV
-    self.P_VenusE = P_VenusE
-    -- Defautlt to 0 % or 0 W if no marstek is found.
-    self.VenusE_SOC = VenusE_SOC and math.floor(VenusE_SOC) or 0
-
-    if ask then
-        mqtt_reader:askHost("battery-inverter", 2)
-        mqtt_reader:askHost("garage-inverter", 2)
-        mqtt_reader:askHost("balkon-inverter", 2)
-    end
-
-    mqtt_reader:processMessages()
-end
-
-local function sleepAndCallMQTT(start_time, short_sleep)
-    local sleep_time
-    if short_sleep then
-        sleep_time = short_sleep - (util.getCurrentTime() - start_time)
-    else
-        sleep_time = config.sleep_time - (util.getCurrentTime() - start_time)
-    end
-
-    local sleep_period = 5
-    repeat
-        util.sleepTime(math.min(sleep_time, sleep_period))
-        sleep_time = sleep_time - sleep_period
-        if mqtt_reader:processMessages(0.01) then -- got message
-            return true
-        end
-    until sleep_time < 0
-    return false
-end
-
-local function sleepAndCallMQTT(start_time, short_sleep)
-    local sleep_time
-    if short_sleep then
-        sleep_time = short_sleep - (util.getCurrentTime() - start_time)
-    else
-        sleep_time = config.sleep_time - (util.getCurrentTime() - start_time)
-    end
-
-    local sleep_period = 5
-    repeat
-        util.sleepTime(math.min(sleep_time, sleep_period))
-        sleep_time = sleep_time - sleep_period
-        if mqtt_reader:updateStates(0.01) then -- got message
-            return true
-        end
-    until sleep_time < 0
-    return false
 end
 
 function PVBattery:main(profiling_runs)
@@ -825,12 +439,11 @@ function PVBattery:main(profiling_runs)
     date = os.date("*t")
     date.year = date.year - 1
 
-    local rescue_stop = math.floor(60/4) + 1
     while type(profiling_runs) ~= "number" or profiling_runs > 0 do
+        self:log(0, "-----------------------")
         if type(profiling_runs) == "number" then
             profiling_runs = profiling_runs - 1
         end
-        local skip_loop = false
         local short_sleep = nil -- a number here will shorten the sleep time
         local _start_time = util.getCurrentTime()
 
@@ -850,7 +463,6 @@ function PVBattery:main(profiling_runs)
         last_date.hour, last_date.min, last_date.sec)
 
         util:log(date_string)
-
         -- Do the sun set and rise calculations if necessary
         if last_date.day ~= date.day or last_date.isdst ~= date.isdst then
             SunTime:setDate()
@@ -863,94 +475,47 @@ function PVBattery:main(profiling_runs)
             h, m, s = util.hourToTime(SunTime.set)
             self.sunset = string.format("%02d:%02d:%02d", h, m, s)
             util:log("Sun set at " .. self.sunset)
+        end
+
+        util:log("\n-------- Total Overview:")
+        util:log(string.format("Grid %8f W (%s)", self.P_Grid, self.P_Grid > 0 and "optaining" or "selling"))
+        util:log(string.format("Load %8f W", self.P_Load))
+        util:log(string.format("Roof %8f W", self.P_PV))
+        util:log(string.format("VenusE1 %8f W", self.SmartBattery[1].power))
+        util:log(string.format("VenusE2 %8f W", self.SmartBattery[2].power))
+
+        self:getValues()
+
+        -- update state, as the battery may have changed or the user could have changed something manually
+        self:outputTheLog(date_string)
+        self:writeToDatabase()
+
+--        self:log(2, "generate JSON")
+--        local ok, result = pcall(self.generateJSON, self, VERSION)
+--        if not ok then
+--            print("Error on generateJSON", result)
+--        end
+
+        self:log(2, "dothemagic")
+
+        ---------------------------------------------------
+        if self:doTheMagic() then
             short_sleep = 1
         end
 
-        -- Update Fronius
-        util:log("\n-------- Total Overview:")
+        self:getValues()
 
-        self:refreshCache()
-
-        if not self.P_Grid or not self.P_Load or not self.P_PV or not self.P_VenusE then
-            short_sleep = 4
-            skip_loop = true
-            rescue_stop = rescue_stop - 1
-            if rescue_stop < 0 then
-                self[state.shutdown](self)
-            end
-        else
-            rescue_stop = math.floor(60/4) + 1
+        self:log(2, "generate JSON")
+        local ok, result = pcall(self.generateJSON, self, VERSION)
+        if not ok then
+            print("Error on generateJSON", result)
         end
 
-        if not skip_loop then
-            util:log(string.format("Grid %8f W (%s)", self.P_Grid, self.P_Grid > 0 and "optaining" or "selling"))
-            util:log(string.format("Load %8f W", self.P_Load))
-            util:log(string.format("Roof %8f W", self.P_PV))
-            util:log(string.format("VenusE %8f W", self.P_VenusE))
-
-            mqtt_reader:processMessages()
-            local oldstate = self:getState()
-            local newstate = self:updateState()
-
-            mqtt_reader:processMessages()
-
-            -- update state, as the battery may have changed or the user could have changed something manually
-            self:outputTheLog(date_string, oldstate, newstate)
-            self:writeToDatabase()
-            local ok, result = pcall(function() self:generateHTML(config, VERSION) end)
-            if not ok then
-                print("Error on generateHTML", result)
-            end
-
-            -- Here the dragons fly (aka the datastructure of the states knocks in)
-            if not self:callStateHandler() then
-                local error_msg = "Error: state '" .. tostring(self:getState()) .. "' not implemented yet"
-                util:log(error_msg)
-                print(error_msg)
-            end
-
-            -- Update Fronius
-            util:log("\n-------- Total Overview:")
-            date = os.date("*t")
-            self:refreshCache()
-
-            oldstate = newstate
-            newstate = self:getState()
-            if oldstate ~= newstate then
-                mqtt_reader:processMessages()
-                newstate = self:updateState()
-                self:outputTheLog(date_string, oldstate, newstate)
-                short_sleep = 2
-            end
-            local ok, result = pcall(function() self:generateHTML(config, VERSION) end)
-            if not ok then
-                print("Error on generateHTML", result)
-            end
-        end
-
-        -- Do the time controlled switching
-        do
-            local curr_hour = date.hour + date.min/60 + date.sec/3600
-            for _, Inverter in ipairs(self.Inverter) do
-                if Inverter.time_controlled == "sunrise" then
-                    if SunTime.rise_civil < curr_hour and curr_hour < SunTime.set_civil then
-                        Inverter:safeStartDischarge()
-                    else
-                        Inverter:safeStopDischarge()
-                    end
-                end
-            end
-        end
-
-        self:serverCommands(config)
-
-        for _, BMS in ipairs(self.BMS) do
-            BMS:printValues()
-        end
+        self:serverCommands()
 
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
 
-        sleepAndCallMQTT(_start_time, short_sleep)
+        mqtt_reader:sleepAndCallMQTT(short_sleep, _start_time)
     end -- end of inner loop
 end
 
@@ -964,19 +529,32 @@ if #arg > 2 then
     end
 end
 
-local MyBatteries = PVBattery
-MyBatteries:init()
-
 util.deleteRunningInstances("PVBattery")
 
-os.execute("date; echo Init done")
+local MyBatteries = PVBattery:new{}
+
+MyBatteries:log(0, "Istantiation done")
 
 if not Profiler then
     -- this is the outer loop, a safety-net if the inner loop is broken with `break`
     while true do
         util:cleanLogs()
-        MyBatteries.BMS[1].timeOfLastFullBalancing = util.getCurrentTime() - 26*3600 -- yesterday the same time
         MyBatteries:main()
+        ------- todo
+--        MyBatteries.BMS[1].timeOfLastFullBalancing = util.getCurrentTime() - 26*3600 -- yesterday the same time
+        local ok, result = xpcall(function() MyBatteries:main() end, util.crashHandler)
+--        MyBatteries:main()
+        if ok then
+            print("[Main] Erfolgreich beendet. Das sollte nicht passieren")
+        else
+            if tostring(result):match("interrupted") then
+                print("Ctrl+C (SIGINT)")
+                -- todo: set mode to auto
+                os.exit(0)
+            else
+                print("[Main] Fehler:", result, "Restart main loop")
+            end
+        end
     end
 else -- if Profiler
     MyBatteries:main(1)
