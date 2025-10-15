@@ -60,7 +60,7 @@ function mqtt_reader:printStates(clear)
             local t = v.time and os.date("%Y-%m-%d %H:%M:%S", v.time) or "-"
             print(string.format("%-19s %-20s %-5s %-8s", t, name, tostring(v.switch1), tostring(v.power)))
 			if clear then
-				v = {}
+				self.states[name] = {}
 			end
         end
     end
@@ -122,6 +122,7 @@ function mqtt_reader:init(uri, id)
 
             -- Handle Tasmota-like messages
             if prefix == "tele" or prefix == "stat" then
+--				print(prefix, topic, data:sub(1, 20))
 				if not self.states[topic] then
 					self.states[topic] = {}
 				end
@@ -254,20 +255,16 @@ end
 function mqtt_reader:_test()
 	mqtt_reader:setLogLevel(2)
     mqtt_reader:init("battery-control.lan", "mqtt_reader_standalone")
-    mqtt_reader:subscribeAndAskHost("moped-charger.lan", 1)
---    mqtt_reader:subscribe("garage-inverter.lan", 0)
---    mqtt_reader:subscribe("battery-inverter.lan", 1)
---    mqtt_reader:askHost("battery-inverter.lan")
-	mqtt_reader:subscribeAndAskHost("garage-inverter.lan", 1)
-	mqtt_reader:subscribeAndAskHost("balkon-inverter.lan", 1)
-	mqtt_reader:subscribeAndAskHost("battery-inverter.lan", 1)
+	mqtt_reader:subscribeAndAskHost("moped-charger.lan", 1)
+--	mqtt_reader:subscribeAndAskHost("garage-inverter.lan", 1)
+	mqtt_reader:subscribeAndAskHost("balkon-inverter.lan", 2)
+	mqtt_reader:subscribeAndAskHost("battery-inverter.lan", 2)
 
     util.sleepTime(1)
 
     log(1, "Waiting for MQTT messages...")
 
     while true do
-		mqtt_reader:askHost("balkon-inverter.lan")
         if mqtt_reader:processMessages() then
             mqtt_reader:printStates(true)
             util.sleepTime(0.1)

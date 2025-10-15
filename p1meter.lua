@@ -83,7 +83,6 @@ end
 
 -- todo add a getter if neccessary
 function P1meter:getCurrentPower()
-
     if self:getData() and self:gotValidP1meterData() then
         return self.Data.active_power_w
     else

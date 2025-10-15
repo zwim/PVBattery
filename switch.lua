@@ -27,7 +27,7 @@ function Switch:new(o)
         o:init()
     end
     o.host = o.host:lower()
-    mqtt_reader:askHost(o.host)
+    mqtt_reader:askHost(o.host, 2)
     return o
 end
 
@@ -52,7 +52,7 @@ function Switch:updateStatus()
     end
 
     local name = self.host:match("^(.*)%.")
-    mqtt_reader.askHost(name)
+    mqtt_reader.askHost(name, 2)
     mqtt_reader:processMessages()
 end
 
