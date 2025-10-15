@@ -67,7 +67,7 @@ function MopedCharger:init()
     }
     mqtt_reader:subscribe(self.Charger.host, 0)
     mqtt_reader:askHost(self.Charger.host)
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
 end
 
 function MopedCharger:getState() return self._state end
@@ -98,6 +98,25 @@ function MopedCharger:isCharging()
     return self.Charger:getPowerState() == "on"
 end
 
+local function sleepAndCallMQTT(start_time, short_sleep)
+    local sleep_time
+    if short_sleep then
+        sleep_time = short_sleep - (util.getCurrentTime() - start_time)
+    else
+        sleep_time = config.sleep_time - (util.getCurrentTime() - start_time)
+    end
+
+    local sleep_period = 5
+    repeat
+        util.sleepTime(math.min(sleep_time, sleep_period))
+        sleep_time = sleep_time - sleep_period
+        if mqtt_reader:processMessages(0.01) then -- got message
+            return true
+        end
+    until sleep_time < 0
+    return false
+end
+
 function MopedCharger:main(profiling_runs)
     local last_date, date
     -- optain a date in the past
@@ -113,15 +132,13 @@ function MopedCharger:main(profiling_runs)
         if type(profiling_runs) == "number" then
             profiling_runs = profiling_runs - 1
         end
-        local skip_loop = false
-        local short_sleep = nil -- a number here will shorten the sleep time
+        local short_sleep_skip_loop = nil -- a number here will shorten the sleep time
         local _start_time = util.getCurrentTime()
 
         -- if config has changed, reload it
         if config:needUpdate() then
             if config:read(true) then
-                short_sleep = 1
-                skip_loop = true
+                short_sleep_skip_loop = 1
             end
         end
 
@@ -148,7 +165,7 @@ function MopedCharger:main(profiling_runs)
             h, m, s = util.hourToTime(SunTime.set)
             self.sunset = string.format("%02d:%02d:%02d", h, m, s)
             util:log("Sun set at " .. self.sunset)
-            short_sleep = 1
+            short_sleep_skip_loop = 1
         end
 
         -- Update Fronius
@@ -163,7 +180,7 @@ function MopedCharger:main(profiling_runs)
         -- Negative values mean VenusE is discharging
         local P_VenusE = self.VenusE:readACPower()
 
-        mqtt_reader:updateStates()
+        mqtt_reader:processMessages()
 
         local repeat_request = math.min(20, config.sleep_time - 5)
         while (not P_Grid or not P_VenusE) and repeat_request > 0 do
@@ -180,37 +197,42 @@ function MopedCharger:main(profiling_runs)
         end
 
         if not P_Grid or not P_VenusE then
-            short_sleep = 1
-            skip_loop = true
+            short_sleep_skip_loop = 1
         else
             util:log(string.format("Grid %8.2f W, VenusE %8.2f W", P_Grid, P_VenusE))
         end
 
-        if not skip_loop then
+        if not short_sleep_skip_loop then
             self:isState(self.Charger:getPowerState(), true)
             if not self:getState("on") and not self:getState("off") then -- try once again
                 self:isState(self.Charger:getPowerState(), true)
             end
 
-            skip_loop = not self:getState("on") and not self:getState("off")
+            if not self:getState("on") and not self:getState("off") then
+                short_sleep_skip_loop = 1
+            end
         end
 
-        if not skip_loop then
-            mqtt_reader:updateStates()
+        if not short_sleep_skip_loop then
+            mqtt_reader:processMessages()
 
             old_power = curr_power
             curr_power = self.Charger:getPower()
-            skip_loop = not curr_power or (curr_power ~= curr_power) -- ether nil or nan
-            skip_loop = skip_loop or (curr_power > old_power) -- starting charge
+            if not curr_power or (curr_power ~= curr_power) then -- ether nil or nan
+                short_sleep_skip_loop = 1
+            end
+            if (curr_power > old_power) then -- starting charge then
+                short_sleep_skip_loop = 1
+            end
             if curr_power > old_power then
                 self.charger_max_power = curr_power or 0
             end
         end
 
-        print(date_string, "skip_loop:'"..tostring(skip_loop).."'",
+        print(date_string, "skip_loop:'"..tostring(short_sleep_skip_loop).."'",
               self:getGoal(), self:getState(), P_Grid, P_VenusE, curr_power, self.charger_max_power)
 
-        if not skip_loop then
+        if not short_sleep_skip_loop then
             if self:isGoal("idle") and curr_power > 0 then
                 -- this will happen if the user turns charging on manually
                 self:isGoal("mid_charge", true)
@@ -245,15 +267,7 @@ function MopedCharger:main(profiling_runs)
             end
         end
 
-        if skip_loop then
-            short_sleep = math.min(short_sleep or 1, 1)
-        end
-
-        if short_sleep then
-            util.sleepTime(short_sleep - (util.getCurrentTime() - _start_time))
-        else
-            util.sleepTime(config.sleep_time - (util.getCurrentTime() - _start_time))
-        end
+        sleepAndCallMQTT(_start_time, short_sleep_skip_loop)
     end -- end of inner loop
 end
 

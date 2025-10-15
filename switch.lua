@@ -27,7 +27,7 @@ function Switch:new(o)
         o:init()
     end
     o.host = o.host:lower()
-    mqtt_reader:askHost(o.host)
+    mqtt_reader:askHost(o.host, 2)
     return o
 end
 
@@ -52,12 +52,12 @@ function Switch:updateStatus()
     end
 
     local name = self.host:match("^(.*)%.")
-    mqtt_reader.askHost(name)
-    mqtt_reader:updateStates()
+    mqtt_reader.askHost(name, 2)
+    mqtt_reader:processMessages()
 end
 
 function Switch:getEnergyTotal()
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
     if not state then
@@ -80,7 +80,7 @@ function Switch:getEnergyToday()
 end
 
 function Switch:getEnergyYesterday()
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
 
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
@@ -93,7 +93,7 @@ function Switch:getEnergyYesterday()
 end
 
 function Switch:getPower()
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
 
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
@@ -120,7 +120,7 @@ function Switch:getMaxPower()
 end
 
 function Switch:getPowerState()
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
 
     local name = self.host:match("^(.*)%.")
     local state = mqtt_reader.states[name]
@@ -157,7 +157,7 @@ function Switch:toggle(on)
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
     local _ = http.request(url)
     util.sleepTime(0.2)
-    mqtt_reader:updateStates()
+    mqtt_reader:processMessages()
 end
 
 return Switch

@@ -55,7 +55,7 @@ function influx:writeLine(device, datum, value)
         print("[INFLUX] Status Code:", status_code)
         local response = table.concat(response_body)
         if response then
-            print("[INFLUX] Response Body:", response )
+            print("[INFLUX] Response Body:", response)
         end
     end
 end
