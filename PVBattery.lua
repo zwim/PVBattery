@@ -800,6 +800,25 @@ local function sleepAndCallMQTT(start_time, short_sleep)
     return false
 end
 
+local function sleepAndCallMQTT(start_time, short_sleep)
+    local sleep_time
+    if short_sleep then
+        sleep_time = short_sleep - (util.getCurrentTime() - start_time)
+    else
+        sleep_time = config.sleep_time - (util.getCurrentTime() - start_time)
+    end
+
+    local sleep_period = 5
+    repeat
+        util.sleepTime(math.min(sleep_time, sleep_period))
+        sleep_time = sleep_time - sleep_period
+        if mqtt_reader:updateStates(0.01) then -- got message
+            return true
+        end
+    until sleep_time < 0
+    return false
+end
+
 function PVBattery:main(profiling_runs)
     local last_date, date
     -- optain a date in the past
