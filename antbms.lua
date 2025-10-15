@@ -211,6 +211,16 @@ function AntBMS:setPower(power)
     end
 end
 
+function AntBMS:getSOC(force)
+    if self:getData(force) then
+        if self:isBatteryFull() then
+            self.timeOfLastFullBalancing = util.getCurrentTime()
+            self.max_SOC = config.bat_SOC_full
+        end
+    end
+    return self.v and self.v.CalculatedSOC or 0
+end
+
 function AntBMS:getCurrentPower()
     if self:getData() then
         return self.v.CurrentPower
@@ -285,7 +295,7 @@ function AntBMS:getData(force)
         for try = 1, 8 do -- try to read a few times
             if not self.socket then
                 self.socket = socket.tcp()
-                self.socket:settimeout(5)
+                self.socket:settimeout(2)
                 self.socket:setoption("keepalive", true)
                 ok, err = self.socket:connect(self.host, 80)
                 if not ok then
@@ -392,6 +402,10 @@ function AntBMS:getData(force)
     end
 
     self:evaluateData()
+
+    -- Now we store the new aquisition time.
+    self:setDataAge()
+
     return true
 end
 
@@ -559,27 +573,19 @@ function AntBMS:evaluateData()
 
     self.answer = {} -- clear old received bytes
 
-
     if util.getCurrentTime() >= self.timeOfLastFullBalancing + config.lastFullPeriod then
         config.bat_SOC_full = 100
-    end
-
-    -- Now we store the new aquisition time.
-    self:setDataAge()
-
-    if self:isBatteryFull() then
-        self.timeOfLastFullBalancing = util.getCurrentTime()
-        config.bat_SOC_max = config.bat_SOC_full
     end
 end
 
 function AntBMS:isBatteryFull()
     if self:getData() then
         local is_full
-        if config.bat_SOC_max == 100 then
+        if self.max_SOC == 100 then
             is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
                 and self.v.CellDiff <= self.min_cell_diff
-                and self.v.CurrentPower > config.charge_finished_current and self.v.CurrentPower <= self.min_charge_power
+                and self.v.CurrentPower > config.charge_finished_current
+                and self.v.CurrentPower <= self.min_charge_power
         else
             is_full = self.v.SOC >= config.bat_SOC_full and self.v.CalculatedSOC >= config.bat_SOC_full - 0.1
         end
@@ -709,7 +715,7 @@ function AntBMS:readyToCharge()
                 start_charge = true
                 continue_charge = true
             end
-        elseif self.v.SOC > config.bat_SOC_max then
+        elseif self.v.SOC > self.max_SOC then
             start_charge = false
             continue_charge = false
         else
@@ -736,10 +742,10 @@ function AntBMS:readyToDischarge()
         elseif self.v.LowestVoltage < config.bat_lowest_voltage + config.bat_voltage_hysteresis then
             start_discharge = false
             continue_discharge = true
-        elseif self.v.SOC < config.bat_SOC_min then
+        elseif self.v.SOC < self.min_SOC then
             start_discharge = false
             continue_discharge = false
-        elseif self.v.SOC < config.bat_SOC_min + config.bat_SOC_hysteresis then
+        elseif self.v.SOC < self.min_SOC + config.bat_SOC_hysteresis then
             start_discharge = false
             continue_discharge = true
         elseif self.v.CellDiff >= config.max_cell_diff then
@@ -758,22 +764,18 @@ function AntBMS:readyToDischarge()
     end
 end
 
-function AntBMS:isLowChargedOrNeedsRescue()
-    if self:getData() then
+function AntBMS:isLowChargedOrNeedsRescue(option)
+    if option.fast or self:getData() then
         if self.v.LowestVoltage < config.bat_lowest_rescue or self.v.SOC < config.bat_SOC_min_rescue then
             self.rescue_charge = true
             return true
-        elseif self.v.LowestVoltage < config.bat_lowest_voltage or self.v.SOC <= config.bat_SOC_min then
+        elseif self.v.LowestVoltage < config.bat_lowest_voltage or self.v.SOC <= self.min_SOC then
             return true
         else
             self.rescue_charge = false
             return false
         end
     end
-end
-
-function AntBMS:needsRescueCharge()
-    return self.rescue_charge
 end
 
 function AntBMS:recoveredFromRescueCharge()
@@ -785,7 +787,7 @@ function AntBMS:recoveredFromRescueCharge()
         if self.v.LowestVoltage > config.bat_lowest_rescue
             and self.v.LowestVoltage > config.bat_lowest_voltage
             and self.v.SOC > config.bat_SOC_min_rescue
-            and self.v.SOC > config.bat_SOC_min then
+            and self.v.SOC > self.min_SOC then
                 self.rescue_charge = false
                 return true
         else

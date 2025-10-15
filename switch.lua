@@ -12,6 +12,7 @@ local Switch = {
     host = nil,
     port = 80,
     max_power = 0,
+    topic_name = nil,
 }
 
 function Switch:extend(subclass_prototype)
@@ -23,11 +24,14 @@ end
 
 function Switch:new(o)
     o = self:extend(o)
+    if o.host then
+        o.host = o.host:lower()
+    end
+    o.topic_name = o.host:match("^(.*)%.")
     if o.init then
         o:init()
     end
-    o.host = o.host:lower()
-    mqtt_reader:askHost(o.host, 2)
+    mqtt_reader:subscribeAndAskHost(o.host, 2)
     return o
 end
 
@@ -35,84 +39,84 @@ function Switch:init()
     if not self.max_power then
         self.max_power = 0
     end
+--    self.topic_name = self.host:match("^(.*)%.")
 end
 
-function Switch:getDataAge()
-    local name = self.host:match("^(.*)%.")
-    local state = mqtt_reader.states[name]
-    if state and state.time then
-        return util.getCurrentTime() - state.time
-    end
-    return 0
-end
-
-function Switch:updateStatus()
-    if not self.host then
+function Switch:updateState(timeout)
+    if not self.host or self.host == ""then
         return false
     end
 
-    local name = self.host:match("^(.*)%.")
-    mqtt_reader.askHost(name, 2)
-    mqtt_reader:processMessages()
+    mqtt_reader:askHost(self.host, 2)
+
+    if timeout then
+        mqtt_reader:sleepAndCallMQTT(timeout, nil)
+    end
 end
 
 function Switch:getEnergyTotal()
     mqtt_reader:processMessages()
-    local name = self.host:match("^(.*)%.")
-    local state = mqtt_reader.states[name]
-    if not state then
-        return (0/0)
+
+    local state = mqtt_reader.states[self.topic_name]
+    if not state or not state.Total then
+        mqtt_reader:askHost(self.host, 2)
+        mqtt_reader:sleepAndCallMQTT(4, nil)
+        state = mqtt_reader.states[self.topic_name]
     end
 
-    local Energy = state.Total or (0/0)
+    local Energy = state and state.Total or (0/0)
     return Energy
 end
 
 function Switch:getEnergyToday()
-    local name = self.host:match("^(.*)%.")
-    local state = mqtt_reader.states[name]
-    if not state then
-        return (0/0)
+    mqtt_reader:processMessages()
+
+    local state = mqtt_reader.states[self.topic_name]
+    if not state or not state.Today then
+        mqtt_reader:askHost(self.host, 2)
+        mqtt_reader:sleepAndCallMQTT(4, nil)
+        state = mqtt_reader.states[self.topic_name]
     end
 
-    local Energy = state.Today or (0/0)
+    local Energy = state and state.Today or (0/0)
     return Energy
 end
 
 function Switch:getEnergyYesterday()
     mqtt_reader:processMessages()
 
-    local name = self.host:match("^(.*)%.")
-    local state = mqtt_reader.states[name]
-    if not state then
-        return (0/0)
+    local state = mqtt_reader.states[self.topic_name]
+    if not state or not state.Yesterday then
+        mqtt_reader:askHost(self.host, 2)
+        mqtt_reader:sleepAndCallMQTT(4, nil)
+        state = mqtt_reader.states[self.topic_name]
     end
 
-    local Energy = state.Yesterday or (0/0)
+    local Energy = state and state.Yesterday or (0/0)
     return Energy
 end
 
 function Switch:getPower()
     mqtt_reader:processMessages()
 
-    local name = self.host:match("^(.*)%.")
-    local state = mqtt_reader.states[name]
+    local state = mqtt_reader.states[self.topic_name]
+    if not state or not state.power then
+        mqtt_reader:askHost(self.host, 2)
+        mqtt_reader:sleepAndCallMQTT(4, nil)
+        state = mqtt_reader.states[self.topic_name]
+    end
+
     if not state then
         return (0/0)
     end
 
     local power = state.power
-    local power_state = self:getPowerState()
 
-    if not power or power_state == "" or power_state == "off" then
-       return 0
-    end
-
-    if power > 20 then
+    if power and power > 20 then
         local weight = 0.2
         self.max_power = (1-weight)*self.max_power + weight*power
     end
-    return power or (0/0)
+    return power or 0
 end
 
 function Switch:getMaxPower()
@@ -122,16 +126,18 @@ end
 function Switch:getPowerState()
     mqtt_reader:processMessages()
 
-    local name = self.host:match("^(.*)%.")
-    local state = mqtt_reader.states[name]
-    if not state then
+    local state = mqtt_reader.states[self.topic_name]
+    if not state or not state.switch1 then
+        mqtt_reader:askHost(self.host, 2)
+        mqtt_reader:sleepAndCallMQTT(4, nil)
+        state = mqtt_reader.states[self.topic_name]
+    end
+
+    if not state or not state.switch1 then
         return ""
     end
 
     local power_state = state.switch1
-    if not power_state then
-        return ""
-    end
 
     power_state = power_state:lower()
 
@@ -155,6 +161,15 @@ function Switch:toggle(on)
         on = "2"
     end
     local url = string.format("http://%s/cm?cmnd=Power0%%20%s", self.host, tostring(on))
+    local _ = http.request(url)
+    util.sleepTime(0.2)
+    mqtt_reader:processMessages()
+end
+
+function Switch:getStatus()
+    if not self.host or self.host == "" then return end
+
+    local url = string.format("http://%s/cm?cmnd=Status0%%20%s", self.host, tostring(0))
     local _ = http.request(url)
     util.sleepTime(0.2)
     mqtt_reader:processMessages()

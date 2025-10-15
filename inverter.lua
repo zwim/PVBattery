@@ -1,6 +1,5 @@
 
 local Switch = require("switch")
-local AntBMS = require("antbms")
 
 local util = require("util")
 
@@ -10,13 +9,6 @@ local Inverter = Switch:extend{
     min_power = 0,
     BMS = nil, -- will get initialized by new
 }
-
-function Inverter:init()
-    if self.bms_host ~= "" then
-        self.BMS = AntBMS:new{host = self.bms_host}
-    end
-    return self
-end
 
 function Inverter:startDischarge(req_power)
     if not self.BMS then -- just an PV-Inverter

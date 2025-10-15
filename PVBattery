@@ -14,6 +14,7 @@ directory="/opt/PVBattery/"
 
 rm -f "/tmp/index.html"
 ln -sf "/tmp/index.html" "/var/www/localhost/htdocs/index.html"
+ln -sf "/tmp/PVBattery.json" "/var/www/localhost/htdocs/PVBattery.json"
 
 date > /tmp/index.html
 echo -e "\nPVBattery is starting up ..." >> /tmp/index.html

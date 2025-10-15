@@ -186,6 +186,14 @@ function util.roundTo(num, places)
     return math.floor(num * 10^(-places) + 0.5) * (10^places)
 end
 
+function math.roundToZero(x)
+    if x > 0 then
+        return math.floor(x)
+    else
+        return math.floor(x+1)
+    end
+end
+
 function util.httpRequest(url)
     local command = string.format("wget -nv --timeout=2 --server-response '%s'  -o /tmp/code -O /tmp/body", url)
 
@@ -328,7 +336,57 @@ function util.http_get_coroutine(connection, path, size)
     return body
 end
 
+function math.clamp(x, l, u)
+    if x < l then
+        return l
+    elseif x > u then
+        return u
+    else
+        return x
+    end
+end
 
+-- url can be URL or hostname
+function util.getIPfromURL(url)
 
+    -- Extract hostname if URL includes "http://"
+    url = url:match("https?://([^/]+)") or url
+
+    -- Resolve hostname to IP
+    local ip, err = socket.dns.toip(url)
+
+    if ip then
+        print("IP address of " .. url .. " is " .. ip)
+    else
+        print("Failed to resolve " .. url .. ": " .. tostring(err))
+    end
+    return ip
+end
+
+-- === Fehler-Handler ===
+function util.crashHandler(err)
+    -- Erzeuge Stacktrace ab Aufrufer-Ebene (2 = skip xpcall)
+    local trace = debug.traceback(tostring(err), 2)
+    print("\n[CRASH] Unerwarteter Fehler erkannt!\n" .. trace)
+    print("\n[Cleanup] Aufräumen wegen:", reason or "unbekannt")
+    return trace
+end
+
+function util.tables_equal_flat(a, b)
+    if a == b then return true end
+    if type(a) ~= "table" or type(b) ~= "table" then return false end
+
+    for k, v in pairs(a) do
+        if b[k] ~= v then
+            return false
+        end
+    end
+    for k, v in pairs(b) do
+        if a[k] ~= v then
+            return false
+        end
+    end
+    return true
+end
 
 return util

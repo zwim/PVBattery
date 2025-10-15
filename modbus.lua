@@ -9,8 +9,8 @@ function Modbus:ensureConnection(ip, port)
     if self.client then self.client:close() end
 
     self.client = socket.tcp()
-    self.client:settimeout(4)
---    self.client:setoption("keepalive", true)
+    self.client:settimeout(5)
+    self.client:setoption("keepalive", true)
     local success, err = self.client:connect(ip, port)
     if not success then
         print("Fehler beim Verbinden: " .. tostring(err))
@@ -22,7 +22,7 @@ end
 
 function Modbus:sendRequest(request, expectedLen)
     local response, err, bytes_sent
-    bytes_sent, err, _ = self.client:send(request)
+    bytes_sent, err = self.client:send(request)
     if not bytes_sent then
         print("Fehler beim Senden:", err)
         -- Hier kannst du auf err reagieren, z.B. reconnect versuchen
