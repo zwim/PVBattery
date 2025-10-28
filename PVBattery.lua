@@ -11,8 +11,8 @@ if Profiler then
     Profiler.start()
 end
 
-local MIN_CHARGE_POWER = 20
-local MIN_DISCHARGE_POWER = 20
+local MIN_CHARGE_POWER = 40
+local MIN_DISCHARGE_POWER = 40
 
 ------------------------------------------------------------------
 
@@ -125,36 +125,31 @@ function PVBattery:init()
     -- Influx:init("http://localhost:8086", "", "Photovoltaik", "Leistung")
 --    Influx:init(config.db_url, config.db_token, config.db_org, config.db_bucket) -- xx
 
-    -- self.SmartBattery[2//]:take(200)
-    -- self.SmartBattery[1]:take(200)
-
     self:log(0, "Initialisation completed")
 end
 
 function PVBattery:getValues()
     -- Attention, this accesses self.SmartBattery and self.USPBattery as well
     for _, Battery in ipairs(self.Battery) do
---        local start_time
---        start_time = util.getCurrentTime()
         Battery.SOC = Battery:getSOC(true) or 0 -- force recalculation
---        print("time SOC: ", util.getCurrentTime() - start_time, Battery.SOC .. "%")
---        start_time = util.getCurrentTime()
         Battery.state = Battery:getState() or {}
---        print("time state: ", util.getCurrentTime() - start_time)
     end
 end
 
 local P_exzess_old = 0
 function PVBattery:doTheMagic()
     local battery_string = ""
+    local SOC_string = ""
 
     self.P_Battery = 0
     for _, Battery in ipairs(self.Battery) do
         Battery.power = Battery:getPower() -- negative, if dischargeing
         self.P_Battery = self.P_Battery + Battery.power
         battery_string = battery_string .. string.format("%s: %5.0f   ", Battery.Device.name, Battery.power)
+        SOC_string = SOC_string .. string.format("%s: %5.1f%%   ", Battery.Device.name, Battery.SOC)
     end
     self:log(3, "Battery ... ", battery_string)
+    self:log(3, "Battery ... ", SOC_string)
 
 --[[
     self:log(3, "     ------")
@@ -213,6 +208,7 @@ function PVBattery:doTheMagic()
         for _, Battery in ipairs(self.Battery) do
             if Battery.state.take then
                 Battery:take(0)
+                P_exzess = P_exzess - Battery.power
                 clear_any_battery = "taken"
             end
         end
@@ -226,7 +222,7 @@ function PVBattery:doTheMagic()
     end
     if clear_any_battery then
         self:log(3, clear_any_battery)
-        return true
+--        return true
     end
 
     if math.abs(P_exzess - P_exzess_old) < 10 then
@@ -241,7 +237,7 @@ function PVBattery:doTheMagic()
             local max_discharge_power_power = -Battery.Inverter:getMaxPower() -- negative, maximal discharge of the USP
             if P_exzess + max_discharge_power_power > 0 then
                 local state = Battery.state
-                if state.idle or state.give or state.can_give then
+                if state.idle or state.can_give then
                     Battery:give(math.abs(P_exzess))
                     mqtt_reader:sleepAndCallMQTT(2)
                     Battery.power = Battery:getPower() -- negative, if dischargeing
@@ -318,7 +314,7 @@ nb_batteries = - 1 -- keine nachvewrteilugn
             local max_charger_power = math.min(Battery.Charger[1]:getMaxPower(),Battery.Charger[2]:getMaxPower())
             if   P_exzess + max_charger_power < 0 then
                 local state = Battery.state
-                if state.idle or state.take or state.can_take then
+                if state.idle or state.can_take then
                     Battery:take(math.abs(P_exzess))
                     mqtt_reader:sleepAndCallMQTT(2)
                     Battery.power = Battery:getPower() -- negative if dischargeing

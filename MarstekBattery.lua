@@ -135,9 +135,9 @@ end
 -- if internal is set, get internal power, else AC-power
 function MarstekBattery:getPower(internal)
     if internal then
-        return (-math.abs(self.VenusE:readBatteryPower())) or 0
+        return self.VenusE:readBatteryPower() or 0
     else
-        return (-math.abs(self.VenusE:readACPower()))  or 0
+        return self.VenusE:readACPower()  or 0
     end
 end
 
@@ -242,8 +242,25 @@ if arg[0]:find("MarstekBattery.lua") then
     local n=1
     print(n) n=n+1
 
-    VenusE:take(20)
-    VenusE2:take(20)
+    local power = 50
+    print("power=" .. power)
+    VenusE:take(power)
+    VenusE2:take(power)
+    os.execute("sleep 4")
+    print("take")
+    printValue(VenusE:getPower())
+    printValue(VenusE2:getPower())
+
+    os.execute("sleep 4")
+    power = power
+    print("power=" .. power)
+    VenusE:give(power)
+    VenusE2:give(power)
+    os.execute("sleep 4")
+    print("give")
+    printValue(VenusE:getPower())
+    printValue(VenusE2:getPower())
+
 
 --    VenusE2:give(50)
 
