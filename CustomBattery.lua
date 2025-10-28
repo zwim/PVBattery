@@ -70,28 +70,80 @@ function CustomBattery:init()
 end
 
 --------------------------------------------------------------------------
+
+-- This returns the internal state of the custom battery: very detailed, too
+-- detailed for the high level api
+function CustomBattery:updateInternalState()
+    if self.BMS:getData() then
+        -- todo add chargin and discharging
+        if self.BMS:isLowChargedOrNeedsRescue({fast = true}) or self.BMS.rescue_charge then
+            return self:setInternalState(internal_state.rescue_charge)
+        elseif self.BMS.v.SOC <= self.min_SOC then
+            return self:setInternalState(internal_state.low_battery)
+        elseif self.BMS.v.HighestVoltage >= config.bat_highest_voltage then
+            return self:setInternalState(internal_state.high_cell)
+        elseif self.BMS.v.CellDiff > config.max_cell_diff then
+            if self.BMS.v.SOC > 50 then
+                return self:setInternalState(internal_state.cell_diff_high)
+            else
+                return self:setInternalState(internal_state.cell_diff_low)
+            end
+        elseif self:getInternalState() == internal_state.cell_diff_high
+            and self.BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
+            return self:setInternalState(internal_state.cell_diff_high)
+        elseif self:getInternalState() == internal_state.cell_diff_low
+            and self.BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
+            return self:setInternalState(internal_state.cell_diff_low)
+        end
+    else
+        return self:setInternalState(internal_state.shutdown)
+    end
+    return self:setInternalState(internal_state.idle)
+end
+
+function CustomBattery:balanceIfNecessary()
+    if self.BMS:needsBalancing() then
+        self.BMS:enableDischarge()
+        self.BMS:setAutoBalance(true)
+    end
+end
+
+-- Returns the state and do some some battery care,
+-- like disabling output if SOC is below threshold ...
 function CustomBattery:getState()
     local result = {}
 
     local i_state = self:updateInternalState()
     if i_state == internal_state["idle"] then
         result.idle = true
+        self:balanceIfNecessary()
+
     elseif i_state == internal_state["charge"] then
         result.take = true
+        self:balanceIfNecessary()
+
     elseif i_state == internal_state["discharge"] then
         result.give = true
+        self:balanceIfNecessary()
+
     elseif i_state == internal_state["low_battery"]
         or i_state == internal_state["low_cell"]
         or i_state == internal_state["rescue_charge"]
         or i_state == internal_state["cell_diff_low"] then
 
         result.can_take = true
+        self:give(0) -- disables bsm output completely, but can be charged
+        if i_state == internal_state["rescue_charge"] then
+            self:take("rescue")
+        end
+
     elseif i_state == internal_state["full"]
         or i_state == internal_state["force_discharge"]
         or i_state == internal_state["high_cell"]
         or i_state == internal_state["cell_diff_high"] then
 
         result.can_give = true
+        self:balanceIfNecessary()
     end
 
     if self.Inverter:getPowerState() == "on" then
@@ -129,6 +181,12 @@ function CustomBattery:take(req_power)
     local p1 = self.Charger[1]:getMaxPower()
     local p2 = self.Charger[2]:getMaxPower()
 
+    if req_power == "rescue" or self:updateInternalState() == internal_state["rescue_charge"] then
+        self.Charger[1]:safeStartCharge()
+        self.Charger[2]:safeStartCharge()
+        return
+    end
+
     if req_power == 0 or math.min(p1, p2) > req_power then
         self.Charger[1]:safeStopCharge()
         self.Charger[2]:safeStopCharge()
@@ -161,9 +219,7 @@ function CustomBattery:give(req_power)
     if req_power == 0 then
         self.Inverter:safeStopDischarge()
         return
-    end
-
-    if req_power > self.Inverter.min_power then
+    elseif req_power > self.Inverter.min_power then
         return self.Inverter:safeStartDischarge()
     end
 end
@@ -185,34 +241,6 @@ end
 -- returns "give", "take", "idle", "can_take", "can_give"
 function CustomBattery:getInternalState()
     return self._internal_state
-end
-
-function CustomBattery:updateInternalState()
-    if self.BMS:getData() then
-        -- todo add chargin and discharging
-        if self.BMS:isLowChargedOrNeedsRescue({fast = true}) or self.BMS.rescue_charge then
-            return self:setInternalState(internal_state.rescue_charge)
-        elseif self.BMS.v.SOC <= self.min_SOC then
-            return self:setInternalState(internal_state.low_battery)
-        elseif self.BMS.v.HighestVoltage >= config.bat_highest_voltage then
-            return self:setInternalState(internal_state.high_cell)
-        elseif self.BMS.v.CellDiff > config.max_cell_diff then
-            if self.BMS.v.SOC > 50 then
-                return self:setInternalState(internal_state.cell_diff_high)
-            else
-                return self:setInternalState(internal_state.cell_diff_low)
-            end
-        elseif self:getInternalState() == internal_state.cell_diff_high
-            and self.BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
-            return self:setInternalState(internal_state.cell_diff_high)
-        elseif self:getInternalState() == internal_state.cell_diff_low
-            and self.BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
-            return self:setInternalState(internal_state.cell_diff_low)
-        end
-    else
-        return self:setInternalState(internal_state.shutdown)
-    end
-    return self:setInternalState(internal_state.idle)
 end
 
 -- returns positive if chargeing, negative if dischargeing

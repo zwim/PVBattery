@@ -257,6 +257,8 @@ local function init()
     printValue(VenusE:readGridStandards())
     printValue(VenusE:writeGridStandards(4))
     printValue(VenusE:readGridStandards())
+
+
 end
 if arg[0]:find("marstek.lua") then
     init()
