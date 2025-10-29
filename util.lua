@@ -348,12 +348,15 @@ end
 
 -- url can be URL or hostname
 function util.getIPfromURL(url)
+    local dnshelper = require("dnshelper")
+    print("xxx debug the ip lookup for now")
+    dnshelper.debug = true
 
     -- Extract hostname if URL includes "http://"
     url = url:match("https?://([^/]+)") or url
 
     -- Resolve hostname to IP
-    local ip, err = socket.dns.toip(url)
+    local ip, err = dnshelper.toip(url)
 
     if ip then
         print("IP address of " .. url .. " is " .. ip)
