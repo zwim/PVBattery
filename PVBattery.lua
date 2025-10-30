@@ -164,12 +164,8 @@ function PVBattery:doTheMagic()
 --    end
 --    self.P_Grid = value
 
-
     self.P_Grid_slow, self.P_Load, self.P_PV, self.P_AC  = self.Fronius:getAllPower()
     self.P_Grid = self.Fronius:getPower()
-
---    print("XXXXXXXXX", math.floor(value), math.floor(self.P_Grid))
---  self.P_Grid = value
 
     local P_exzess = self.P_Grid + self.P_Battery
     self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old%5.1f", self.P_Grid, P_exzess, P_exzess_old))
@@ -253,7 +249,6 @@ function PVBattery:doTheMagic()
                 not_distributed_power = not_distributed_power - p -- should be and stay positive
             end
 
-nb_batteries = - 1 -- keine nachvewrteilugn
             -- if there is not_distributed_power and
             while not_distributed_power > MIN_DISCHARGE_POWER and nb_batteries > 0 do
                 local remaining_power = not_distributed_power / nb_batteries
@@ -330,7 +325,6 @@ nb_batteries = - 1 -- keine nachvewrteilugn
                 not_distributed_power = not_distributed_power - p -- should be and stay negative
             end
 
-nb_batteries = - 1 -- keine nachvewrteilugn
             -- if there is not_distributed_power and
             while not_distributed_power < -MIN_CHARGE_POWER and nb_batteries > 0 do
                 self:log(3, "distributing Power: " .. not_distributed_power)
