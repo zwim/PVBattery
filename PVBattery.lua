@@ -302,7 +302,7 @@ function PVBattery:doTheMagic()
 
         local sum_missing_SOC = 0
         for _, Battery in ipairs(self.SmartBattery) do
-            sum_missing_SOC = sum_missing_SOC + math.max(0, Battery.Device.SOC_max - Battery.SOC)
+            sum_missing_SOC = sum_missing_SOC + math.max(0, Battery:getDesiredMaxSOC() - Battery.SOC)
             Battery.batt_req_power = 0
         end
         if sum_missing_SOC > 1 then
@@ -311,8 +311,8 @@ function PVBattery:doTheMagic()
             -- first distribute power depending on SOC
             for _, Battery in ipairs(self.SmartBattery) do
                 local p = 0
-                if Battery.SOC <= Battery.Device.SOC_max then
-                    p = (P_exzess * (Battery.Device.SOC_max - Battery.SOC) / sum_missing_SOC) -- proportional share
+                if Battery.SOC <= Battery:getDesiredMaxSOC() then
+                    p = (P_exzess * (Battery:getDesiredMaxSOC() - Battery.SOC) / sum_missing_SOC) -- proportional share
                     if p < -Battery.Device.charge_max_power then
                         p = -Battery.Device.charge_max_power
                         nb_batteries = nb_batteries - 1

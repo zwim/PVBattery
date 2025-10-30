@@ -1,6 +1,7 @@
 -- Masterclass for Batteries
 
 local PowerDevice = require("PowerDevice")
+local SunTime = require("suntime/suntime")
 
 local Battery = PowerDevice:extend{
     __name = "Battery",
@@ -33,6 +34,19 @@ end
 
 function Battery:take(req_power)
 end
+
+function Battery:getDesiredMaxSOC()
+    local current_time_h = SunTime:getTimeInHours()
+    if current_time_h < SunTime.noon - 0.25 then    -- 15 minutes before high noon
+        return math.min(60, self.Device.SOC_max)
+    elseif current_time_h > SunTime.set - 2.5 then  -- 2:30 hours befor sunset
+        return self.Device.SOC_max
+    else
+        return 60 + math.clamp(self.Device.SOC_max - 60, 0, 100)
+            * (current_time_h - SunTime.noon) / (SunTime.set - SunTime.noon)
+    end
+end
+
 
 function Battery:give(req_power)
 end
