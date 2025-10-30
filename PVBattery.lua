@@ -2,7 +2,7 @@
 -- ###############################################################
 -- CONFIGURATION
 -- ###############################################################
-local VERSION = "V5.0.0"
+local VERSION = "V5.1.0"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -168,7 +168,7 @@ function PVBattery:doTheMagic()
     self.P_Grid = self.Fronius:getPower()
 
     local P_exzess = self.P_Grid + self.P_Battery
-    self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old%5.1f", self.P_Grid, P_exzess, P_exzess_old))
+    self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old: %5.1f", self.P_Grid, P_exzess, P_exzess_old))
 
     if math.abs(self.P_Grid) < 10 then
         return

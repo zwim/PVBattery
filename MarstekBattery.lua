@@ -80,20 +80,28 @@ end
 -- charge Battery
 function MarstekBattery:take(req_power)
     if req_power >= 0 then
+        local factor = self.VenusE:calculateTempFactor()
+        self:log(3, "Temperature factor", factor)
+        req_power = req_power * factor
         req_power = math.clamp(req_power, 0, self.charge_max_power)
         self.VenusE:writeRs485ControlMode(true)
         self.VenusE:writeForcibleChargeDischarge(1) -- charge
         self.VenusE:writeForcibleChargePower(req_power)
+        return req_power
     end
 end
 
 -- dischargeBattery
 function MarstekBattery:give(req_power)
     if req_power >= 0 then
+        local factor = self.VenusE:calculateTempFactor()
+        self:log(3, "Temperature factor", factor)
+        req_power = req_power * factor
         req_power = math.clamp(req_power, 0, self.discharge_max_power)
         self.VenusE:writeRs485ControlMode(true)
         self.VenusE:writeForcibleChargeDischarge(2) -- discharge
         self.VenusE:writeForcibleDischargePower(req_power)
+        return req_power
     end
 end
 
@@ -242,6 +250,7 @@ if arg[0]:find("MarstekBattery.lua") then
     local n=1
     print(n) n=n+1
 
+--[[
     local power = 50
     print("power=" .. power)
     VenusE:take(power)
@@ -250,6 +259,7 @@ if arg[0]:find("MarstekBattery.lua") then
     print("take")
     printValue(VenusE:getPower())
     printValue(VenusE2:getPower())
+
 
     os.execute("sleep 4")
     power = power
@@ -260,9 +270,9 @@ if arg[0]:find("MarstekBattery.lua") then
     print("give")
     printValue(VenusE:getPower())
     printValue(VenusE2:getPower())
+]]
 
-
---    VenusE2:give(50)
+    VenusE:take(2020)
 
 
 end

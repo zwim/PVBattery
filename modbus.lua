@@ -3,7 +3,7 @@ local socket = require("socket")
 local util = require("util")
 
 local Modbus = {
-    __naame = "Modbus",
+    __name = "Modbus",
 
     ip = nil,
     port = nil,
@@ -52,7 +52,7 @@ function Modbus:ensureConnection()
     self.client:setoption("keepalive", true)
     local success, err = self.client:connect(self.ip, self.port)
     if not success then
-        self:log(0, "Fehler beim Verbinden: " .. tostring(err))
+        self:log(0, "Error on connecting to host: " .. self.ip .. "    " .. tostring(err))
         self.client = nil
         return false
     end
