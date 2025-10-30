@@ -38,8 +38,8 @@ end
 local function resolve_system(host)
   local cmds = {
     "getent hosts " .. host .. " 2>/dev/null",
-    "nslookup " .. host .. " 2>/dev/null",
     "dig +short " .. host .. " 2>/dev/null"
+--    "nslookup " .. host .. " 2>/dev/null",
   }
   for _, cmd in ipairs(cmds) do
     local f = io.popen(cmd)
@@ -60,6 +60,11 @@ end
 
 -- === Hauptfunktion mit Cache, Retry & Fallback ===
 function M.toip(host)
+  host = host:lower()
+  if host:find("_") then
+      log("String contains an underscore '_', this is not allowed")
+  end
+
   local now = os.time()
 
   -- 1. Cache prüfen

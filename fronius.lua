@@ -3,6 +3,7 @@ local config = require("configuration")
 local json = require("dkjson")
 local util = require("util")
 local http = require("socket.http")
+local modbus = require("modbus")
 
 local host = "192.168.0.49"
 local port = "80"
@@ -30,12 +31,37 @@ local Fronius = {
     timeOfLastRequiredData = {}, -- no data yet
 }
 
-function Fronius:new(o)
-    o = o or {}   -- create object if user does not provide one
+function Fronius:extend(o)
+    o = o or {}
     setmetatable(o, self)
     self.__index = self
     return o
 end
+
+function Fronius:new(o)
+    o = self:extend(o)
+    if o.host then
+        o.host = o.host:lower()
+    end
+    if o.init then
+        o:init()
+    end
+    return o
+end
+
+function Fronius:init()
+    -- Verbindung zu Fronius-Wechselrichter (nicht direkt zum Smart Meter!)
+    self.modbus_port = self.modbus_port or 502
+    self.slave_id = self.modbus_slave_id or 200  -- Standardadresse des Fronius Smart Meter
+    self.ModbusInstance = modbus:new{ip = self.ip, port = self.modbus_port, slave_id = self.slave_id}
+end
+
+
+local registers = {}
+-- registers.         = {adr = , typ = "", gain = , unit = ""}
+
+registers.readACPower     = {adr = 40097, typ = "f32", gain = 1, unit = "W"} -- Bezug positiv, Einspeisung negativ
+
 
 function Fronius:getDataAge(source)
     return util.getCurrentTime() - (self.timeOfLastRequiredData[source] or 0)
@@ -146,8 +172,12 @@ function Fronius:getGridLoadPV()
     end
 end
 
-function Fronius:getACPower()
+function Fronius:getPowerModbus()
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readACPower),
+        "Battery Power", registers.readACPower.unit
+end
 
+function Fronius:getPower()
     if self:gotValidInverterRealtimeData() then
         return self.Data.GetInverterRealtimeData.Body.Data.PAC.Value
     else
@@ -155,13 +185,18 @@ function Fronius:getACPower()
     end
 end
 
+local function example()
+    local SmartMeter = Fronius:new{ip = "192.168.0.49"}
 
---[[ usage:
-Fronius:GetPowerFlowRealtimeData()
+    for i = 1, 100 do
+        local power = SmartMeter:getPowerModbus()
+        print("power", power)
+    end
 
-print("P_Grid:", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Grid)
-print("P_Load:", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_Load)
-print("P_PV:  ", Fronius.Data.GetPowerFlowRealtimeData.Body.Data.Site.P_PV)
-]]
+end
+
+if arg[0]:find("fronius.lua") then
+    example()
+end
 
 return Fronius

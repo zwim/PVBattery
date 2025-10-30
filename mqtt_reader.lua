@@ -320,7 +320,6 @@ end
 -- returns number of messages received
 function mqtt_reader:sleepAndCallMQTT(short_sleep, start_time)
     start_time = start_time or util.getCurrentTime()
-    short_sleep = short_sleep or 5
     local sleep_time
     if short_sleep then
         sleep_time = short_sleep - (util.getCurrentTime() - start_time)
