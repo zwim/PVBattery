@@ -10,8 +10,8 @@ local MarstekBattery = Battery:extend{
     VenusE = nil,
 }
 
-function MarstekBattery:extend(subclass_prototype)
-    local o = subclass_prototype or {}
+function MarstekBattery:extend(o)
+    local o = o or {}
     setmetatable(o, self)
     self.__index = self
     return o
@@ -51,10 +51,10 @@ function MarstekBattery:init()
     print(self.VenusE:readChargingCutoff())
     print(self.VenusE:readDischargingCutoff())
     if self.VenusE:readChargingCutoff() ~= self.Device.SOC_max then
---       self.VenusE:writeChargingCutoff(self.Device.SOC_max) --xxx
+        self.VenusE:writeChargingCutoff(self.Device.SOC_max or 100)
     end
     if self.VenusE:readDischargingCutoff() ~= self.Device.SOC_min then
---        self.VenusE:writeDischargingCutoff(self.Device.SOC_min) --xxx
+        self.VenusE:writeDischargingCutoff(self.Device.SOC_min or 15)
     end
 end
 
@@ -67,7 +67,7 @@ end
 function MarstekBattery:setPower(req_power)
     if not req_power then
         self.VenusE:writeRs485ControlMode(false) -- back to auto mode
-    elseif req_poewr == 0 then
+    elseif req_power == 0 then
         self:take(0)
         self:give(0)
     elseif req_power < 0 then

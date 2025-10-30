@@ -1,4 +1,5 @@
 
+local ffi = require("ffi")
 local json = require("dkjson")
 local lfs = require("lfs")
 local posix = require("posix")
@@ -349,8 +350,7 @@ end
 -- url can be URL or hostname
 function util.getIPfromURL(url)
     local dnshelper = require("dnshelper")
-    print("xxx debug the ip lookup for now")
-    dnshelper.debug = true
+    dnshelper.debug = false
 
     -- Extract hostname if URL includes "http://"
     url = url:match("https?://([^/]+)") or url
@@ -391,5 +391,28 @@ function util.tables_equal_flat(a, b)
     end
     return true
 end
+
+-- 32-Bit-Integer → IEEE754-Float
+function util.int32_to_float(value, little_endian)
+    -- 4 Byte Speicher reservieren
+    local bytes = ffi.new("uint8_t[4]")
+    if not little_endian then
+        bytes[0] = bit.band(value, 0xFF)
+        bytes[1] = bit.band(bit.rshift(value, 8), 0xFF)
+        bytes[2] = bit.band(bit.rshift(value, 16), 0xFF)
+        bytes[3] = bit.band(bit.rshift(value, 24), 0xFF)
+    else
+        bytes[2] = bit.band(value, 0xFF)
+        bytes[3] = bit.band(bit.rshift(value, 8), 0xFF)
+        bytes[0] = bit.band(bit.rshift(value, 16), 0xFF)
+        bytes[1] = bit.band(bit.rshift(value, 24), 0xFF)
+    end
+
+    -- als float interpretieren
+    local fptr = ffi.cast("float*", bytes)
+
+    return fptr[0]
+end
+
 
 return util

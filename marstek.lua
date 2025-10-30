@@ -6,7 +6,7 @@ local Marstek = {
     host = nil,
     ip = nil, -- IP-Adresse des ELFIN WL11A
     port = nil, -- Modbus TCP Port
-    slaveId = nil, -- Slave ID
+    slave_id = nil, -- Slave ID
     ACPower = 0,
     MIN_DISCHARGE_LIMIT = 800,
     MAX_DISCHARGE_LIMIT = 2500,
@@ -23,6 +23,13 @@ function Marstek:new(o)
         o:init()
     end
     return o
+end
+
+function Marstek:init(o)
+    if not self.slave_id then
+        self.slave_id = 1 -- the marstek venusE Gen2.0 id
+    end
+   self.ModbusInstance = Modbus:new{ip = self.ip, port = self.port, slave_id = self.slave_id}
 end
 
 local registers = {}
@@ -66,54 +73,54 @@ registers.GridStandards      = {adr = 44100, typ = "u16", gain = 1, unit = ""}
 
 
 function Marstek:readBatteryVoltage()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryVoltage),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryVoltage),
         "Battery Voltage", registers.readBatteryVoltage.unit
 end
 function Marstek:readBatteryCurrent()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryCurrent),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryCurrent),
         "Battery Current", registers.readBatteryCurrent.unit
 end
 -- negative meanse that the battery is discharching
 function Marstek:readBatteryPower()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryPower),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryPower),
         "Battery Power", registers.readBatteryPower.unit
 end
 function Marstek:readBatterySOC()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatterySOC),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readBatterySOC),
         "Battery SOC", registers.readBatterySOC.unit
 end
 function Marstek:readBatteryTotalEnergy()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readBatteryTotalEnergy),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryTotalEnergy),
         "Battery TotalEnergy", registers.readBatteryTotalEnergy.unit
 end
 
 function Marstek:readACVoltage()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACVoltage),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readACVoltage),
         "Battery Voltage", registers.readACVoltage.unit
 end
 function Marstek:readACCurrent()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACCurrent),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.readACCurrent),
         "Battery Current", registers.readACCurrent.unit
 end
 -- negative means that the battery is discharching
 function Marstek:readACPower()
-    self.ACPower = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.readACPower)
+    self.ACPower = self.ModbusInstance:readHoldingRegisters(1, registers.readACPower)
     return self.ACPower, "Battery Power", registers.readACPower.unit
 end
 
 function Marstek:readMaxChargePower()
-    self.maxChargePower = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1,
+    self.maxChargePower = self.ModbusInstance:readHoldingRegisters(1,
         registers.maxChargePower)
 
     return self.maxChargePower, "Max Charge Power", registers.maxChargePower.unit
 end
 
 function Marstek:writeMaxChargePower(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.maxChargePower, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.maxChargePower, value)
 end
 
 function Marstek:readMaxDischargePower()
-    self.maxDischargePower = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1,
+    self.maxDischargePower = self.ModbusInstance:readHoldingRegisters(1,
         registers.maxDischargePower)
     return self.maxDischargePower, "Max Discharge Power", registers.maxDischargePower.unit
 end
@@ -122,29 +129,29 @@ function Marstek:writeMaxDischargePower(value)
     if self.maxDischargePower == self.MIN_DISCHARGE_LIMIT then
         print("Marstek: Power was fixed at "..self.MIN_DISCHARGE_LIMIT.."W, change it in Marstek-App before!")
     end
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.maxDischargePower, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.maxDischargePower, value)
 end
 
 function Marstek:readChargingCutoff()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.ChargingCutoff),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.ChargingCutoff),
         "Charge Cutoff", registers.ChargingCutoff.unit
 end
 
 function Marstek:writeChargingCutoff(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.ChargingCutoff, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.ChargingCutoff, value)
 end
 
 function Marstek:readDischargingCutoff()
-    return Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.DischargingCutoff),
+    return self.ModbusInstance:readHoldingRegisters(1, registers.DischargingCutoff),
         "Discharge Cutoff", registers.DischargingCutoff.unit
 end
 
 function Marstek:writeDischargingCutoff(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.DischargingCutoff, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.DischargingCutoff, value)
 end
 
 function Marstek:readGridStandards()
-    local gridStd = Modbus:readHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.GridStandards)
+    local gridStd = self.ModbusInstance:readHoldingRegisters(1, registers.GridStandards)
     local country = {
             [0] = "Auto 50/60",
             "EN50549",
@@ -161,25 +168,25 @@ function Marstek:readGridStandards()
 end
 
 function Marstek:writeGridStandards(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.GridStandards, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.GridStandards, value)
 end
 
 -- 0:manual, 1:anti-feed, 2:trade
 function Marstek:writeUserWorkMode(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.userWorkMode, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.userWorkMode, value)
 end
 
 -- 0:stop, 1:charge, 2:discharge
 function Marstek:writeForcibleChargeDischarge(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.forcibleChargeDischarge, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.forcibleChargeDischarge, value)
 end
 
 function Marstek:writeForcibleChargePower(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.forcibleChargePower, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.forcibleChargePower, value)
 end
 
 function Marstek:writeForcibleDischargePower(value)
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.forcibleDischargePower, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.forcibleDischargePower, value)
 end
 
 function Marstek:writeRs485ControlMode(enable)
@@ -189,7 +196,7 @@ function Marstek:writeRs485ControlMode(enable)
     else
         value = 0x55bb
     end
-    return Modbus:writeHoldingRegisters(self.ip, self.port, self.slaveId, 1, registers.rs485ControlMode, value)
+    return self.ModbusInstance:writeHoldingRegisters(1, registers.rs485ControlMode, value)
 end
 
 
@@ -220,14 +227,14 @@ local function printValue(value, name, unit)
     end
 end
 
-local function init()
+local function example()
     -- Beispielaufruf
     local ip = "192.168.0.208" -- IP-Adresse des ELFIN WL11A
     local port = 502 -- Modbus TCP Port
-    local slaveId = 1 -- Slave ID
+    local slave_id = 1 -- Slave ID
 
 
-    local VenusE = Marstek:new({ip = ip, port=port, slaveId = slaveId})
+    local VenusE = Marstek:new{ip = ip, port=port, slave_id = slave_id}
 
     printValue(VenusE:readBatterySOC())
     printValue(VenusE:readBatteryVoltage())
@@ -257,13 +264,11 @@ local function init()
     printValue(VenusE:readGridStandards())
     printValue(VenusE:writeGridStandards(4))
     printValue(VenusE:readGridStandards())
-
-
 end
+
 if arg[0]:find("marstek.lua") then
-    init()
+    example()
 end
-
 
 return Marstek
 

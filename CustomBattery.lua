@@ -255,6 +255,7 @@ function CustomBattery:getPower(internal)
         local power1 = self.Charger[1]:getPower()
         local power2 = self.Charger[2]:getPower()
         return discharging_power - power1 - power2
+--        return - (discharging_power - power1 - power2)
     end
 end
 

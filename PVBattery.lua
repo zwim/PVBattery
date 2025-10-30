@@ -11,8 +11,8 @@ if Profiler then
     Profiler.start()
 end
 
-local MIN_CHARGE_POWER = 40
-local MIN_DISCHARGE_POWER = 40
+local MIN_CHARGE_POWER = 15
+local MIN_DISCHARGE_POWER = 15
 
 ------------------------------------------------------------------
 
@@ -45,7 +45,6 @@ local PVBattery = BaseClass:extend{
     P_Grid = 0,
     P_Load = 0,
     P_PV = 0,
-    P_AC = 0,
 }
 
 -------------------- extend functions from this file
@@ -113,7 +112,8 @@ function PVBattery:init()
                 local eInv = EnvertechInverter:new{Device = Device}
                 table.insert(self.Inverter, eInv)
             elseif brand == "fronius" then
-                table.insert(self.Inverter, FroniusInverter:new{Device = Device})
+                self.Fronius = FroniusInverter:new{Device = Device}
+                table.insert(self.Inverter, self.Fronius)
             else
                 assert(false, "Wrong configuration, inverter brand not known")
             end
@@ -151,54 +151,31 @@ function PVBattery:doTheMagic()
     self:log(3, "Battery ... ", battery_string)
     self:log(3, "Battery ... ", SOC_string)
 
---[[
-    self:log(3, "     ------")
-    self:log(3, "Inverter: " .. string.format("%5.1f", P_Inverter), "Battery: " .. string.format("%5.1f", P_Battery))
-
-    local status_string = ""
-    for _, Battery in ipairs(self.Battery) do
-        status_string = status_string .. Battery.Device.name .. ": " .. self.listValues(Battery:getState()) .. "   "
-    end
-    for _, Inverter in ipairs(self.Inverter) do
-        status_string = status_string .. Inverter.Device.name .. ": " .. self.listValues(Inverter:getState()) .. "   "
-    end
-    self:log(3, "Status:", status_string)
-]]
     -- P_exzess is the power we could
     --     store in our batteries if negative
     --     reclaim from our batteries if positive
 
-    local inverter_string = ""
-    local P_Inverter = 0
-    self.P_Grid = 0
-    for _, Inverter in ipairs(self.Inverter) do
-        local power, Grid, Load, PV, AC  = Inverter:getPower()
-        if Grid then
-            self.P_Load, self.P_PV, self.P_AC = Load, PV, AC
-        end
-        P_Inverter = P_Inverter + power
-        inverter_string = inverter_string .. string.format("%s: %5.0f   ", Inverter.Device.name, power)
-    end
-    self:log(3, "Inverter ... ", inverter_string)
 
-    local value , is_data_old = self.Smartmeter[1]:getPower()
+    -- Workaround, as the TINETZ SmartMeter delivres data only every 5-10 sec.
+--    local value, is_data_old = self.Smartmeter[1]:getPower()
+--    if is_data_old then
+--        self:log(1, "P1Meter: no new data")
+--        return
+--    end
+--    self.P_Grid = value
 
-    if is_data_old then
-        self:log(1, "P1Meter: no new data")
-        return
-    end
 
-    self.P_Grid = value
+    self.P_Grid_slow, self.P_Load, self.P_PV, self.P_AC  = self.Fronius:getAllPower()
+    self.P_Grid = self.Fronius:getPower()
 
-    self:log(3, "P_Grid ... ", self.P_Grid)
-
---    self.P_Grid = self.P_Grid < 2000 -- simulate 2000 W form PV
+--    print("XXXXXXXXX", math.floor(value), math.floor(self.P_Grid))
+--  self.P_Grid = value
 
     local P_exzess = self.P_Grid + self.P_Battery
-    self:log(1, string.format("P_exzess: %5.1f, %5.1f", P_exzess, P_exzess_old))
+    self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old%5.1f", self.P_Grid, P_exzess, P_exzess_old))
 
     if math.abs(self.P_Grid) < 10 then
-        return false
+        return
     end
 
     -- if at least one battery does not, what is expected, turn it of and retrun early
@@ -222,13 +199,12 @@ function PVBattery:doTheMagic()
     end
     if clear_any_battery then
         self:log(3, clear_any_battery)
---        return true
+--        return
     end
 
     if math.abs(P_exzess - P_exzess_old) < 10 then
-        return false
+        return
     end
-
 
     P_exzess_old = P_exzess
 
@@ -354,6 +330,7 @@ nb_batteries = - 1 -- keine nachvewrteilugn
                 not_distributed_power = not_distributed_power - p -- should be and stay negative
             end
 
+nb_batteries = - 1 -- keine nachvewrteilugn
             -- if there is not_distributed_power and
             while not_distributed_power < -MIN_CHARGE_POWER and nb_batteries > 0 do
                 self:log(3, "distributing Power: " .. not_distributed_power)
@@ -385,7 +362,6 @@ nb_batteries = - 1 -- keine nachvewrteilugn
             Battery.power = Battery.batt_req_power
         end
     end
-    return true
 end
 
 function PVBattery:outputTheLog(date_string)
@@ -394,7 +370,7 @@ function PVBattery:outputTheLog(date_string)
         date_string, self.P_Grid or 0, self.P_Load or 0,
         self.Battery[1].power or 0,
         self.Battery[2].power or 0,
-        self.Battery[3].power or 0)
+        self.Battery[2].power or 0) --xxxxxxxxxx
 
     util:log(log_string)
 end
@@ -440,14 +416,12 @@ function PVBattery:main(profiling_runs)
         if type(profiling_runs) == "number" then
             profiling_runs = profiling_runs - 1
         end
-        local short_sleep = nil -- a number here will shorten the sleep time
+
         local _start_time = util.getCurrentTime()
 
         -- if config has changed, reload it
         if config:needUpdate() then
-            if config:read(true) then
-                short_sleep = 1
-            end
+            config:read(true)
         end
 
         last_date = date
@@ -486,18 +460,8 @@ function PVBattery:main(profiling_runs)
         self:outputTheLog(date_string)
         self:writeToDatabase()
 
---        self:log(2, "generate JSON")
---        local ok, result = pcall(self.generateJSON, self, VERSION)
---        if not ok then
---            print("Error on generateJSON", result)
---        end
-
         self:log(2, "dothemagic")
-
-        ---------------------------------------------------
-        if self:doTheMagic() then
-            short_sleep = 1
-        end
+        self:doTheMagic()
 
         self:getValues()
 
@@ -511,7 +475,8 @@ function PVBattery:main(profiling_runs)
 
         util:log("\n. . . . . . . . . sleep . . . . . . . . . . . .")
 
-        mqtt_reader:sleepAndCallMQTT(short_sleep, _start_time)
+        mqtt_reader:sleepAndCallMQTT(0.1)  -- leep at least 1/10 second
+        mqtt_reader:sleepAndCallMQTT(config.sleep_time, _start_time) -- and at least config.sleep_time from start of loop
     end -- end of inner loop
 end
 

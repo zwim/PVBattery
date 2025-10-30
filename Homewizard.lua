@@ -55,4 +55,27 @@ end
 function Homewizard:getMaxChargePower()
 end
 
+local function example()
+    local Device = {
+            name = "P1Meter",
+            typ = "smartmeter",
+            brand = "homewizard",
+            host = "HW-p1meter.lan",
+            ip = nil,
+    }
+
+    local dev = Homewizard:new{Device = Device}
+    dev:log(0, "Now do some reading, to show how values change")
+    for i = 1, tonumber(arg[1] or 40) do
+        local power= dev:getPower()
+        dev:log(0, string.format("Power: %5.1f", power))
+        os.execute("sleep 1")
+    end
+end
+
+if arg[0]:find("Homewizard.lua") then
+    example()
+end
+
+
 return Homewizard
