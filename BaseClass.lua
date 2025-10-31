@@ -10,8 +10,9 @@ local BaseClass = {
     -- ##############################################################
     -- CONFIGURATION
     -- ##############################################################
-    --levels: 0 = silent, 1 = info, 2 = debug, 3 = verbose
+    --levels: 0 = silent, 1 = info, 2 = debug, 3 = verbose, 4 = chatty
     __loglevel = 3,
+    __log_signature = { "ERR", "INF", "DBG", "VERB", "CHAT" }
 }
 
 function BaseClass:extend(o)
@@ -39,7 +40,10 @@ function BaseClass:log(level, ...)
         loglevel = math.min(loglevel, config.loglevel)
     end
     if level <= loglevel then
-        print(os.date("%Y/%m/%d-%H:%M:%S ["..(getmetatable(self).__name or "???").."]"), ...)
+        print(os.date("%Y/%m/%d-%H:%M:%S "
+                .. (self.__log_signature[level] or "" )
+                .. " ["
+                .. (getmetatable(self).__name or "???").."]"), ...)
     end
 end
 

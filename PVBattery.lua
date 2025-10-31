@@ -86,6 +86,7 @@ function PVBattery:init()
     -- Init all device configurations
 
     mqtt_reader:init(config.mqtt_broker_uri, config.mqtt_client_id)
+	mqtt_reader:processMessages()
 
     self.Battery = {}      -- all batteries
     self.SmartBattery = {} -- a subset of stupid custom batteries from all batteries
@@ -498,20 +499,19 @@ if not Profiler then
     -- this is the outer loop, a safety-net if the inner loop is broken with `break`
     while true do
         util:cleanLogs()
-        MyBatteries:main()
-        ------- todo
---        MyBatteries.BMS[1].timeOfLastFullBalancing = util.getCurrentTime() - 26*3600 -- yesterday the same time
-        local ok, result = xpcall(function() MyBatteries:main() end, util.crashHandler)
+
 --        MyBatteries:main()
+
+        local ok, result = xpcall(function() MyBatteries:main() end, util.crashHandler)
         if ok then
-            print("[Main] Erfolgreich beendet. Das sollte nicht passieren")
+            self:log(0, "main() returned true. This should never happen .......")
         else
             if tostring(result):match("interrupted") then
-                print("Ctrl+C (SIGINT)")
+                self:log(0, "Ctrl+C (SIGINT)")
                 -- todo: set mode to auto
                 os.exit(0)
             else
-                print("[Main] Fehler:", result, "Restart main loop")
+                self:log(0, "error in main():", result, "restart main() loop")
             end
         end
     end

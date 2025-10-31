@@ -50,8 +50,8 @@ local OFFSET_TO_HIGH_NOON = -1/4 -- in hours
 local OFFSET_BEFORE_SUNSET = -2.5 -- in hours
 local FIRST_MAX_SOC_LEVEL = 60 -- Percent
 local SECOND_MAX_SOC_LEVEL = 80 -- Percent
-function Battery:getDesiredMaxSOC()
-    local current_time_h = SunTime:getTimeInHours()
+function Battery:getDesiredMaxSOC(current_time_h)
+    current_time_h = current_time_h or SunTime:getTimeInHours()
     local time_1_h = SunTime.noon + OFFSET_TO_HIGH_NOON
     if current_time_h < time_1_h then    -- 15 minutes before high noon
         return math.min(FIRST_MAX_SOC_LEVEL, self.Device.SOC_max)
@@ -79,9 +79,7 @@ function Battery:getDesiredMaxSOC()
         return FIRST_MAX_SOC_LEVEL + k * x
     ]]
 --        return SECOND_MAX_SOC_LEVEL
-
 end
-
 
 function Battery:give(req_power)
 end
@@ -146,5 +144,32 @@ end
 -- in percent
 function Battery:getDischargeCutOff()
 end
+
+local function example()
+    local Device = {
+        name = "VenusE 1",
+        typ = "battery",
+        brand = "marstek",
+        host = "Venus-E1-modbus",
+        -- ip = "192.168.0.208",
+        port = 502,
+        slaveId = 1,
+        charge_max_power = 2492,
+        discharge_max_power = 2492,
+        SOC_min = 15,
+        SOC_max = 100,
+        leave_mode = "auto",
+    }
+    SunTime.noon = 11.6666
+    SunTime.set = 17.9333
+
+    local M = Battery:new{Device = Device}
+    print("check getDesiredMaxSOC:", M:getDesiredMaxSOC( SunTime:getTimeInHours() ))
+end
+
+if arg[0]:find("Battery.lua") then
+    example()
+end
+
 
 return Battery

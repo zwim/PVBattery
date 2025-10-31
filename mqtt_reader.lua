@@ -1,4 +1,4 @@
--- load mqtt module
+-- load mqtt_reader module
 
 local json = require("dkjson")
 local mqtt = require("mqtt")
@@ -7,7 +7,7 @@ local util = require("util")
 -- ##############################################################
 -- CONFIGURATION
 -- ##############################################################
-local LOGLEVEL = 3 -- 0 = silent, 1 = info, 2 = debug
+local LOGLEVEL = 4 -- 0 = silent, 1 = info, 2 = debug, 3 = verbose, 4 = chatty
 
 local function log(level, ...)
     if level <= LOGLEVEL then
@@ -69,10 +69,18 @@ end
 -- ##############################################################
 -- INITIALIZATION
 -- ##############################################################
-function mqtt_reader:init(uri, id)
+--luacheck: ignore _retry_count
+function mqtt_reader:init(uri, id, _retry_count)
     assert(uri and uri ~= "", "MQTT URI required")
     assert(id and id ~= "", "MQTT client ID required")
 
+	_retry_count = _retry_count or 0
+	if _retry_count > 10 then
+		util.sleepTime(2)
+		error("[mqtt_reader] retried to init itself more than " .. _retry_count .. " times")
+	end
+
+	id = id .. tostring(math.random(9999))
     self.uri = uri
     self.id = id
 
@@ -95,7 +103,7 @@ function mqtt_reader:init(uri, id)
                 log(0, "MQTT connect failed:", connack:reason_string())
                 util.sleepTime(5)
                 log(1, "Retrying connection...")
-                self:init(uri, id)
+                self:init(uri, id, _retry_count + 1)
                 return
             end
             log(1, "Connected to MQTT broker " .. uri .. " with id=" .. id)
@@ -160,34 +168,34 @@ function mqtt_reader:init(uri, id)
 				if self.got_message_in_last_iteration then
 					s.time = util.getCurrentTime()
 				end
-
             end
         end,
 
         -- Error callback
         error = function(err)
             log(0, "MQTT client error:", err)
-            util.sleepTime(3)
-            log(1, "Reconnecting...")
+            log(0, "Reconnecting in " .. _retry_count .. " s")
+            util.sleepTime(3 + _retry_count)
 
-			-- Versuche, die bestehende client-Verbindung zu verwenden / reconnect
-			if not self.client.connect then
-				log(0, "Reconnect failed, re-initing new client")
-				self:init(self.uri, self.id)
-			else
-				local ok, connack = self.client:connect(self.uri)  -- oder passenden reconnect-Aufruf
-				if not ok then
-					log(0, "Reconnect failed, re-initing new client")
-					self:init(self.uri, self.id)
-				end
+			self.client:close()
+
+			local ok, connack = self.client:connect(self.uri)  -- oder passenden reconnect-Aufruf
+			if not ok then
+				log(0, "Reconnect failed, re-initing new client", _retry_count + 1)
+				self:init(self.uri, self.id,  _retry_count + 1)
 			end
 		end,
+
+        close = function()
+            print("mqtt closed connection 🔌")
+            self.client = nil
+        end,
     }
 
     self.ioloop = mqtt.get_ioloop()
     self.ioloop:add(self.client)
 
-	self:processMessages()
+--	self:processMessages()
 end
 
 -- ##############################################################
@@ -199,6 +207,8 @@ function mqtt_reader:subscribe(topic, qos)
     topic = topic:lower()
     local pattern = topic and "+/" .. topic .. "/#" or "+/#"
 
+	self:processMessages()
+
     self.client:subscribe{
         topic = pattern,
         qos = qos,
@@ -206,6 +216,8 @@ function mqtt_reader:subscribe(topic, qos)
             log(1, "Subscribed to", pattern, "QoS=", qos)
         end,
     }
+
+	self:processMessages()
 end
 
 -- ##############################################################
@@ -222,6 +234,7 @@ function mqtt_reader:askHost(host, qos)
     self.client:publish{ topic = "cmnd/" .. host .. "/Power", payload = "", qos = qos }
     self.client:publish{ topic = "cmnd/" .. host .. "/Status", payload = "8", qos = qos }
 --    self.ioloop:iteration()
+	self:processMessages()
 end
 
 -- ##############################################################
@@ -237,6 +250,8 @@ end
 -- ##############################################################
 function mqtt_reader:clearRetainedMessages(topic)
     if not topic or topic == "" then return end
+
+	self:processMessages()
     self.client:publish{
         topic = topic,
         payload = "",
