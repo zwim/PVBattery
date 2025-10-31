@@ -11,6 +11,7 @@ if Profiler then
     Profiler.start()
 end
 
+local GRID_THRESHOLD = 5
 local MIN_CHARGE_POWER = 15
 local MIN_DISCHARGE_POWER = 15
 
@@ -170,7 +171,7 @@ function PVBattery:doTheMagic()
     local P_exzess = self.P_Grid + self.P_Battery
     self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old: %5.1f", self.P_Grid, P_exzess, P_exzess_old))
 
-    if math.abs(self.P_Grid) < 10 then
+    if math.abs(self.P_Grid) < GRID_THRESHOLD then
         return
     end
 
@@ -305,7 +306,7 @@ function PVBattery:doTheMagic()
             sum_missing_SOC = sum_missing_SOC + math.max(0, Battery:getDesiredMaxSOC() - Battery.SOC)
             Battery.batt_req_power = 0
         end
-        if sum_missing_SOC > 1 then
+        if sum_missing_SOC >= 1 then
             local nb_batteries = #self.SmartBattery
             local not_distributed_power = P_exzess --negative
             -- first distribute power depending on SOC
@@ -335,7 +336,9 @@ function PVBattery:doTheMagic()
                 for _, Battery in ipairs(self.SmartBattery) do
                     if -Battery.Device.charge_max_power < Battery.batt_req_power then -- may get some power too
                         local power_to_add = remaining_power
-                        if -Battery.Device.charge_max_power > Battery.batt_req_power + power_to_add   then
+                        if Battery:getDesiredMaxSOC() <= Battery.SOC then
+                            power_to_add = 0
+                        elseif -Battery.Device.charge_max_power > Battery.batt_req_power + power_to_add then
                             power_to_add = Battery.batt_req_power + power_to_add - Battery.Device.charge_max_power
                         end
                         Battery.batt_req_power = Battery.batt_req_power + power_to_add
@@ -347,8 +350,9 @@ function PVBattery:doTheMagic()
                     end
                 end
             end
-
+            self:log(3, "Not distributed power", not_distributed_power)
         end -- sum_missing_SOC
+
         for _, Battery in ipairs(self.SmartBattery) do
             Battery.batt_req_power = math.min(Battery.batt_req_power, Battery.Device.discharge_max_power)
             Battery:take(math.floor(math.max(0, -Battery.batt_req_power)))

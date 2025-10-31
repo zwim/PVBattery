@@ -35,16 +35,51 @@ end
 function Battery:take(req_power)
 end
 
+-- An absolutely straightforward battery charging optimization strategy:
+-- The maximum allowed SOC (state of charge) is adjusted to the time (depending of the sun position)
+--
+-- 1. From sunrise until shortly after the solar zenith (peak sun), change the maximum SOC to 60%.
+-- 2. Starting from the end of step 1, up to 2.5 hours before sunset, the maximum SOC
+--    is linearly increased to 80%.
+-- 3. From that point on, change the maximum SOC to 100%.
+--
+-- There you have it. Optimizing your battery's life, one strategic percentage at a time.
+--
+-- ajustable parameters:
+local OFFSET_TO_HIGH_NOON = -1/4 -- in hours
+local OFFSET_BEFORE_SUNSET = -2.5 -- in hours
+local FIRST_MAX_SOC_LEVEL = 60 -- Percent
+local SECOND_MAX_SOC_LEVEL = 80 -- Percent
 function Battery:getDesiredMaxSOC()
     local current_time_h = SunTime:getTimeInHours()
-    if current_time_h < SunTime.noon - 0.25 then    -- 15 minutes before high noon
-        return math.min(60, self.Device.SOC_max)
-    elseif current_time_h > SunTime.set - 2.5 then  -- 2:30 hours befor sunset
-        return self.Device.SOC_max
-    else
-        return 60 + math.clamp(self.Device.SOC_max - 60, 0, 100)
-            * (current_time_h - SunTime.noon) / (SunTime.set - SunTime.noon)
+    local time_1_h = SunTime.noon + OFFSET_TO_HIGH_NOON
+    if current_time_h < time_1_h then    -- 15 minutes before high noon
+        return math.min(FIRST_MAX_SOC_LEVEL, self.Device.SOC_max)
     end
+
+    local time_2_h = SunTime.set + OFFSET_BEFORE_SUNSET
+    if time_2_h < time_1_h then
+        time_2_h = time_1_h + 0.5
+    end
+    if current_time_h > time_2_h then  -- 2:30 hours befor sunset
+        return self.Device.SOC_max
+    end
+
+    local y = SECOND_MAX_SOC_LEVEL - FIRST_MAX_SOC_LEVEL
+    local x = time_2_h - time_1_h
+    local k = y / x
+
+    local t = current_time_h - time_1_h
+
+    local max_SOC = FIRST_MAX_SOC_LEVEL + t * k
+    return max_SOC
+--[[
+        local x = (current_time_h - (SunTime.noon - OFFSET_TO_HIGH_NOON)) /
+        ((SunTime.set - OFFSET_BEFORE_SUNSET) - (SunTime.noon - OFFSET_TO_HIGH_NOON))
+        return FIRST_MAX_SOC_LEVEL + k * x
+    ]]
+--        return SECOND_MAX_SOC_LEVEL
+
 end
 
 
