@@ -86,6 +86,14 @@ function PVBattery:init()
     -- Init all device configurations
 
     mqtt_reader:init(config.mqtt_broker_uri, config.mqtt_client_id)
+
+	local ok, err = mqtt_reader:connect()
+    if not ok then
+        -- Wenn der initiale Connect fehlschlägt, ist das Test-Setup ungültig.
+        log(0, "Initial connection failed: " .. tostring(err))
+        return
+    end
+
 	mqtt_reader:processMessages()
 
     self.Battery = {}      -- all batteries
@@ -149,14 +157,10 @@ function PVBattery:doTheMagic()
         self.P_Battery = self.P_Battery + Battery.power
         battery_string = battery_string .. string.format("%s: %5.0f   ", Battery.Device.name, Battery.power)
         SOC_string = SOC_string .. string.format("%s: %5.1f%%   ", Battery.Device.name, Battery.SOC)
+
     end
     self:log(3, "Battery ... ", battery_string)
     self:log(3, "Battery ... ", SOC_string)
-
-    -- P_exzess is the power we could
-    --     store in our batteries if negative
-    --     reclaim from our batteries if positive
-
 
     -- Workaround, as the TINETZ SmartMeter delivres data only every 5-10 sec.
 --    local value, is_data_old = self.Smartmeter[1]:getPower()
@@ -167,8 +171,11 @@ function PVBattery:doTheMagic()
 --    self.P_Grid = value
 
     self.P_Grid_slow, self.P_Load, self.P_PV, self.P_AC  = self.Fronius:getAllPower()
-    self.P_Grid = self.Fronius:getPower()
+    self.P_Grid = self.Fronius:getPower() -- this a fast modbus call
 
+    -- P_exzess is the power we could
+    --     store in our batteries if negative
+    --     reclaim from our batteries if positive
     local P_exzess = self.P_Grid + self.P_Battery
     self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old: %5.1f", self.P_Grid, P_exzess, P_exzess_old))
 
@@ -375,17 +382,16 @@ function PVBattery:outputTheLog(date_string)
 end
 
 Influx.writeLine = function(...)
-    print("INFLUX:", ...)
+--    print("INFLUX:", ...)
 end
 function PVBattery:writeToDatabase()
-    if true then return end
     local datum = "Leistung"
-    Influx:writeLine("garage-inverter", datum, self.Inverter[3]:getPower())
-    Influx:writeLine("balkon-inverter", datum, self.Inverter[2]:getPower())
-    Influx:writeLine("battery-inverter", datum, self.USPBattery[1].Inverter:getPower())
+    Influx:writeLine("garage-inverter", datum, self.Inverter[3].power)
+    Influx:writeLine("balkon-inverter", datum, self.Inverter[2].power)
+    Influx:writeLine("battery-inverter", datum, self.USPBattery[1].Inverter.power)
 
-    Influx:writeLine("battery-charger",  datum, self.USPBattery[1].Charger[1]:getPower())
-    Influx:writeLine("battery-charger2", datum, self.USPBattery[1].Charger[2]:getPower())
+    Influx:writeLine("battery-charger",  datum, self.USPBattery[1].Charger[1].power)
+    Influx:writeLine("battery-charger2", datum, self.USPBattery[1].Charger[2].power)
 
     Influx:writeLine("P_PV", datum, self.P_PV)
     Influx:writeLine("P_Grid", datum, self.P_Grid)
@@ -393,6 +399,12 @@ function PVBattery:writeToDatabase()
 
     Influx:writeLine("P_VenusE", datum, self.SmartBattery[1].power)
     Influx:writeLine("P_VenusE2", datum, self.SmartBattery[2].power)
+
+    Influx:writeLine("SOC_battery", datum, self.USPBattery[1].SOC)
+    Influx:writeLine("SOC_VenusE", datum, self.SmartBattery[1].SOC)
+    Influx:writeLine("SOC_VenusE2", datum, self.SmartBattery[2].SOC)
+
+
 
 --Influx:writeLine("Status", "Status", self:getState())
 
@@ -405,6 +417,8 @@ Influx:writeLine("battery-inverter", datum, self.USPBattery[1].Inverter:getEnerg
 Influx:writeLine("battery-charger", datum, self.USPBattery[1].Charger[1]:getEnergyTotal())
 Influx:writeLine("battery-charger2", datum, self.USPBattery[1].Charger[2]:getEnergyTotal())
 ]]
+
+
 
 end
 
@@ -470,11 +484,12 @@ function PVBattery:main(profiling_runs)
 
         self:log(2, "generate JSON")
         self:getValues() -- for the json
+		local ok, result
         ok, result = pcall(self.generateJSON, self, VERSION)
         if not ok then
             print("Error on generateJSON", result)
         end
-        local ok, result = pcall(self.writeToDatabase, self)
+        ok, result = pcall(self.writeToDatabase, self)
         if not ok then
             print("Error on write to database", result)
         end

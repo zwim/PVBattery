@@ -8,9 +8,9 @@ return function(self, VERSION)
     local sinks = 0
     for _, Battery in ipairs(self.USPBattery) do
         for _, Charger in ipairs(Battery.Charger) do
-            local power = Charger:getPower()
-            table.insert(ChargerPowerCache, power)
-            sinks = sinks + power
+            Charger.power = Charger:getPower()
+            table.insert(ChargerPowerCache, Charger.power)
+            sinks = sinks + Charger.power
         end
     end
     for _, Battery in ipairs(self.SmartBattery) do
@@ -18,18 +18,18 @@ return function(self, VERSION)
     end
 
     local sources =  self.P_PV
-    for i = 1, #self.Inverter do
-        local pow = self.Inverter[i]:getPower() or 0
-        table.insert(InverterPowerCache, pow)
-        sources = sources + pow
+    for _, Inverter in ipairs(self.Inverter) do
+        Inverter.power = Inverter:getPower() or 0
+        table.insert(InverterPowerCache, Inverter.power)
+        sources = sources + Inverter.power
     end
     for _, Battery in ipairs(self.SmartBattery) do
         sources = sources + math.max(Battery.power, 0)
     end
 
-    local SOC_string = ""
+    local SOC_string = "<br>"
     for _, Battery in ipairs(self.Battery) do
-        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."% "
+        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."%<br>"
     end
 
     local data = {

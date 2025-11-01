@@ -49,6 +49,13 @@
             text-decoration: underline;
         }
 
+        /* Einheit (W) */
+        .energy-unit {
+            font-size: 0.8em;
+            font-weight: normal;
+            margin-left: 5px;
+        }
+
         /* --- (1) ENERGIEFLUSS-ZUSAMMENFASSUNG (OBERE TABELLE) --- */
         .energy-table {
             max-width: 500px;
@@ -78,13 +85,6 @@
         .buy-row td { color: #e74c3c; } /* Rot für Bezug */
         .sell-row td { color: #2ecc71; } /* Grün für Einspeisung */
         .consumption-row td { color: #f39c12; } /* Orange für Verbrauch */
-
-        /* Einheit (W) */
-        .energy-unit {
-            font-size: 0.8em;
-            font-weight: normal;
-            margin-left: 5px;
-        }
 
         /* --- (2) SOURCES/SINKS DETAIL-TABELLEN --- */
         .container {
@@ -195,30 +195,30 @@
     <div class="left">
         <h2>Sources <span style="font-size: 0.6em;">(Erzeugung/Einspeisung)</span></h2>
         <table>
-            <tr><td><a id="ROOF_LINK" href="#">Roof</a></td><td>=</td><td id="P_ROOF">_ W</td></tr>
-            <tr><td><a id="GARAGE_INVERTER_LINK" href="#">Garage Inverter</a></td><td>=</td><td id="GARAGE_INVERTER_POWER">_ W</td></tr>
-            <tr><td><a id="BATTERY_INVERTER_LINK" href="#">Battery Inverter</a></td><td>=</td><td id="BATTERY_INVERTER_POWER">_ W</td></tr>
-            <tr><td><a id="BALKON_INVERTER_LINK" href="#">Balkon Inverter</a></td><td>=</td><td id="BALKON_INVERTER_POWER">_ W</td></tr>
-            <tr><td>Venus1 discharge</td><td>=</td><td id="VENUS1_DISCHARGE_POWER">_ W</td></tr>
-            <tr><td>Venus2 discharge</td><td>=</td><td id="VENUS2_DISCHARGE_POWER">_ W</td></tr>
+            <tr><td><a id="ROOF_LINK" href="#">Roof</a></td><td>=</td><td id="P_ROOF"> <span class="energy-unit">W</span></td></tr>
+            <tr><td><a id="GARAGE_INVERTER_LINK" href="#">Garage Inverter</a></td><td>=</td><td id="GARAGE_INVERTER_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td><a id="BATTERY_INVERTER_LINK" href="#">Battery Inverter</a></td><td>=</td><td id="BATTERY_INVERTER_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td><a id="BALKON_INVERTER_LINK" href="#">Balkon Inverter</a></td><td>=</td><td id="BALKON_INVERTER_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td>Venus1 discharge</td><td>=</td><td id="VENUS1_DISCHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td>Venus2 discharge</td><td>=</td><td id="VENUS2_DISCHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
 
             <tr><td colspan="3"><hr></td></tr>
 
-            <tr><td>Total Source</td><td>=</td><td id="POWER_SOURCES">_ W</td></tr>
+            <tr><td>Total Source</td><td>=</td><td id="POWER_SOURCES"> <span class="energy-unit">W</span></td></tr>
         </table>
     </div>
 
     <div class="right">
         <h2>Sinks <span style="font-size: 0.6em;">(Verbrauch/Ladung)</span></h2>
         <table>
-            <tr><td><a id="BATTERY_CHARGER1_LINK" href="#">Battery Charger1</a></td><td>=</td><td id="BATTERY_CHARGER1_POWER">_ W</td></tr>
-            <tr><td><a id="BATTERY_CHARGER2_LINK" href="#">Battery Charger2</a></td><td>=</td><td id="BATTERY_CHARGER2_POWER">_ W</td></tr>
-            <tr><td>Venus1 charge</td><td>=</td><td id="VENUS1_CHARGE_POWER">_ W</td></tr>
-            <tr><td>Venus2 charge</td><td>=</td><td id="VENUS2_CHARGE_POWER">_ W</td></tr>
+            <tr><td><a id="BATTERY_CHARGER1_LINK" href="#">Battery Charger1</a></td><td>=</td><td id="BATTERY_CHARGER1_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td><a id="BATTERY_CHARGER2_LINK" href="#">Battery Charger2</a></td><td>=</td><td id="BATTERY_CHARGER2_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td>Venus1 charge</td><td>=</td><td id="VENUS1_CHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td>Venus2 charge</td><td>=</td><td id="VENUS2_CHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
 
             <tr><td colspan="3"><hr></td></tr>
 
-            <tr><td>Total Sink</td><td>=</td><td id="POWER_SINKS">_ W</td></tr>
+            <tr><td>Total Sink</td><td>=</td><td id="POWER_SINKS">_ <span class="energy-unit">W</span></td></tr>
         </table>
     </div>
 </div>
@@ -262,7 +262,7 @@ async function update() {
             const e = document.getElementById(id);
             if(e && d[id]!==undefined) {
                 // Fügt die Einheit W bei den Power-Werten hinzu
-                e.textContent = powerIds.includes(id) ? `${d[id]} W` : d[id];
+                e.textContent = powerIds.includes(id) ? `${d[id]}` : d[id];
             }
         });
 

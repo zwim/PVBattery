@@ -49,7 +49,7 @@ local function safe_get(table, key)
 end
 
 function mqtt_reader:setLogLevel(new_level)
-	LOGLEVEL = new_level
+    LOGLEVEL = new_level
 end
 
 -- ##############################################################
@@ -61,28 +61,62 @@ function mqtt_reader:printStates(clear)
         if type(v) == "table" and (v.switch1 or v.power) then
             local t = v.time and os.date("%Y-%m-%d %H:%M:%S", v.time) or "-"
             print(string.format("%-19s %-20s %-5s %-8s", t, name, tostring(v.switch1), tostring(v.power)))
-			if clear then
-				self.states[name] = {}
-			end
+            if clear then
+                self.states[name] = {}
+            end
         end
     end
 end
 
 -- ##############################################################
--- INITIALIZATION
+-- DISCONNECTION
 -- ##############################################################
+function mqtt_reader:disconnect()
+    if not self.client then
+        log(1, "Client is already disconnected.")
+        return
+    end
+
+    log(1, "Disconnecting MQTT client " .. self.id)
+
+    -- 1. Client aus dem I/O-Loop entfernen
+    if self.ioloop then
+        self.ioloop:remove(self.client)
+    end
+
+    -- 2. DISCONNECT-Paket senden und zugrundeliegende Verbindung schließen
+    -- client_mt:disconnect() ist korrekt
+    local ok, err = self.client:disconnect()
+    if not ok then
+        log(0, "Warning: Error during MQTT disconnect:", err)
+    end
+
+    -- 3. Interne Referenzen aufräumen
+    self.client = nil
+    self.ioloop = nil
+    self.states = {}
+
+    log(1, "MQTT client disconnected and resources cleaned up.")
+end
+
+-- ##############################################################
+-- INITIALIZATION (SETUP)
+-- ##############################################################
+-- Initialisiert das Client-Objekt, die Callbacks und den I/O-Loop.
+-- Startet KEINE Verbindung.
 --luacheck: ignore _retry_count
 function mqtt_reader:init(uri, id, _retry_count)
     assert(uri and uri ~= "", "MQTT URI required")
     assert(id and id ~= "", "MQTT client ID required")
 
-	_retry_count = _retry_count or 0
-	if _retry_count > 10 then
-		util.sleepTime(2)
-		error("[mqtt_reader] retried to init itself more than " .. _retry_count .. " times")
-	end
+    _retry_count = _retry_count or 0
+    if _retry_count > 10 then
+        util.sleepTime(2)
+        error("[mqtt_reader] retried to init itself more than " .. _retry_count .. " times")
+    end
 
-	id = id .. tostring(math.random(9999))
+    -- ID und URI setzen (für spätere Connects)
+    id = id .. tostring(math.random(9999))
     self.uri = uri
     self.id = id
 
@@ -92,7 +126,7 @@ function mqtt_reader:init(uri, id, _retry_count)
         id = id,
         uri = uri,
         clean = false,
-		reconnect = true,
+        reconnect = true,
     }
 
     -- ##############################################################
@@ -105,7 +139,10 @@ function mqtt_reader:init(uri, id, _retry_count)
                 log(0, "MQTT connect failed:", connack:reason_string())
                 util.sleepTime(5)
                 log(1, "Retrying connection...")
-                self:init(uri, id, _retry_count + 1)
+
+                -- RECONNECT-LOGIK: RUFT DIE ÖFFENTLICHE CONNECT-FUNKTION AUF (KORRIGIERT)
+                -- Die Verbindung wird über den öffentlichen Reader neu gestartet
+                mqtt_reader:connect()
                 return
             end
             log(1, "Connected to MQTT broker " .. uri .. " with id=" .. id)
@@ -114,7 +151,7 @@ function mqtt_reader:init(uri, id, _retry_count)
         -- Message callback
         message = function(msg)
             if not msg.payload then return end
-			if not msg.topic then return end
+            if not msg.topic then return end
 
             -- Split topic into prefix / device / data
             local topic_str = msg.topic
@@ -133,71 +170,90 @@ function mqtt_reader:init(uri, id, _retry_count)
 
             -- Handle Tasmota-like messages
             if prefix == "tele" or prefix == "stat" then
---				print(prefix, topic, data:sub(1, 20))
-				if not self.states[topic] then
-					self.states[topic] = {}
-				end
-				local s = self.states[topic]
+--                  print(prefix, topic, data:sub(1, 20))
+                if not self.states[topic] then
+                    self.states[topic] = {}
+                end
+                local s = self.states[topic]
 
-                if data == "STATE" or data == "STATUS"  or data == "RESULT" or data == "POWER" then
+                if data == "STATE" or data == "STATUS" or data == "RESULT" or data == "POWER" then
                     if decoded.power or decoded.power1 then
                         s.switch1 = decoded.power or decoded.power1
-						self.got_message_in_last_iteration = true
+                        self.got_message_in_last_iteration = true
                     elseif decoded.power2 then
                         s.switch2 = decoded.power2
-						self.got_message_in_last_iteration = true
+                        self.got_message_in_last_iteration = true
                     end
                 elseif (data == "SENSOR" and decoded.energy) then
                     s.power = decoded.energy.power
                     if s.power and s.power > 0 then
-						s.switch1 = "on"
-					end
+                        s.switch1 = "on"
+                    end
                     s.today = decoded.energy.today
                     s.yesterday = decoded.energy.yesterday
                     s.total = decoded.energy.total
-					self.got_message_in_last_iteration = true
+                    self.got_message_in_last_iteration = true
                 elseif (data == "STATUS10" and decoded.statussns) then
                     local e = decoded.statussns.energy
                     s.power = safe_get(e, "power")
                     if s.power and s.power > 0 then
-						s.switch1 = "on"
-					end
+                        s.switch1 = "on"
+                    end
                     s.today = safe_get(e, "today")
                     s.yesterday = safe_get(e, "yesterday")
                     s.total = safe_get(e, "total")
-					self.got_message_in_last_iteration = true
+                    self.got_message_in_last_iteration = true
                 end
-				if self.got_message_in_last_iteration then
-					s.time = util.getCurrentTime()
-				end
+                if self.got_message_in_last_iteration then
+                    s.time = util.getCurrentTime()
+                end
             end
         end,
 
         -- Error callback
         error = function(err)
             log(0, "MQTT client error:", err)
-            log(0, "Reconnecting in " .. _retry_count .. " s")
+            log(0, "Attempting reconnect...")
             util.sleepTime(3 + _retry_count)
 
-			self.client:close()
-
-			local ok, connack = self.client:connect(self.uri)  -- oder passenden reconnect-Aufruf
-			if not ok then
-				log(0, "Reconnect failed, re-initing new client", _retry_count + 1)
-				self:init(self.uri, self.id,  _retry_count + 1)
-			end
-		end,
+            -- Saubere Trennung des Sockets, dann neuer Connect-Versuch
+            self.client:disconnect()
+            util.sleepTime(5)
+            -- RUFT DIE ÖFFENTLICHE CONNECT-FUNKTION AUF (KORRIGIERT)
+            mqtt_reader:connect()
+        end,
 
         close = function()
             print("mqtt closed connection 🔌")
-            self.client = nil
         end,
     }
 
     self.ioloop = mqtt.get_ioloop()
     self.ioloop:add(self.client)
+end
 
---	self:processMessages()
+-- ##############################################################
+-- CONNECT LOGIC (KORRIGIERT)
+-- ##############################################################
+-- Startet den initialen Verbindungsversuch zum Broker.
+function mqtt_reader:connect()
+    if not self.client or not self.uri then
+        log(0, "Client not initialized. Call :init(uri, id) first.")
+        return false, "Client not initialized"
+    end
+
+    log(2, "Starting connection to broker using client:start_connecting()...")
+
+    -- Führt den korrekten Verbindungsaufruf durch: client_mt:start_connecting()
+    -- Die uri ist bereits im Client-Objekt gespeichert
+    local ok, err = self.client:start_connecting()
+
+    if not ok then
+        log(0, "Initial/Immediate start_connecting attempt failed:", err)
+    end
+
+    -- start_connecting gibt true/false + Fehlermeldung zurück
+    return ok, err
 end
 
 -- ##############################################################
@@ -209,7 +265,7 @@ function mqtt_reader:subscribe(topic, qos)
     topic = topic:lower()
     local pattern = topic and "+/" .. topic .. "/#" or "+/#"
 
-	self:processMessages()
+    self:processMessages()
 
     self.client:subscribe{
         topic = pattern,
@@ -219,7 +275,7 @@ function mqtt_reader:subscribe(topic, qos)
         end,
     }
 
-	self:processMessages()
+    self:processMessages()
 end
 
 -- ##############################################################
@@ -230,21 +286,21 @@ function mqtt_reader:askHost(host, qos)
     host = host:match("^(.*)%.") or host
     host = host:lower()
 
-	if not qos then
-		qos = 0
-	end
+    if not qos then
+        qos = 0
+    end
     self.client:publish{ topic = "cmnd/" .. host .. "/Power", payload = "", qos = qos }
     self.client:publish{ topic = "cmnd/" .. host .. "/Status", payload = "8", qos = qos }
---    self.ioloop:iteration()
-	self:processMessages()
+--     self.ioloop:iteration()
+    self:processMessages()
 end
 
 -- ##############################################################
 -- SUBSCRIBE TO TOPIC AND ASK HOST FOR STATUS
 -- ##############################################################
 function mqtt_reader:subscribeAndAskHost(topic, qos)
-	self:subscribe(topic, qos)
-	self:askHost(topic, qos)
+    self:subscribe(topic, qos)
+    self:askHost(topic, qos)
 end
 
 -- ##############################################################
@@ -253,7 +309,7 @@ end
 function mqtt_reader:clearRetainedMessages(topic)
     if not topic or topic == "" then return end
 
-	self:processMessages()
+    self:processMessages()
     self.client:publish{
         topic = topic,
         payload = "",
@@ -266,69 +322,60 @@ end
 -- ##############################################################
 -- UPDATE LOOP
 -- ##############################################################
---[[function mqtt_reader:processMessages(wait_time)
-    wait_time = wait_time or 0.1
-    local got_message = false
-    while true do
-        self.got_message_in_last_iteration = false
-        self.ioloop:iteration()
-        if not self.got_message_in_last_iteration then break end
-        got_message = true
-        util.sleepTime(wait_time)
-    end
-    return got_message
-end
-]]
 
 function mqtt_reader:processMessages(wait_time)
-	wait_time = wait_time or 0.1
-	local timeout = 5  -- maximale Wartezeit in Sekunden für QoS-2-Handshake
-	local end_time = util.getCurrentTime() + timeout
-	local got_message = false
-	local inflight
-	while true do
-		self.got_message_in_last_iteration = false
-		self.ioloop:iteration()
+    wait_time = wait_time or 0.1
+    local timeout = 5 -- maximale Wartezeit in Sekunden für QoS-2-Handshake
+    local end_time = util.getCurrentTime() + timeout
+    local got_message = false
+    local inflight
+    while true do
+        self.got_message_in_last_iteration = false
+        if self.ioloop and self.client then -- Sicherheitscheck
+            self.ioloop:iteration()
+        else
+            break
+        end
 
-		-- Prüfen, ob eingehende Nachricht bearbeitet wurde
-		if self.got_message_in_last_iteration then
-			got_message = true
-		end
+        -- Prüfen, ob eingehende Nachricht bearbeitet wurde
+        if self.got_message_in_last_iteration then
+            got_message = true
+        end
 
-		-- Prüfen, ob QoS2-Nachrichten noch "in flight" sind
-		inflight = 0
-		if self.client and self.client.outgoing then
-			for _, msg in pairs(self.client.outgoing) do
-				if msg.qos == 2 then
-					inflight = inflight + 1
-				end
-			end
-		end
+        -- Prüfen, ob QoS2-Nachrichten noch "in flight" sind
+        inflight = 0
+        if self.client and self.client.outgoing then
+            for _, msg in pairs(self.client.outgoing) do
+                if msg.qos == 2 then
+                    inflight = inflight + 1
+                end
+            end
+        end
 
-		-- Debug-Information
-		if inflight > 0 then
-			log(3, string.format("MQTT QoS2 in-flight messages: %d", inflight))
-		end
+        -- Debug-Information
+        if inflight > 0 then
+            log(3, string.format("MQTT QoS2 in-flight messages: %d", inflight))
+        end
 
-		-- Bedingung zum Beenden:
-		-- 1. Keine eingehende Message mehr
-		-- 2. Keine QoS2-Nachricht mehr in flight
-		-- 3. Oder Timeout erreicht
-		if (not self.got_message_in_last_iteration and inflight == 0)
-			or (util.getCurrentTime() > end_time)
-		then
-			break
-		end
+        -- Bedingung zum Beenden:
+        -- 1. Keine eingehende Message mehr
+        -- 2. Keine QoS2-Nachricht mehr in flight
+        -- 3. Oder Timeout erreicht
+        if (not self.got_message_in_last_iteration and inflight == 0)
+            or (util.getCurrentTime() > end_time)
+        then
+            break
+        end
 
-		util.sleepTime(wait_time)
-	end
+        util.sleepTime(wait_time)
+    end
 
-	-- Optional: nach dem Timeout nochmal prüfen
-	if inflight > 0 then
-		log(1, string.format("Warning: %d QoS2 message(s) still in flight after timeout", inflight))
-	end
+    -- Optional: nach dem Timeout nochmal prüfen
+    if inflight > 0 then
+        log(1, string.format("Warning: %d QoS2 message(s) still in flight after timeout", inflight))
+    end
 
-	return got_message
+    return got_message
 end
 
 -- sleeps some time an process mqtt messages
@@ -341,11 +388,13 @@ function mqtt_reader:sleepAndCallMQTT(short_sleep, start_time)
     if short_sleep then
         sleep_time = short_sleep - (util.getCurrentTime() - start_time)
     else
+        -- ACHTUNG: 'config' ist nicht definiert! Dies wird wahrscheinlich einen Fehler werfen,
+        -- wenn es nicht in der aufrufenden Umgebung definiert ist. Hier wird es unverändert gelassen.
         sleep_time = config.sleep_time - (util.getCurrentTime() - start_time)
     end
 
     local sleep_period = 0.10
-	local got = 0
+    local got = 0
     repeat
         util.sleepTime(math.min(sleep_time, sleep_period))
         sleep_time = sleep_time - sleep_period
@@ -358,21 +407,37 @@ end
 
 
 -- ##############################################################
--- STANDALONE MODE FOR TESTING
+-- STANDALONE MODE FOR TESTING (ANGEPASST)
 -- ##############################################################
 function mqtt_reader:_test()
-	mqtt_reader:setLogLevel(2)
+    mqtt_reader:setLogLevel(2)
+
+    -- 1. INIT (Setup)
     mqtt_reader:init("battery-control.lan", "mqtt_reader_standalone")
-	mqtt_reader:subscribeAndAskHost("moped-charger.lan", 1)
-	mqtt_reader:subscribeAndAskHost("battery-inverter.lan", 1)
-	mqtt_reader:subscribeAndAskHost("balkon-inverter.lan", 2)
-	mqtt_reader:subscribeAndAskHost("battery-inverter.lan", 2)
+
+    -- 2. CONNECT (Start)
+    -- Die Rückgabewerte von connect() haben sich geändert (true/false, err)
+    local ok, err = mqtt_reader:connect()
+    if not ok then
+        -- Wenn der initiale Connect fehlschlägt, ist das Test-Setup ungültig.
+        log(0, "Initial connection failed: " .. tostring(err))
+        return
+    end
+
+    -- Subscriptions und Statusabfragen
+    mqtt_reader:subscribeAndAskHost("moped-charger.lan", 1)
+    mqtt_reader:subscribeAndAskHost("battery-inverter.lan", 1)
+    mqtt_reader:subscribeAndAskHost("balkon-inverter.lan", 2)
+    mqtt_reader:subscribeAndAskHost("battery-inverter.lan", 2)
 
     util.sleepTime(1)
 
     log(1, "Waiting for MQTT messages...")
 
-    while true do
+    local start_time = util.getCurrentTime()
+    local max_runtime = 15 -- Läuft maximal 15 Sekunden für den Test
+
+    while (util.getCurrentTime() - start_time) < max_runtime do
         if mqtt_reader:processMessages() then
             mqtt_reader:printStates(true)
             util.sleepTime(0.1)
@@ -380,12 +445,18 @@ function mqtt_reader:_test()
             util.sleepTime(1)
         end
     end
+
+    log(1, "Max runtime reached. Disconnecting.")
+
+    -- 3. DISCONNECT (Sauber beenden)
+    mqtt_reader:disconnect()
+
+    log(1, "Test finished.")
 end
 
 
-
 if arg and arg[0] and arg[0]:find("mqtt_reader.lua") then
-	mqtt_reader:_test()
+    mqtt_reader:_test()
 end
 
 return mqtt_reader

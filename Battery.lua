@@ -47,21 +47,22 @@ end
 --
 -- ajustable parameters:
 local OFFSET_TO_HIGH_NOON = -1/4 -- in hours
-local OFFSET_BEFORE_SUNSET = -2.5 -- in hours
+local OFFSET_TO_SUNSET = -2.5 -- in hours
 local FIRST_MAX_SOC_LEVEL = 60 -- Percent
 local SECOND_MAX_SOC_LEVEL = 80 -- Percent
 function Battery:getDesiredMaxSOC(current_time_h)
     current_time_h = current_time_h or SunTime:getTimeInHours()
+
     local time_1_h = SunTime.noon + OFFSET_TO_HIGH_NOON
-    if current_time_h < time_1_h then    -- 15 minutes before high noon
+    if current_time_h < time_1_h then
         return math.min(FIRST_MAX_SOC_LEVEL, self.Device.SOC_max)
     end
 
-    local time_2_h = SunTime.set + OFFSET_BEFORE_SUNSET
+    local time_2_h = SunTime.set + OFFSET_TO_SUNSET
     if time_2_h < time_1_h then
         time_2_h = time_1_h + 0.5
     end
-    if current_time_h > time_2_h then  -- 2:30 hours befor sunset
+    if current_time_h > time_2_h then
         return self.Device.SOC_max
     end
 
@@ -73,11 +74,6 @@ function Battery:getDesiredMaxSOC(current_time_h)
 
     local max_SOC = FIRST_MAX_SOC_LEVEL + t * k
     return max_SOC
---[[
-        local x = (current_time_h - (SunTime.noon - OFFSET_TO_HIGH_NOON)) /
-        ((SunTime.set - OFFSET_BEFORE_SUNSET) - (SunTime.noon - OFFSET_TO_HIGH_NOON))
-        return FIRST_MAX_SOC_LEVEL + k * x
-    ]]
 --        return SECOND_MAX_SOC_LEVEL
 end
 
