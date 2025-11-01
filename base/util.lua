@@ -414,5 +414,15 @@ function util.int32_to_float(value, little_endian)
     return fptr[0]
 end
 
+-- Safe JSON decode: prevents crashes on invalid JSON
+function util.safe_json_decode(payload)
+    local ok, result = pcall(json.decode, payload, 1, nil)
+    if not ok then
+        print("JSON decode error:", result)
+        return nil, result
+    end
+    return result
+end
+
 
 return util

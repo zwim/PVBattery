@@ -33,16 +33,6 @@ local mqtt_reader = {
 -- HELPER FUNCTIONS
 -- ##############################################################
 
--- Safe JSON decode: prevents crashes on invalid JSON
-local function safe_json_decode(payload)
-    local ok, result = pcall(json.decode, payload)
-    if not ok then
-        log(2, "JSON decode error:", result)
-        return nil
-    end
-    return result
-end
-
 -- Safe table lookup
 local function safe_get(table, key)
     return (table and table[key]) or nil
@@ -165,7 +155,7 @@ function mqtt_reader:init(uri, id, _retry_count)
             local topic = parts[2]:lower()
             local data = parts[3]:upper()
 
-            local decoded = safe_json_decode(msg.payload:lower())
+            local decoded = util.safe_json_decode(msg.payload:lower())
             if not decoded or type(decoded) == "number" then return end
 
             -- Handle Tasmota-like messages
