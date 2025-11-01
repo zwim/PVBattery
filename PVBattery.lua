@@ -20,19 +20,19 @@ local MIN_DISCHARGE_POWER = 15
 -- luacheck: globals config
 config = require("configuration") -- this one is global
 
-local mqtt_reader = require("mqtt_reader")
-local util = require("util")
+local mqtt_reader = require("base/mqtt_reader")
+local util = require("base/util")
 
 local SunTime = require("suntime/suntime")
 
-local Influx = require("influx")
+local Influx = require("base/influx")
 
-local BaseClass = require("BaseClass")
-local CustomBattery = require("CustomBattery")
-local MarstekBattery = require("MarstekBattery")
-local EnvertechInverter = require("EnvertechInverter")
-local FroniusInverter = require("FroniusInverter")
-local Homewizard = require("Homewizard")
+local BaseClass = require("mid/BaseClass")
+local CustomBattery = require("mid/CustomBattery")
+local MarstekBattery = require("mid/MarstekBattery")
+local EnvertechInverter = require("mid/EnvertechInverter")
+local FroniusInverter = require("mid/FroniusInverter")
+local Homewizard = require("mid/Homewizard")
 
 local PVBattery = BaseClass:extend{
     __name = "PVBattery",

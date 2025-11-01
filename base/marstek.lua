@@ -1,5 +1,5 @@
 
-local Modbus = require("modbus")
+local Modbus = require("base/modbus")
 
 local Marstek = {
     client = nil,

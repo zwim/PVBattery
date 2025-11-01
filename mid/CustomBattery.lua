@@ -1,13 +1,13 @@
 -- Home made battery
 
 -- luacheck: globals config
-local Battery = require("Battery")
+local Battery = require("mid/Battery")
 
-local AntBMS = require("antbms")
-local ChargerClass = require("charger")
-local InverterClass = require("inverter")
+local AntBMS = require("base/antbms")
+local ChargerClass = require("base/charger")
+local InverterClass = require("base/inverter")
 
-local mqtt_reader = require("mqtt_reader")
+local mqtt_reader = require("base/mqtt_reader")
 
 local internal_state = {
     fail = "fail", -- unknown state

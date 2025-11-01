@@ -1,6 +1,6 @@
 -- charger.lua: Charger control abstraction for PVBattery
 
-local Switch = require("switch")
+local Switch = require("base/switch")
 
 -- Charger class, based on Switch, with BMS integration
 local Charger = Switch:extend{

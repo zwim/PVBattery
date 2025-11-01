@@ -1,6 +1,6 @@
 -- Masterclass for Batteries
 
-local PowerDevice = require("PowerDevice")
+local PowerDevice = require("mid/PowerDevice")
 local SunTime = require("suntime/suntime")
 
 local Battery = PowerDevice:extend{

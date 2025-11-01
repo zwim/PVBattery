@@ -1,4 +1,5 @@
 
+local dnshelper = require("base/dnshelper")
 local ffi = require("ffi")
 local json = require("dkjson")
 local lfs = require("lfs")
@@ -349,7 +350,6 @@ end
 
 -- url can be URL or hostname
 function util.getIPfromURL(url)
-    local dnshelper = require("dnshelper")
     dnshelper.debug = false
 
     -- Extract hostname if URL includes "http://"

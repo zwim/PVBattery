@@ -1,11 +1,9 @@
 -- Masterclass for Batteries
 
-local PowerDevice = require("PowerDevice")
-
-local P1meter = require("p1meter")
-
-local mqtt_reader = require("mqtt_reader")
-local util = require("util")
+local PowerDevice = require("mid/PowerDevice")
+local mqtt_reader = require("base/mqtt_reader")
+local P1meter = require("base/p1meter")
+local util = require("base/util")
 
 local Homewizard = PowerDevice:extend{
     __name = "Homewizard",

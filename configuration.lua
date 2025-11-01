@@ -2,7 +2,7 @@
 local LOGLEVEL = 3
 
 local lfs = require("lfs")
-local util = require("util")
+local util = require("base/util")
 
 local configuration = {
     -- Don't change this in a config file.

@@ -1,6 +1,6 @@
 -- Masterclass for Batteries
 
-local BaseClass = require("BaseClass")
+local BaseClass = require("mid/BaseClass")
 
 local state = {
     fail = "fail", -- unknown state

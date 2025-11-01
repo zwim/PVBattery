@@ -1,7 +1,7 @@
 --- This function checks if there is a new command for PVBattery
 -- Commands are stored in the file config.command_file_name
 
-local util = require("util")
+local util = require("base/util")
 
 return function(self)
     local file_name = config.command_file_name or "/tmp/PVCommands"

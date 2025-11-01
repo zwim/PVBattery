@@ -1,9 +1,9 @@
 -- Masterclass for Batteries
 
-local mqtt_reader = require("mqtt_reader")
+local mqtt_reader = require("base/mqtt_reader")
 
-local InverterClass = require("inverter")
-local PowerDevice = require("PowerDevice")
+local InverterClass = require("base/inverter")
+local PowerDevice = require("mid/PowerDevice")
 local SunTime = require("suntime/suntime")
 
 local EnvertechInverter = PowerDevice:extend{

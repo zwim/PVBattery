@@ -1,9 +1,9 @@
 -- Masterclass for Batteries
 
-local Battery = require("Battery")
+local Battery = require("mid/Battery")
 
-local Marstek = require("marstek")
-local util = require("util")
+local Marstek = require("base/marstek")
+local util = require("base/util")
 
 local MarstekBattery = Battery:extend{
     __name = "MarstekBattery",

@@ -1,6 +1,6 @@
 local bit = require("bit")
 local socket = require("socket")
-local util = require("util")
+local util = require("base/util")
 
 local Modbus = {
     __name = "Modbus",

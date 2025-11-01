@@ -2,7 +2,7 @@
 
 local json = require("dkjson")
 local mqtt = require("mqtt")
-local util = require("util")
+local util = require("base/util")
 
 math.randomseed(os.time() + os.clock() * 10000)
 
