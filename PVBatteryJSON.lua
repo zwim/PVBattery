@@ -23,13 +23,6 @@ return function(self, VERSION)
         table.insert(InverterPowerCache, pow)
         sources = sources + pow
     end
-    for _, Battery in ipairs(self.USPBattery) do
-        if Battery.power <= 0 then -- negative, if dischargeing
-            local power = math.abs(Battery.power)
-            table.insert(InverterPowerCache, power)
-            sources = sources + power
-        end
-    end
     for _, Battery in ipairs(self.SmartBattery) do
         sources = sources + math.max(Battery.power, 0)
     end

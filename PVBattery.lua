@@ -466,7 +466,7 @@ function PVBattery:main(profiling_runs)
         self:log(2, "dothemagic")
         self:doTheMagic()
 
-        self:log(4, "xxxxxxxxxxx desired SOC", self.SmartBattery[1]:getDesiredMaxSOC())
+        self:log(3, "xxxxxxxxxxx desired SOC", self.SmartBattery[1]:getDesiredMaxSOC())
 
         self:log(2, "generate JSON")
         self:getValues() -- for the json
