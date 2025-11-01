@@ -110,7 +110,8 @@ function Battery:getCurrent(internal)
 end
 
 -- always AC
-function Battery:getEnergyStored()
+function Battery:getEnergyTotal()
+    error("not impl")
 end
 
 -- always AC

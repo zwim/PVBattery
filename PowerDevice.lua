@@ -80,7 +80,7 @@ function PowerDevice:getCurrent(internal)
 end
 
 -- always AC
-function PowerDevice:getEnergyStored()
+function PowerDevice:getEnergyTotal()
 end
 
 -- always AC

@@ -17,7 +17,7 @@ return function(self, VERSION)
         sinks = sinks + math.max(-Battery.power, 0)
     end
 
-    local sources =  0
+    local sources =  self.P_PV
     for i = 1, #self.Inverter do
         local pow = self.Inverter[i]:getPower() or 0
         table.insert(InverterPowerCache, pow)
@@ -25,7 +25,7 @@ return function(self, VERSION)
     end
     for _, Battery in ipairs(self.USPBattery) do
         if Battery.power <= 0 then -- negative, if dischargeing
-            local power = -Battery.power
+            local power = math.abs(Battery.power)
             table.insert(InverterPowerCache, power)
             sources = sources + power
         end

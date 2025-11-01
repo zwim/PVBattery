@@ -124,7 +124,7 @@ function PVBattery:init()
         end
     end
 
-    -- Influx:init("http://localhost:8086", "", "Photovoltaik", "Leistung")
+    -- Influx:init("http://battery-control:8086", "", "Photovoltaik", "Leistung")
 --    Influx:init(config.db_url, config.db_token, config.db_org, config.db_bucket) -- xx
 
     self:log(0, "Initialisation completed")
@@ -374,17 +374,18 @@ function PVBattery:outputTheLog(date_string)
     util:log(log_string)
 end
 
+Influx.writeLine = function(...)
+    print("INFLUX:", ...)
+end
 function PVBattery:writeToDatabase()
-    print("no influx for now")
     if true then return end
-
     local datum = "Leistung"
-    Influx:writeLine("garage-inverter", datum, self.Inverter[1]:getPower())
-    Influx:writeLine("battery-inverter", datum, self.Inverter[2]:getPower())
-    Influx:writeLine("balkon-inverter", datum, self.Inverter[3]:getPower())
+    Influx:writeLine("garage-inverter", datum, self.Inverter[3]:getPower())
+    Influx:writeLine("balkon-inverter", datum, self.Inverter[2]:getPower())
+    Influx:writeLine("battery-inverter", datum, self.USPBattery[1].Inverter:getPower())
 
-    Influx:writeLine("battery-charger", datum, self.Charger[1]:getPower())
-    Influx:writeLine("battery-charger2", datum, self.Charger[2]:getPower())
+    Influx:writeLine("battery-charger",  datum, self.USPBattery[1].Charger[1]:getPower())
+    Influx:writeLine("battery-charger2", datum, self.USPBattery[1].Charger[2]:getPower())
 
     Influx:writeLine("P_PV", datum, self.P_PV)
     Influx:writeLine("P_Grid", datum, self.P_Grid)
@@ -393,16 +394,20 @@ function PVBattery:writeToDatabase()
     Influx:writeLine("P_VenusE", datum, self.SmartBattery[1].power)
     Influx:writeLine("P_VenusE2", datum, self.SmartBattery[2].power)
 
-    Influx:writeLine("Status", "Status", self:getState())
+--Influx:writeLine("Status", "Status", self:getState())
 
-    datum = "Energie"
-    Influx:writeLine("garage-inverter", datum, self.Inverter[1]:getEnergyTotal())
-    Influx:writeLine("battery-inverter", datum, self.Inverter[2]:getEnergyTotal())
-    Influx:writeLine("balkon-inverter", datum, self.Inverter[3]:getEnergyTotal())
+--[[
+datum = "Energie"
+Influx:writeLine("garage-inverter", datum, self.Inverter[3]:getEnergyTotal())
+Influx:writeLine("balkon-inverter", datum, self.Inverter[2]:getEnergyTotal())
 
-    Influx:writeLine("battery-charger", datum, self.Charger[1]:getEnergyTotal())
-    Influx:writeLine("battery-charger2", datum, self.Charger[2]:getEnergyTotal())
+Influx:writeLine("battery-inverter", datum, self.USPBattery[1].Inverter:getEnergyTotal())
+Influx:writeLine("battery-charger", datum, self.USPBattery[1].Charger[1]:getEnergyTotal())
+Influx:writeLine("battery-charger2", datum, self.USPBattery[1].Charger[2]:getEnergyTotal())
+]]
+
 end
+
 
 function PVBattery:main(profiling_runs)
     local last_date, date
@@ -457,17 +462,21 @@ function PVBattery:main(profiling_runs)
 
         -- update state, as the battery may have changed or the user could have changed something manually
         self:outputTheLog(date_string)
-        self:writeToDatabase()
 
         self:log(2, "dothemagic")
         self:doTheMagic()
 
-        self:getValues()
+        self:log(4, "xxxxxxxxxxx desired SOC", self.SmartBattery[1]:getDesiredMaxSOC())
 
         self:log(2, "generate JSON")
-        local ok, result = pcall(self.generateJSON, self, VERSION)
+        self:getValues() -- for the json
+        ok, result = pcall(self.generateJSON, self, VERSION)
         if not ok then
             print("Error on generateJSON", result)
+        end
+        local ok, result = pcall(self.writeToDatabase, self)
+        if not ok then
+            print("Error on write to database", result)
         end
 
         self:serverCommands()
@@ -489,34 +498,39 @@ if #arg > 2 then
     end
 end
 
-util.deleteRunningInstances("PVBattery")
+local function protected_start()
+    util.deleteRunningInstances("PVBattery") -- only necessary on first start
 
-local MyBatteries = PVBattery:new{}
+    local MyBatteries = PVBattery:new{}
+    MyBatteries:log(0, "Instantiation done")
 
-MyBatteries:log(0, "Istantiation done")
+    if not Profiler then
+        -- this is the outer loop, a safety-net if the inner loop is broken with `break`
+        while true do
+            util:cleanLogs()
+            MyBatteries:main()
+        end
+    else -- if Profiler
+        MyBatteries:main(1)
+        Profiler.stop()
+        Profiler.report("test-profiler.log")
+    end
+end
 
-if not Profiler then
-    -- this is the outer loop, a safety-net if the inner loop is broken with `break`
-    while true do
-        util:cleanLogs()
+while true do
+    local ok, result = xpcall(protected_start, util.crashHandler)
 
---        MyBatteries:main()
-
-        local ok, result = xpcall(function() MyBatteries:main() end, util.crashHandler)
-        if ok then
-            self:log(0, "main() returned true. This should never happen .......")
+    if ok then
+        PVBattery:log(0, "main() returned true. This should never happen .......")
+    else
+        if tostring(result):match("interrupted") then
+            PVBattery:log(0, "Ctrl+C (SIGINT)")
+            -- todo: set mode to auto
+            os.exit(0)
         else
-            if tostring(result):match("interrupted") then
-                self:log(0, "Ctrl+C (SIGINT)")
-                -- todo: set mode to auto
-                os.exit(0)
-            else
-                self:log(0, "error in main():", result, "restart main() loop")
-            end
+            PVBattery:log(0, "error in main():", result, "restart main() loop in 5 seconds")
+            util.sleepTime(5)
         end
     end
-else -- if Profiler
-    MyBatteries:main(1)
-    Profiler.stop()
-    Profiler.report("test-profiler.log")
 end
+

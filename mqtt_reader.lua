@@ -4,6 +4,8 @@ local json = require("dkjson")
 local mqtt = require("mqtt")
 local util = require("util")
 
+math.randomseed(os.time() + os.clock() * 10000)
+
 -- ##############################################################
 -- CONFIGURATION
 -- ##############################################################

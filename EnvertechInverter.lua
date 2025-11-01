@@ -65,7 +65,8 @@ function EnvertechInverter:getCurrent(internal)
 end
 
 -- always AC
-function EnvertechInverter:getEnergyStored()
+function EnvertechInverter:getEnergyTotal()
+    return self.Inverter:getEnergyTotal()
 end
 
 -- always AC
