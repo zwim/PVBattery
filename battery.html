@@ -1,88 +1,169 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Energy Flow</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="de"> <head>
+    <meta charset="utf-8">
+    <title>Detaillierter Energiefluss</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-    }
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-    }
-    .left, .right {
-      flex: 1;
-      padding: 20px;
-    }
-    .left { background-color: #f0f0f0; }
-    .right { background-color: #d0d0d0; }
-    table { border-collapse: collapse; width: 100%; }
-    td { padding: 4px; }
-    hr { border: none; border-top: 1px solid #999; }
-    a { color: #004080; }
+    <style>
+        /* --- ALLGEMEINE GRUNDLAGEN --- */
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f9; /* Dezenter Hintergrund */
+            color: #333;
+            padding: 20px;
+        }
 
+        /* --- HAUPTÜBERSCHRIFTEN & INFOS --- */
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        p {
+            text-align: center;
+            margin: 2px 0;
+            color: #555;
+        }
 
-    /* CSS für das schöne Design */
-    .energy-table {
-        width: 400px; /* Feste Breite für Übersichtlichkeit */
-        margin: 20px auto;
-        border-collapse: collapse;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-        border-radius: 10px;
-        overflow: hidden;
-        background-color: #ffffff;
-    }
+        /* --- HARMONISIERTE TABELLEN BASIS --- */
+        .energy-table, .container table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 1.1em;
+        }
 
-    .energy-table caption {
-        font-size: 1.4em;
-        font-weight: bold;
-        padding: 15px;
-        color: #2c3e50;
-        caption-side: top;
-        text-align: center;
-    }
+        /* Allgemeine Zellen-Einstellungen */
+        .energy-table td, .energy-table th, .container td {
+            padding: 8px 15px; /* Einheitlicher Abstand */
+            border-bottom: 1px solid #ecf0f1;
+            vertical-align: middle;
+        }
 
-    .energy-table th, .energy-table td {
-        padding: 12px 20px;
-        text-align: left;
-        border-bottom: 1px solid #ecf0f1;
-    }
+        /* Links in den Tabellen */
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
 
-    /* Kopfzeile (optional, hier als erste Spalte definiert) */
-    .energy-table th {
-        background-color: #3498db; /* Dunkelblau als Header-Farbe */
-        color: white;
-        font-weight: 600;
-        width: 60%;
-    }
+        /* --- (1) ENERGIEFLUSS-ZUSAMMENFASSUNG (OBERE TABELLE) --- */
+        .energy-table {
+            max-width: 500px;
+            margin: 30px auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            background-color: #ffffff;
+        }
+        .energy-table caption {
+            font-size: 1.6em;
+            font-weight: bold;
+            padding: 10px 0;
+            color: #2c3e50;
+        }
+        .energy-table th {
+            text-align: left;
+            background-color: #f8f9fa; /* Heller Hintergrund für Beschreibung */
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        .energy-table td {
+            text-align: right;
+            font-weight: bold;
+        }
+        /* Farbkodierung der Zeilen */
+        .buy-row td { color: #e74c3c; } /* Rot für Bezug */
+        .sell-row td { color: #2ecc71; } /* Grün für Einspeisung */
+        .consumption-row td { color: #f39c12; } /* Orange für Verbrauch */
 
-    /* Datenzelle für die Werte */
-    .energy-table td {
-        font-weight: bold;
-        color: #2c3e50;
-        background-color: #f8f9fa;
-        text-align: right; /* Werte rechtsbündig ausrichten */
-        font-size: 1.1em;
-        width: 40%;
-    }
+        /* Einheit (W) */
+        .energy-unit {
+            font-size: 0.8em;
+            font-weight: normal;
+            margin-left: 5px;
+        }
 
-    /* Spezielle Farben für besseres Verständnis */
-    .buy-row td { color: #e74c3c; } /* Rot für Bezug */
-    .sell-row td { color: #2ecc71; } /* Grün für Einspeisung */
-    .consumption-row td { color: #f39c12; } /* Orange für Verbrauch */
+        /* --- (2) SOURCES/SINKS DETAIL-TABELLEN --- */
+        .container {
+            display: flex;
+            flex-wrap: wrap; /* Wichtig für Responsivität */
+            justify-content: center;
+            gap: 30px;
+            max-width: 1100px;
+            margin: 20px auto;
+        }
+        .left, .right {
+            flex: 1;
+            min-width: 350px; /* Mindestbreite, bevor sie untereinander springen */
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+        }
+        h2 {
+            text-align: center;
+            margin-top: 0;
+            padding-bottom: 10px;
+            font-size: 1.6em;
+            border-bottom: 3px solid;
+            margin-bottom: 15px;
+        }
+        .left h2 { border-bottom-color: #2ecc71; color: #2ecc71; } /* Grün für Sources */
+        .right h2 { border-bottom-color: #e74c3c; color: #e74c3c; } /* Rot für Sinks */
 
-    /* Die "W" Einheit soll etwas kleiner sein */
-    .energy-unit {
-        font-size: 0.8em;
-        font-weight: normal;
-        margin-left: 5px;
-    }
-  </style>
+        /* Detail-Tabellen Zellen-Struktur */
+        .container td:nth-child(1) { /* Beschriftung */
+            text-align: right;
+            padding-right: 15px;
+            color: #555;
+            width: 70%;
+        }
+        .container td:nth-child(2) { /* = */
+            text-align: center;
+            width: 10px;
+            color: #aaa;
+        }
+        .container td:nth-child(3) { /* Wert */
+            font-weight: bold;
+            text-align: right;
+            color: #333;
+            width: 30%;
+        }
+
+        /* Trennlinie */
+        .container hr {
+            border: 0;
+            height: 1px;
+            background-color: #bdc3c7;
+            margin: 8px 0;
+        }
+        .container tr:last-child td { border-bottom: none; } /* Letzte Zeile ohne Rand */
+
+        /* Total Zeilen Hervorhebung */
+        .left tr:last-child td {
+            background-color: #e8f5e9;
+            border-top: 2px solid #2ecc71;
+            font-size: 1.2em;
+        }
+        .right tr:last-child td {
+            background-color: #fbecec;
+            border-top: 2px solid #e74c3c;
+            font-size: 1.2em;
+        }
+
+        /* Mobile Optimierung: Stapeln unter 768px */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .left, .right {
+                min-width: 90%;
+            }
+        }
+    </style>
 </head>
 <body>
 
@@ -93,96 +174,115 @@
 <p>Status: <span id="STATE_OF_OPERATION">_</span></p>
 
 <table class="energy-table">
-        <caption>Aktueller Energiefluss</caption>
-        <tbody>
-            <tr class="buy-row">
-                <th scope="row">Bezug aus dem Netz <a id="FRONIUS_ADR" href="#">(Grid)</a></th>
-                <td><span id="P_BUY_GRID">_</span> <span class="energy-unit">W</span></td>
-            </tr>
+    <caption>Aktueller Energiefluss (Netz & Verbrauch)</caption>
+    <tbody>
+        <tr class="buy-row">
+            <th scope="row">Bezug aus dem Netz <a id="FRONIUS_ADR" href="#">(Grid)</a></th>
+            <td><span id="P_BUY_GRID">_</span> <span class="energy-unit">W</span></td>
+        </tr>
+        <tr class="sell-row">
+            <th scope="row">Einspeisung ins Netz <a id="FRONIUS_ADR2" href="#">(Grid)</a></th>
+            <td><span id="P_SELL_GRID">_</span> <span class="energy-unit">W</span></td>
+        </tr>
+        <tr class="consumption-row">
+            <th scope="row">Eigenverbrauch</th>
+            <td><span id="POWER_CONSUMED">_</span> <span class="energy-unit">W</span></td>
+        </tr>
+    </tbody>
+</table>
 
-            <tr class="sell-row">
-                <th scope="row">Einspeisung ins Netz <a id="FRONIUS_ADR2" href="#">(Grid)</a></th>
-                <td><span id="P_SELL_GRID">_</span> <span class="energy-unit">W</span></td>
-            </tr>
-
-            <tr class="consumption-row">
-                <th scope="row">Eigenverbrauch</th>
-                <td><span id="POWER_CONSUMED">_</span> <span class="energy-unit">W</span></td>
-            </tr>
-        </tbody>
-    </table>
 <div class="container">
-  <div class="left">
-    <h2>Sources</h2>
-    <table>
-      <tr><td align="right"><a id="ROOF_LINK" href="#">Roof</a></td><td>=</td><td align="right" id="P_ROOF">_</td></tr>
-      <tr><td align="right"><a id="GARAGE_INVERTER_LINK" href="#">Garage Inverter</a></td><td>=</td><td align="right" id="GARAGE_INVERTER_POWER">_</td></tr>
-      <tr><td align="right"><a id="BATTERY_INVERTER_LINK" href="#">Battery Inverter</a></td><td>=</td><td align="right" id="BATTERY_INVERTER_POWER">_</td></tr>
-      <tr><td align="right"><a id="BALKON_INVERTER_LINK" href="#">Balkon Inverter</a></td><td>=</td><td align="right" id="BALKON_INVERTER_POWER">_</td></tr>
-      <tr><td align="right">Venus1 discharge</td><td>=</td><td align="right" id="VENUS1_DISCHARGE_POWER">_</td></tr>
-      <tr><td align="right">Venus2 discharge</td><td>=</td><td align="right" id="VENUS2_DISCHARGE_POWER">_</td></tr>
-      <tr><td colspan="3"><hr></td></tr>
-      <tr><td align="right">Total Source</td><td>=</td><td align="right" id="POWER_SOURCES">_</td></tr>
-    </table>
-  </div>
+    <div class="left">
+        <h2>Sources <span style="font-size: 0.6em;">(Erzeugung/Einspeisung)</span></h2>
+        <table>
+            <tr><td><a id="ROOF_LINK" href="#">Roof</a></td><td>=</td><td id="P_ROOF">_ W</td></tr>
+            <tr><td><a id="GARAGE_INVERTER_LINK" href="#">Garage Inverter</a></td><td>=</td><td id="GARAGE_INVERTER_POWER">_ W</td></tr>
+            <tr><td><a id="BATTERY_INVERTER_LINK" href="#">Battery Inverter</a></td><td>=</td><td id="BATTERY_INVERTER_POWER">_ W</td></tr>
+            <tr><td><a id="BALKON_INVERTER_LINK" href="#">Balkon Inverter</a></td><td>=</td><td id="BALKON_INVERTER_POWER">_ W</td></tr>
+            <tr><td>Venus1 discharge</td><td>=</td><td id="VENUS1_DISCHARGE_POWER">_ W</td></tr>
+            <tr><td>Venus2 discharge</td><td>=</td><td id="VENUS2_DISCHARGE_POWER">_ W</td></tr>
 
-  <div class="right">
-    <h2>Sinks</h2>
-    <table>
-      <tr><td align="right"><a id="BATTERY_CHARGER1_LINK" href="#">Battery Charger1</a></td><td>=</td><td align="right" id="BATTERY_CHARGER1_POWER">_</td></tr>
-      <tr><td align="right"><a id="BATTERY_CHARGER2_LINK" href="#">Battery Charger2</a></td><td>=</td><td align="right" id="BATTERY_CHARGER2_POWER">_</td></tr>
-      <tr><td align="right">Venus1 charge</td><td>=</td><td align="right" id="VENUS1_CHARGE_POWER">_</td></tr>
-      <tr><td align="right">Venus2 charge</td><td>=</td><td align="right" id="VENUS2_CHARGE_POWER">_</td></tr>
-      <tr><td colspan="3"><hr></td></tr>
-      <tr><td align="right">Total Sink</td><td>=</td><td align="right" id="POWER_SINKS">_</td></tr>
-    </table>
-  </div>
+            <tr><td colspan="3"><hr></td></tr>
+
+            <tr><td>Total Source</td><td>=</td><td id="POWER_SOURCES">_ W</td></tr>
+        </table>
+    </div>
+
+    <div class="right">
+        <h2>Sinks <span style="font-size: 0.6em;">(Verbrauch/Ladung)</span></h2>
+        <table>
+            <tr><td><a id="BATTERY_CHARGER1_LINK" href="#">Battery Charger1</a></td><td>=</td><td id="BATTERY_CHARGER1_POWER">_ W</td></tr>
+            <tr><td><a id="BATTERY_CHARGER2_LINK" href="#">Battery Charger2</a></td><td>=</td><td id="BATTERY_CHARGER2_POWER">_ W</td></tr>
+            <tr><td>Venus1 charge</td><td>=</td><td id="VENUS1_CHARGE_POWER">_ W</td></tr>
+            <tr><td>Venus2 charge</td><td>=</td><td id="VENUS2_CHARGE_POWER">_ W</td></tr>
+
+            <tr><td colspan="3"><hr></td></tr>
+
+            <tr><td>Total Sink</td><td>=</td><td id="POWER_SINKS">_ W</td></tr>
+        </table>
+    </div>
 </div>
 
 <br>
-<a id="BMS1_INFO" href="#">Battery1 Status</a><br><br>
-<a id="BMS1_BALANCE_TOGGLE" href="#">Battery1 Balancer TOGGLE</a><br>
-<a id="BMS1_BALANCE_ON" href="#">Battery1 Balancer ON</a><br>
-<a id="BMS1_BALANCE_OFF" href="#">Battery1 Balancer OFF</a><br><br>
+<div style="text-align: center; margin-top: 10px;">
+    <a id="BMS1_INFO" href="#">Battery1 Status</a> |
+    <a id="BMS1_BALANCE_TOGGLE" href="#">Balancer TOGGLE</a> |
+    <a id="BMS1_BALANCE_ON" href="#">Balancer ON</a> |
+    <a id="BMS1_BALANCE_OFF" href="#">Balancer OFF</a>
+    <br><br>
+    <a href="http://battery-control:8086">InfluxDB Dashboard</a>
+</div>
 
-<a href="http://battery-control:8086">Influx</a>
 
 <script>
+// Funktion zur Aktualisierung der Daten (unverändert)
 async function update() {
-  try {
-    const res = await fetch('/PVBattery.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error(res.status);
-    const d = await res.json();
+    try {
+        const res = await fetch('/PVBattery.json', { cache: 'no-cache' });
+        if (!res.ok) throw new Error(res.status);
+        const d = await res.json();
 
-    const ids = [
-      "Vx_y_z","DATE","SUNRISE","SUNSET","STATE_OF_OPERATION",
-      "P_BUY_GRID","P_SELL_GRID","POWER_CONSUMED",
-      "P_ROOF","GARAGE_INVERTER_POWER","BATTERY_INVERTER_POWER",
-      "BALKON_INVERTER_POWER",
-      "VENUS1_DISCHARGE_POWER","VENUS2_DISCHARGE_POWER",
-      "POWER_SOURCES",
-      "BATTERY_CHARGER1_POWER","BATTERY_CHARGER2_POWER",
-      "VENUS1_CHARGE_POWER",
-      "VENUS2_CHARGE_POWER","POWER_SINKS"
-    ];
-    ids.forEach(id => { if(d[id]!==undefined) document.getElementById(id).textContent=d[id]; });
+        // Liste der IDs, die nur Textinhalt erhalten
+        const ids = [
+            "Vx_y_z","DATE","SUNRISE","SUNSET","STATE_OF_OPERATION",
+            "P_BUY_GRID","P_SELL_GRID","POWER_CONSUMED",
+            "P_ROOF","GARAGE_INVERTER_POWER","BATTERY_INVERTER_POWER",
+            "BALKON_INVERTER_POWER",
+            "VENUS1_DISCHARGE_POWER","VENUS2_DISCHARGE_POWER",
+            "POWER_SOURCES",
+            "BATTERY_CHARGER1_POWER","BATTERY_CHARGER2_POWER",
+            "VENUS1_CHARGE_POWER",
+            "VENUS2_CHARGE_POWER","POWER_SINKS"
+        ];
 
-    const link=(id,url)=>{const e=document.getElementById(id);if(e&&url)e.href='http://'+url;};
-    link("FRONIUS_ADR", d.FRONIUS_ADR);
-    link("FRONIUS_ADR2", d.FRONIUS_ADR);
-    link("ROOF_LINK", d.FRONIUS_ADR);
-    link("GARAGE_INVERTER_LINK", d.GARAGE_INVERTER);
-    link("BATTERY_INVERTER_LINK", d.BATTERY_INVERTER);
-    link("BALKON_INVERTER_LINK", d.BALKON_INVERTER);
-    link("BATTERY_CHARGER1_LINK", d.BATTERY_CHARGER1);
-    link("BATTERY_CHARGER2_LINK", d.BATTERY_CHARGER2);
+        // Fügt die W-Einheit nur zu den Power-Werten hinzu
+        const powerIds = ids.filter(id => id.includes("POWER") || id.includes("GRID") || id === "P_ROOF");
 
-    ["BMS1_INFO","BMS1_BALANCE_TOGGLE","BMS1_BALANCE_ON","BMS1_BALANCE_OFF"].forEach(id=>{
-      const e=document.getElementById(id); if(e&&d[id]) e.href=d[id];
-    });
-  } catch(e){ console.warn("update failed:", e); }
+        ids.forEach(id => {
+            const e = document.getElementById(id);
+            if(e && d[id]!==undefined) {
+                // Fügt die Einheit W bei den Power-Werten hinzu
+                e.textContent = powerIds.includes(id) ? `${d[id]} W` : d[id];
+            }
+        });
+
+        const link=(id,url)=>{const e=document.getElementById(id);if(e&&url)e.href='http://'+url;};
+        link("FRONIUS_ADR", d.FRONIUS_ADR);
+        link("FRONIUS_ADR2", d.FRONIUS_ADR);
+        link("ROOF_LINK", d.FRONIUS_ADR);
+        link("GARAGE_INVERTER_LINK", d.GARAGE_INVERTER);
+        link("BATTERY_INVERTER_LINK", d.BATTERY_INVERTER);
+        link("BALKON_INVERTER_LINK", d.BALKON_INVERTER);
+        link("BATTERY_CHARGER1_LINK", d.BATTERY_CHARGER1);
+        link("BATTERY_CHARGER2_LINK", d.BATTERY_CHARGER2);
+
+        ["BMS1_INFO","BMS1_BALANCE_TOGGLE","BMS1_BALANCE_ON","BMS1_BALANCE_OFF"].forEach(id=>{
+            const e=document.getElementById(id); if(e&&d[id]) e.href=d[id];
+        });
+    } catch(e){ console.warn("update failed:", e); }
 }
 
+// Initialer Aufruf und Intervall
 update();
 setInterval(update, 5000);
 </script>
