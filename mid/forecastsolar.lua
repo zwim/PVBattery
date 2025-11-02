@@ -1,7 +1,8 @@
 -- ==============================================================
 -- forecast_solar_aggregator.lua
 -- Aggregiert die stündliche PV-Prognose (kWh) von forecast.solar
--- für mehrere Flächen (Planes).
+-- für mehrere Flächen (Planes) und konvertiert Zeitstempel in
+-- die LOKALE ZEITZONE der Maschine.
 -- Abhängig von: LuaSocket, dkjson
 -- ==============================================================
 
@@ -22,7 +23,7 @@ local BASE_URL = "https://api.forecast.solar/estimate/"
 -- Hilfsfunktionen
 ------------------------------------------------------------
 
--- Wiederverwendete HTTP GET Funktion (aus deiner Vorlage)
+-- Wiederverwendete HTTP GET Funktion
 local function http_get(url)
     local response = {}
     local response_headers = {}
@@ -65,12 +66,40 @@ local function read_file(path)
     return content
 end
 
+-- NEUE HILFSFUNKTION: Konvertiert UTC-String zu lokalem Zeit-String
+function ForecastSolarAggregator:_utc_to_local_string(utc_str)
+    -- Muster: "YYYY-MM-DD HH:MM:SS"
+    local year, month, day, hour, min, sec = utc_str:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+
+    if not year then return nil end
+
+    -- 1. Erstelle eine UTC-Zeittabelle
+    local utc_table = {
+        year = tonumber(year),
+        month = tonumber(month),
+        day = tonumber(day),
+        hour = tonumber(hour),
+        min = tonumber(min),
+        sec = tonumber(sec)
+    }
+
+    -- 2. Konvertiere UTC-Tabelle in UTC-Epoch-Zeitstempel
+    -- Das '!' in os.time erzeugt den Epoch-Wert basierend auf der Annahme,
+    -- dass die Tabelle eine UTC-Zeit repräsentiert.
+    local utc_epoch = os.time(utc_table)
+
+    -- 3. Formatiere den UTC-Epoch-Zeitstempel in die lokale Zeit des Systems.
+    -- Wenn das Format-String kein '!' enthält, verwendet os.date die lokale Zeitzone (CET/CEST).
+    local local_str = os.date("%Y-%m-%d %H:%M:%S", utc_epoch)
+
+    return local_str, utc_epoch
+end
+
 ------------------------------------------------------------
 -- Konstruktor
 ------------------------------------------------------------
 
 -- Konfiguriere die Flächen, die abgefragt werden sollen
--- Die Konfiguration muss alle Flächen enthalten, da die Klasse die Summe bildet.
 function ForecastSolarAggregator.new(cfg)
     local self = setmetatable({}, ForecastSolarAggregator)
 
@@ -84,15 +113,12 @@ function ForecastSolarAggregator.new(cfg)
     }
 
     -- Cache-Struktur: Speichert die aggregierten Ergebnisse
+    -- Die Schlüssel von hourly_kwh sind jetzt LOKALE ZEIT-STRINGS
     self.cache = {
         timestamp = 0,
-        hourly_kwh = nil, -- Speichert die summierten { timestamp: kwh }
+        hourly_kwh = nil, -- Speichert die summierten { local_timestamp: kwh }
         error = nil
     }
-
-    self.latitude = self.latitude or 47.51
-    self.longitude = self.longitude or 12.09
-
 
     self:_load_cache()
 
@@ -123,7 +149,6 @@ end
 -- Hauptlogik: Abruf & Aggregation
 ------------------------------------------------------------
 
--- API des ursprünglichen Codes: Ersetzt die item/id-Logik
 function ForecastSolarAggregator:fetch()
     local now = os.time()
     local is_cached = false
@@ -131,12 +156,13 @@ function ForecastSolarAggregator:fetch()
     -- 1. Cache-Prüfung (Einfache Zeitprüfung)
     if self.cache.hourly_kwh and (now - self.cache.timestamp) < self.config.cachetime then
         is_cached = true
+        -- WICHTIG: Rückgabe der LOKAL-KEY-Aggregation
         return self.cache.hourly_kwh, nil, is_cached
     end
 
     print("TRUE FETCH: Starte Abruf und Aggregation von " .. #self.planes .. " Flächen.")
 
-    local total_hourly_kwh = {} -- { timestamp_string: kwh_value }
+    local total_hourly_kwh = {} -- { local_timestamp_string: kwh_value }
     local last_error = nil
 
     -- 2. Iteriere über alle Flächen und frage sie einzeln ab (Aggregate-Logik)
@@ -155,7 +181,7 @@ function ForecastSolarAggregator:fetch()
         if err then
             print("Fehler bei Fläche " .. i .. ": " .. err)
             last_error = err
-            -- Wir brechen hier ab, da eine unvollständige Summe sinnlos ist
+            -- Im Fehlerfall alte Daten zurückgeben, falls vorhanden
             self.cache.timestamp = now
             self.cache.error = err
             self:_save_cache()
@@ -173,10 +199,17 @@ function ForecastSolarAggregator:fetch()
         end
 
         -- Aggregation der stündlichen Watt-Werte
-        for timestamp, watts in pairs(data.result.watts) do
-            -- Umrechnung: Watt (W) zu Kilowattstunden (kWh)
-            local kwh = watts / 1000
-            total_hourly_kwh[timestamp] = (total_hourly_kwh[timestamp] or 0) + kwh
+        for utc_timestamp, watts in pairs(data.result.watts) do
+
+            -- NEUE LOGIK: Konvertiere den UTC-String in den lokalen Zeit-String
+            local local_timestamp = self:_utc_to_local_string(utc_timestamp)
+
+            if local_timestamp then
+                -- Umrechnung: Watt (W) zu Kilowattstunden (kWh)
+                local kwh = watts / 1000
+                -- Speichere unter dem LOKALEN Zeitstempel
+                total_hourly_kwh[local_timestamp] = (total_hourly_kwh[local_timestamp] or 0) + kwh
+            end
         end
     end
 
@@ -191,7 +224,6 @@ end
 
 -- Gibt die verarbeiteten Daten zurück (die Aggregationstabelle)
 function ForecastSolarAggregator:get_hourly_forecast()
-    -- Sortieren ist für die Ausgabe sinnvoll, aber nicht für die Speicherung/Logik
     local hourly_kwh_table = self.cache.hourly_kwh or {}
     local sorted_kwh = {}
 
@@ -200,8 +232,9 @@ function ForecastSolarAggregator:get_hourly_forecast()
         table.insert(sorted_kwh, { timestamp = ts, kwh = kwh })
     end
 
+    -- Sortiere nach dem lokalen Zeitstempel-String (der jetzt der Schlüssel ist)
     table.sort(sorted_kwh, function(a, b)
-        return a.timestamp < b.timestamp -- Sortiere nach dem Zeitstempel-String
+        return a.timestamp < b.timestamp
     end)
 
     return sorted_kwh
@@ -211,20 +244,28 @@ end
 -- Hilfsfunktion für die Berechnung des restlichen Ertrags
 function ForecastSolarAggregator:get_remaining_daily_forecast_yield()
     local now_epoch = os.time()
-    local today_date = os.date("%Y-%m-%d", now_epoch)
+
+    -- Der Tag wird jetzt basierend auf der LOKALEN Zeit bestimmt
+    local today_date_local = os.date("%Y-%m-%d", now_epoch)
     local remaining_kwh = 0
 
     local hourly_kwh_table = self.cache.hourly_kwh or {}
 
-    for timestamp_str, kwh in pairs(hourly_kwh_table) do
-        -- Prüfe, ob der Eintrag von heute ist und noch in der Zukunft liegt
-        if timestamp_str:sub(1, 10) == today_date then
-            -- Konvertiere den Zeitstempel-String in Epoch
-            -- Muster: "YYYY-MM-DD HH:MM:SS"
-            local year, month, day, hour, min, sec = timestamp_str:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    if #hourly_kwh_table == 0 then
+        print("[Forecastsolar] Fehler: Keine gültigen Daten.")
+        return math.huge
+    end
 
-            -- Erstelle eine Zeittabelle (UTC-basiert, da forecast.solar UTC-Strings liefert)
-            local ts_table = {
+    for local_timestamp_str, kwh in pairs(hourly_kwh_table) do
+        -- 1. Prüfe, ob der Eintrag von heute ist (lokal vs. lokal)
+        if local_timestamp_str:sub(1, 10) == today_date_local then
+
+            -- 2. Konvertiere den lokalen Zeitstempel-String in Epoch
+            -- Hier nutzen wir die String-zu-Epoch-Umwandlung, da der Schlüssel jetzt LOKAL ist.
+            local year, month, day, hour, min, sec = local_timestamp_str:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+
+            -- Erstelle eine Zeittabelle (Lokale Zeit)
+            local ts_table_local = {
                 year = tonumber(year),
                 month = tonumber(month),
                 day = tonumber(day),
@@ -232,29 +273,16 @@ function ForecastSolarAggregator:get_remaining_daily_forecast_yield()
                 min = tonumber(min),
                 sec = tonumber(sec)
             }
+            -- os.time() konvertiert die LOKALE Zeittabelle in eine Epoch-Zahl
+            local ts_epoch = os.time(ts_table_local)
 
-            -- WICHTIG: os.time() konvertiert die Zeittabelle in eine Epoch-Zahl.
-            -- Verwenden Sie 'os.time(ts_table)' wenn Sie davon ausgehen, dass der UTC-String
-            -- bereits die lokale Zeit Ihrer Maschine widerspiegelt (was die einfachste,
-            -- aber technisch unsauberste Methode ist).
-            -- Oder verwenden Sie eine benutzerdefinierte UTC-zu-Epoch-Funktion,
-            -- wenn Ihre Lua-Umgebung UTC-Zeiten explizit unterstützt (z.B. os.time(ts_table)).
-
-            -- Wir nutzen die lokale Konvertierung, da die Zeitverschiebung meist
-            -- von der Umgebung automatisch gehandhabt wird:
-            local ts_epoch = os.time(ts_table) -- <--- KORREKTUR HIER!
-            -- Da forecast.solar stündliche Werte liefert (z.B. 15:00:00),
-            -- zählt der Wert für die gesamte Stunde ab diesem Zeitpunkt.
-            -- Wir prüfen, ob die Stunde begonnen hat.
-            if ts_epoch >= now_epoch then
+            -- 3. Prüfe, ob die Stunde begonnen hat.
+            if ts_epoch and ts_epoch >= now_epoch then
                  remaining_kwh = remaining_kwh + kwh
             end
         end
     end
 
-    -- Wenn keine Daten vorhanden sind, ist es ratsam, einen sicheren Wert zurückzugeben.
-    -- Math.huge ist eher für Routing. 0 ist hier sicherer, um keine unnötigen
-    -- Verbraucher zu starten.
     return remaining_kwh > 0 and remaining_kwh or 0
 end
 
@@ -274,11 +302,12 @@ function ForecastSolarAggregator:print_latest()
     end
 
     print("\n--- Aggregierter Forecast.Solar Ertrag ---")
-    print(string.format("Status: %s. Zuletzt aktualisiert: %s", source_status, os.date("%H:%M:%S", self.cache.timestamp)))
+    print(string.format("Status: %s. Zuletzt aktualisiert (Lokal): %s", source_status, os.date("%Y-%m-%d %H:%M:%S", self.cache.timestamp)))
     print("----------------------------------------")
 
     for _, entry in ipairs(data_array) do
-        print(string.format("%s: %.3f kWh (Aggregiert)", entry.timestamp, entry.kwh))
+        -- Der Schlüssel entry.timestamp ist jetzt der LOKALE Zeitstempel-String
+        print(string.format("%s (Lokal): %.3f kWh (Aggregiert)", entry.timestamp, entry.kwh))
     end
     print("----------------------------------------")
 end
@@ -294,8 +323,6 @@ local function example()
 
     local cfg = {
         -- Hier definierst du ALLE deine PV-Flächen.
-        -- Die Aggregator-Klasse fragt alle ab und summiert.
-        -- 0° Süd, -90° Ost
         planes = {
             {
                 name = "Dach",
@@ -314,11 +341,6 @@ local function example()
                 kwp = 6.9
             },
             -- Optional: Mehr Flächen hinzufügen
-            -- {
-            --     name = "Gartenhaus-Süd",
-            --     latitude = LAT, longitude = LON,
-            --     declination = 15, azimuth = 180, kwp = 1.0
-            -- }
         },
         cachefile = "/tmp/forecast_solar_agg.json",
         cachetime = 1 * 3600, -- 1 Stunde

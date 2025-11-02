@@ -94,6 +94,8 @@ function CustomBattery:updateInternalState()
         elseif self:getInternalState() == internal_state.cell_diff_low
             and self.BMS.v.CellDiff > config.max_cell_diff - config.max_cell_diff_hysteresis then
             return self:setInternalState(internal_state.cell_diff_low)
+        elseif self.BMS:isBatteryFull() then
+            return self:setInternalState(internal_state.full)
         end
     else
         return self:setInternalState(internal_state.shutdown)
@@ -134,7 +136,7 @@ function CustomBattery:getState()
         result.can_take = true
         self:give(0) -- disables bsm output completely, but can be charged
         if i_state == internal_state["rescue_charge"] then
-            self:take("rescue")
+--            self:take("rescue")
         end
 
     elseif i_state == internal_state["full"]

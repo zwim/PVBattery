@@ -14,9 +14,6 @@ local json   = require("dkjson")
 local Solar = {}
 Solar.__index = Solar
 
-local TEST_BODY = [[{"preferredNextApiRequestAt":{"secondOfHour":2927,"epochTimeUtc":1762022927},"status":0,"iLastPredictionGenerationEpochTime":1762020850,"weather_source_text":"Kurzfristig (3 Tage): Powered by <a href=\"https://www.weatherapi.com/\" title=\"Free Weather API\">WeatherAPI.com</a> und Langfristig (10 Tage): Powered by <a href=\"https://www.visualcrossing.com/weather-data\" target=\"_blank\">Visual Crossing Weather</a>","datalinename":"Austria > Kirchbichl","data":{"1762024800":[1762024800,0,0],"1762028400":[1762028400,0,0.0],"1762032000":[1762032000,0.205,0.205],"1762035600":[1762035600,1.298,1.503],"1762039200":[1762039200,2.738,4.241],"1762042800":[1762042800,3.977,8.218],"1762046400":[1762046400,4.898,13.116],"1762050000":[1762050000,5.487,18.603],"1762053600":[1762053600,5.377,23.98],"1762057200":[1762057200,4.436,28.416],"1762060800":[1762060800,2.418,30.834],"1762064400":[1762064400,0,30.834],"1762068000":[1762068000,0,0],"1762071600":[1762071600,0.106,0.106],"1762075200":[1762075200,1.127,1.233],"1762078800":[1762078800,2.286,3.519],"1762082400":[1762082400,2.328,5.847],"1762086000":[1762086000,3.878,9.725],"1762089600":[1762089600,2.174,11.899]}}]]
-
-
 ------------------------------------------------------------
 -- Hilfsfunktionen
 ------------------------------------------------------------
@@ -44,20 +41,52 @@ end
 
 local function http_get(url)
     local response = {}
+    local response_headers = {} -- Tabelle zum Speichern der Server-Header
+
+    -- Request senden und Header-Tabelle übergeben
     local res, code = http.request{
         url = url,
         sink = ltn12.sink.table(response),
+        headers = response_headers, -- Header werden hier gespeichert
         timeout = 10
     }
-    if not res then
-        return nil, "HTTP Fehler"
-    end
-    if code ~= 200 then
-        return nil, "HTTP Code: " .. tostring(code)
-    end
-    return table.concat(response), nil
-end
 
+    -- Standard-Rückgabe-Werte vorbereiten
+    local body = table.concat(response)
+    local error_message = nil
+    local retry_after_value = nil
+
+    -- 1. Fehler auf Transportebene prüfen
+    if not res then
+        -- Syntax: nil, "Fehlermeldung", nil
+        return nil, "HTTP Transport-Fehler", nil
+    end
+
+    -- 2. Statuscode prüfen (Nicht-200)
+    if code ~= 200 then
+        -- Bei jedem Fehler prüfen wir, ob Retry-After vorhanden ist
+        -- (Header-Namen sind oft kleingeschrieben: "retry-after")
+        local raw_retry = response_headers["retry-after"]
+        if raw_retry then
+            -- Versuch, den Wert in eine Zahl umzuwandeln. Bei Fehlschlag ist er nil.
+            retry_after_value = tonumber(raw_retry)
+        end
+
+        -- Bei 429 geben wir einen spezifischen Fehler und den Retry-Wert zurück
+        if code == 429 then
+            -- Syntax: nil, "429 Too Many Requests", Wartezeit
+            return nil, "429 Too Many Requests", retry_after_value
+        else
+            -- Bei anderen Fehlern (z.B. 404, 500) geben wir nur den Code zurück
+            -- Syntax: nil, "HTTP Code: 500", nil
+            return nil, "HTTP Code: " .. tostring(code), nil
+        end
+    end
+
+    -- 3. Erfolg (Code 200)
+    -- Syntax: body, nil, nil
+    return body, nil, nil
+end
 ------------------------------------------------------------
 -- Konstruktor
 ------------------------------------------------------------
@@ -189,11 +218,6 @@ function Solar:_process_data()
     return processed_data
 end
 
-function Solar:_clean_cache_and_process_data()
-    self:_clean_cache()
-    return self:_process_data()
-end
-
 ------------------------------------------------------------
 -- Hauptfunktion: fetch()
 ------------------------------------------------------------
@@ -205,10 +229,10 @@ function Solar:fetch()
     if self.cache.data then
         -- call at least config.cachetime later and not before the next preferred request time
         if (now - self.cache.timestamp) < self.config.cachetime or
-            now < self.cache.preferredNextApiRequestAt.epochTimeUtc + self.config.cachetime * 3600 then
+            now < self.cache.preferredNextApiRequestAt.epochTimeUtc + self.config.cachetime then
             is_cached = true
             -- Rückgabe des *verarbeiteten* Caches
-            return self:_clean_cache_and_process_data(), nil, is_cached
+            return self:_process_data(), nil, is_cached
         end
     end
 
@@ -230,7 +254,9 @@ function Solar:fetch()
         -- Rückgabe des *verarbeiteten* alten Caches oder leeres Array bei Fehler
         print("postpone next fetch")
         self.cache.timestamp = now
-        return self:_clean_cache_and_process_data(), err, is_cached
+        self:_save_cache()
+
+        return self:_process_data(), err, is_cached
     end
 
     -- Safe JSON decode
@@ -239,7 +265,6 @@ function Solar:fetch()
         local error_msg = result or "JSON-Struktur ungültig."
         print("JSON decode error:", error_msg)
         self.cache.error = error_msg
-        self:_save_cache()
         -- Rückgabe des *verarbeiteten* alten Caches
         return self:_process_data(), error_msg, is_cached
     end
@@ -249,10 +274,9 @@ function Solar:fetch()
     self.cache.timestamp = now
     self.cache.error = nil
 
-    self:_save_cache()
-
+	self:_clean_cache()
     -- Rückgabe des *verarbeiteten* neuen Datensatzes
-    return self:_clean_cache_and_process_data(), nil, false
+    return self:_process_data(), nil, false
 end
 
 -- no forecast, returns math.huge
@@ -260,7 +284,7 @@ function Solar:get_remaining_daily_forecast_yield()
     local data_array = self:_process_data()
 
     if #data_array == 0 then
-        print("Fehler: Keine gültigen Daten.")
+        print("[Solarprognose] Fehler: Keine gültigen Daten.")
         if self.cache.error then print("Letzter Fehler:", self.cache.error) end
 
         return math.huge
@@ -304,11 +328,11 @@ function Solar:print_latest()
         -- Umrechnung der dezimalen Stunde zurück in eine lesbare UTC-Zeit für die Ausgabe (optional)
         local total_seconds = entry.hour * 3600
         local t_epoch = self:_get_midnight_epoch() + total_seconds
-        local timeStamp_utc = os.date("%Y-%m-%d %H:%M:%S", t_epoch)
+        local timeStamp_local = os.date("%Y-%m-%d %H:%M:%S", t_epoch)
 
-        print(string.format("Stunde %.2f (UTC: %s) -> %.3f kW, Kumulativ: %.3f kWh",
+        print(string.format("Stunde %.2f (lokal: %s) -> %.3f kW, Kumulativ: %.3f kWh",
             entry.hour,
-            timeStamp_utc,
+            timeStamp_local,
             entry.power_kw,
             entry.cumulative_kwh
         ))
@@ -328,7 +352,7 @@ local function example()
         id = "14336",
         typ = "hourly",
         cachefile = "/tmp/wr1.json",
-   		cachetime = 3, -- in hours
+   		cachetime = 1 * 3600, -- in hours
     }
 
     local wr2 = Solar.new{
@@ -339,12 +363,13 @@ local function example()
         id = "14337",
         typ = "hourly",
         cachefile = "/tmp/wr2.json",
-   		cachetime = 3, -- in hours
+   		cachetime = 1*3600,
     }
 
     print("Starte Abruf für WR1 (Dach)...")
     -- d1 ist jetzt das Array von Objekten
     local d1, err1, cached1 = wr1:fetch()
+    d1, err1, cached1 = wr1:fetch()
     if d1 and #d1 > 0 then
         wr1:print_latest()
         -- Beispielzugriff auf das erste Element des Array:
@@ -365,6 +390,17 @@ local function example()
     else
         print("Fehler beim Abruf WR2:", err2, "kWh")
     end
+
+	local gesamt = {}
+	for i, v in ipairs(d1) do
+		gesamt[i] = {}
+		gesamt[i].hour = v.hour
+		gesamt[i].power_kw = v.power_kw + d2[i].power_kw
+		gesamt[i].cumulative_kwh = v.cumulative_kwh + d2[i].cumulative_kwh
+		print(string.format("Stunde %4.2f -> %6.3f, Kumulativ: %4.3f",
+				v.hour, gesamt[i].power_kw, gesamt[i].cumulative_kwh))
+	end
+
 end
 
 if arg[0]:find("solarprognose.lua") then

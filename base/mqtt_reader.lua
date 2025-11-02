@@ -207,9 +207,14 @@ function mqtt_reader:init(uri, id, _retry_count)
             util.sleepTime(3 + _retry_count)
 
             -- Saubere Trennung des Sockets, dann neuer Connect-Versuch
-            self.client:disconnect()
+            local ok, err = self.client:disconnect()
+            if not ok then
+                log(0, "MQTT disconnect error:", err)
+                log(0, "exit program")
+                os.exit(12, true)
+            end
             util.sleepTime(5)
-            -- RUFT DIE ÖFFENTLICHE CONNECT-FUNKTION AUF (KORRIGIERT)
+            -- RUFT DIE ÖFFENTLICHE CONNECT-FUNKTION AUF
             mqtt_reader:connect()
         end,
 

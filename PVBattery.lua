@@ -34,31 +34,7 @@ local EnvertechInverter = require("mid/EnvertechInverter")
 local FroniusInverter = require("mid/FroniusInverter")
 local Homewizard = require("mid/Homewizard")
 local Solarprognose = require("mid/solarprognose")
-
-local SolarModul = {
-    Solarprognose.new{
-        __name = "roof",
-        token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
-        project = "7052",
-        item = "module_filed",
-        id = "14336",
-        typ = "hourly",
-        cachefile = "/tmp/wr1.json",
-		cachetime = 3, -- in hours
-    },
-	Solarprognose.new{
-        __name = "balkon",
-        token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
-        project = "7052",
-        item = "module_field",
-        id = "14337",
-        typ = "hourly",
-        cachefile = "/tmp/wr2.json",
-		cachetime = 3, -- in hours
-    }
-}
-SolarModul[1]:fetch()
-SolarModul[2]:fetch()
+local Forecastsolar = require("mid/forecastsolar")
 
 local PVBattery = BaseClass:extend{
     __name = "PVBattery",
@@ -131,6 +107,8 @@ function PVBattery:init()
 
     self.Inverter = {}
     self.Smartmeter = {}
+
+	self.SolarprognoseModul = {}
     for _, Device in ipairs(config.Device) do
         local typ = Device.typ:lower()
         local brand = Device.brand:lower()
@@ -158,6 +136,16 @@ function PVBattery:init()
             end
         elseif typ == "smartmeter" then
             table.insert(self.Smartmeter, Homewizard:new{Device = Device})
+		elseif typ == "prognose" then
+			if brand == "solarprognose" then
+				table.insert(self.SolarprognoseModul, Solarprognose.new(Device[1]))
+				table.insert(self.SolarprognoseModul, Solarprognose.new(Device[2]))
+				self.SolarprognoseModul[1]:fetch()
+				self.SolarprognoseModul[2]:fetch()
+			elseif brand == "forecast.solar" then
+				self.ForecastsolarModul = Forecastsolar.new(Device.cfg)
+			end
+
         end
     end
 
@@ -178,7 +166,7 @@ function PVBattery:getValues()
 end
 
 local P_exzess_old = 0
-function PVBattery:doTheMagic()
+function PVBattery:doTheMagic(_second_try)
     local battery_string = ""
     local SOC_string = ""
 
@@ -238,7 +226,11 @@ function PVBattery:doTheMagic()
     end
     if clear_any_battery then
         self:log(3, clear_any_battery)
-		return self:doTheMagic() -- call again and leave after that
+		if _second_try then
+			return
+		else
+			return self:doTheMagic(true) -- call again and leave after that
+		end
     end
 
     if math.abs(P_exzess - P_exzess_old) < 10 then
@@ -509,9 +501,16 @@ function PVBattery:main(profiling_runs)
         self:getValues()
 
 		self.expected_yield = 0
-		for _, Prognose in ipairs(SolarModul) do
-			Prognose:fetch()
-			self.expected_yield = self.expected_yield + Prognose:get_remaining_daily_forecast_yield()
+		if SunTime:isDayTime() then
+			for _, Prognose in ipairs(self.SolarprognoseModul) do
+				Prognose:fetch()
+				self.expected_yield = self.expected_yield + Prognose:get_remaining_daily_forecast_yield()
+			end
+		end
+		if self.ForecastsolarModul then
+			self.ForecastsolarModul:fetch()
+			local forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
+			self.expected_yield = math.min(self.expected_yield, forecastsolar_expected_yield)
 		end
 
 		self:log(3, "expected yield", self.expected_yield, "kWh; unused capacity", self.unused_capacity, "kWh")
@@ -535,6 +534,7 @@ function PVBattery:main(profiling_runs)
         if not ok then
             print("Error on write to database", result)
         end
+		self:log(3, "JSON done ...")
 
         self:serverCommands()
 

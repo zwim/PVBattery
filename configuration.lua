@@ -4,6 +4,15 @@ local LOGLEVEL = 3
 local lfs = require("lfs")
 local util = require("base/util")
 
+local position = {
+    name = "Kirchbichl",
+    latitude = 47.5109083,
+    longitude = 12.0855866,
+    altitude = 520,
+    timezone = nil,
+}
+
+
 local configuration = {
     -- Don't change this in a config file.
     -- Use a config file only if it is younger than
@@ -21,13 +30,7 @@ local configuration = {
 
     host = util.hostname(),
 
-    position = {
-        name = "Kirchbichl",
-        latitude = 47.5109083,
-        longitude = 12.0855866,
-        altitude = 520,
-        timezone = nil,
-    },
+    position = position,
 
     log_file_name = "/var/log/PVBattery.log",
     html_main = "/var/www/localhost/htdocs/index.html",
@@ -145,6 +148,58 @@ local configuration = {
             BMS = nil,
             inverter_switch = "garage-inverter.lan",
             inverter_time_controlled = "sunrise",
+        },
+        { -- Device[8]
+            typ = "prognose",
+            brand = "solarprognose",
+            {
+                __name = "roof",
+                token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
+                project = "7052",
+                item = "module_filed",
+                id = "14336",
+                typ = "hourly",
+                cachefile = "/tmp/solarprognose_dach.json",
+                cachetime = 1*3600,
+            },
+            { -- Device[9]
+                __name = "roof",
+                token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
+                project = "7052",
+                item = "module_filed",
+                id = "14337",
+                typ = "hourly",
+                cachefile = "/tmp/solarprognose_balkon.json",
+                cachetime = 1*3600,
+            },
+        },
+        { -- Device[10]
+            typ = "prognose",
+            brand = "forecast.solar",
+            cfg = {
+                -- Hier definierst du ALLE deine PV-Flächen.
+                planes = {
+                    {
+                        name = "Dach",
+                        latitude = position.latitude,
+                        longitude = position.longitude,
+                        declination = 30,
+                        azimuth = -45,
+                        kwp = 4.5
+                    },
+                    {
+                        name = "Balkon",
+                        latitude = position.latitude,
+                        longitude = position.longitude,
+                        declination = 85,
+                        azimuth = 90,
+                        kwp = 6.9
+                    },
+                    -- Optional: Mehr Flächen hinzufügen
+                },
+                cachefile = "/tmp/forecast_solar_agg.json",
+                cachetime = 1 * 3600, -- 1 Stunde
+            },
         },
     },
 
