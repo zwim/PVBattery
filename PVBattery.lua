@@ -33,6 +33,32 @@ local MarstekBattery = require("mid/MarstekBattery")
 local EnvertechInverter = require("mid/EnvertechInverter")
 local FroniusInverter = require("mid/FroniusInverter")
 local Homewizard = require("mid/Homewizard")
+local Solarprognose = require("mid/solarprognose")
+
+local SolarModul = {
+    Solarprognose.new{
+        __name = "roof",
+        token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
+        project = "7052",
+        item = "module_filed",
+        id = "14336",
+        typ = "hourly",
+        cachefile = "/tmp/wr1.json",
+		cachetime = 3, -- in hours
+    },
+	Solarprognose.new{
+        __name = "balkon",
+        token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
+        project = "7052",
+        item = "module_field",
+        id = "14337",
+        typ = "hourly",
+        cachefile = "/tmp/wr2.json",
+		cachetime = 3, -- in hours
+    }
+}
+SolarModul[1]:fetch()
+SolarModul[2]:fetch()
 
 local PVBattery = BaseClass:extend{
     __name = "PVBattery",
@@ -46,6 +72,9 @@ local PVBattery = BaseClass:extend{
     P_Grid = 0,
     P_Load = 0,
     P_PV = 0,
+
+	expected_yield = math.huge, -- hWh
+	unused_capacity = 0, -- kWh
 }
 
 -------------------- extend functions from this file
@@ -90,7 +119,7 @@ function PVBattery:init()
 	local ok, err = mqtt_reader:connect()
     if not ok then
         -- Wenn der initiale Connect fehlschlägt, ist das Test-Setup ungültig.
-        log(0, "Initial connection failed: " .. tostring(err))
+        self:log(0, "Initial connection failed: " .. tostring(err))
         return
     end
 
@@ -140,8 +169,10 @@ end
 
 function PVBattery:getValues()
     -- Attention, this accesses self.SmartBattery and self.USPBattery as well
+	self.unused_capacity = 0
     for _, Battery in ipairs(self.Battery) do
         Battery.SOC = Battery:getSOC(true) or 0 -- force recalculation
+		self.unused_capacity = self.unused_capacity + (1-Battery.SOC/100) * Battery.Device.capacity
         Battery.state = Battery:getState() or {}
     end
 end
@@ -153,6 +184,9 @@ function PVBattery:doTheMagic()
 
     self.P_Battery = 0
     for _, Battery in ipairs(self.Battery) do
+		-- use schedule algorithm, if expected yield is more than the unused capacity
+		Battery.use_schedule = self.expected_yield > self.unused_capacity
+
         Battery.power = Battery:getPower() -- negative, if dischargeing
         self.P_Battery = self.P_Battery + Battery.power
         battery_string = battery_string .. string.format("%s: %5.0f   ", Battery.Device.name, Battery.power)
@@ -204,7 +238,7 @@ function PVBattery:doTheMagic()
     end
     if clear_any_battery then
         self:log(3, clear_any_battery)
---        return
+		return self:doTheMagic() -- call again and leave after that
     end
 
     if math.abs(P_exzess - P_exzess_old) < 10 then
@@ -474,6 +508,14 @@ function PVBattery:main(profiling_runs)
 
         self:getValues()
 
+		self.expected_yield = 0
+		for _, Prognose in ipairs(SolarModul) do
+			Prognose:fetch()
+			self.expected_yield = self.expected_yield + Prognose:get_remaining_daily_forecast_yield()
+		end
+
+		self:log(3, "expected yield", self.expected_yield, "kWh; unused capacity", self.unused_capacity, "kWh")
+
         -- update state, as the battery may have changed or the user could have changed something manually
         self:outputTheLog(date_string)
 
@@ -544,6 +586,8 @@ while true do
             os.exit(0)
         else
             PVBattery:log(0, "error in main():", result, "restart main() loop in 5 seconds")
+			print("we stop here!!!!!")
+			os.exit()
             util.sleepTime(5)
         end
     end

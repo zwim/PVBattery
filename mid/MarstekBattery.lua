@@ -81,7 +81,9 @@ end
 function MarstekBattery:take(req_power)
     if req_power >= 0 then
         local factor = self.VenusE:calculateTempFactor()
-        self:log(3, "Temperature factor", factor)
+        if factor < 1 then
+            self:log(3, "Temperature factor", factor)
+        end
         req_power = req_power * factor
         req_power = math.clamp(req_power, 0, self.charge_max_power)
         self.VenusE:writeRs485ControlMode(true)

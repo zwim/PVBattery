@@ -12,6 +12,7 @@ end
 
 local json_decode_tmp = json.decode
 
+--[[
 function json.decode(str)
     if str then
         str = str:gsub("^%s*(.-)%s*$", "%1")
@@ -25,7 +26,7 @@ function json.decode(str)
         return 0
     end
 end
-
+]]
 local util = {
     log = nil,
     log_file_name = nil,

@@ -240,7 +240,7 @@ function Marstek:getTemperature()
     local MOSTemp = math.max(MOS1Temp, MOS2Temp)
     local CellTemp = math.max(MINcTemp, MAXcTemp)
 
-    print("Temperatures:", internalTemp, MOS1Temp, MOS2Temp, MINcTemp, MAXcTemp)
+--    print("Temperatures:", internalTemp, MOS1Temp, MOS2Temp, MINcTemp, MAXcTemp)
     return {internalTemp, MOSTemp, CellTemp}
 end
 

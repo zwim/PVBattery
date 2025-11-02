@@ -6,6 +6,7 @@ local SunTime = require("suntime/suntime")
 local Battery = PowerDevice:extend{
     __name = "Battery",
     internal_state = "",
+    use_schedule = true,
 }
 
 function Battery:new(o)
@@ -23,6 +24,7 @@ function Battery:init()
     if not self.max_power then
         self.max_power = 0
     end
+    self.use_scheduled = true
 end
 
 --------------------------------------------------------------------------
@@ -50,7 +52,7 @@ local OFFSET_TO_HIGH_NOON = -1/4 -- in hours
 local OFFSET_TO_SUNSET = -2.5 -- in hours
 local FIRST_MAX_SOC_LEVEL = 60 -- Percent
 local SECOND_MAX_SOC_LEVEL = 80 -- Percent
-function Battery:getDesiredMaxSOC(current_time_h)
+function Battery:getDesiredMaxSOC_scheduled(current_time_h)
     current_time_h = current_time_h or SunTime:getTimeInHours()
 
     local time_1_h = SunTime.noon + OFFSET_TO_HIGH_NOON
@@ -75,6 +77,14 @@ function Battery:getDesiredMaxSOC(current_time_h)
     local max_SOC = FIRST_MAX_SOC_LEVEL + t * k
     return max_SOC
 --        return SECOND_MAX_SOC_LEVEL
+end
+
+function Battery:getDesiredMaxSOC(current_time_h)
+    if self.use_schedule then
+        return self:getDesiredMaxSOC_scheduled(current_time_h)
+    else
+        return self.Device.SOC_max
+    end
 end
 
 function Battery:give(req_power)

@@ -203,9 +203,9 @@ function Solar:fetch()
 
     -- Cache noch gültig?
     if self.cache.data then
-        -- call at least config.cachetime later and not before reh preferred next requiest time
-        if (now - self.cache.timestamp) < self.config.cachetime and
-            now >= self.cache.preferredNextApiRequestAt.epochTimeUtc then
+        -- call at least config.cachetime later and not before the next preferred request time
+        if (now - self.cache.timestamp) < self.config.cachetime or
+            now < self.cache.preferredNextApiRequestAt.epochTimeUtc + self.config.cachetime * 3600 then
             is_cached = true
             -- Rückgabe des *verarbeiteten* Caches
             return self:_clean_cache_and_process_data(), nil, is_cached
@@ -228,6 +228,8 @@ function Solar:fetch()
     if not body then
         self.cache.error = err or "Unbekannter Fehler beim Abruf."
         -- Rückgabe des *verarbeiteten* alten Caches oder leeres Array bei Fehler
+        print("postpone next fetch")
+        self.cache.timestamp = now
         return self:_clean_cache_and_process_data(), err, is_cached
     end
 
@@ -251,6 +253,30 @@ function Solar:fetch()
 
     -- Rückgabe des *verarbeiteten* neuen Datensatzes
     return self:_clean_cache_and_process_data(), nil, false
+end
+
+-- no forecast, returns math.huge
+function Solar:get_remaining_daily_forecast_yield()
+    local data_array = self:_process_data()
+
+    if #data_array == 0 then
+        print("Fehler: Keine gültigen Daten.")
+        if self.cache.error then print("Letzter Fehler:", self.cache.error) end
+
+        return math.huge
+    end
+
+    local current_hour = tonumber(os.date("%H"))
+    local remaining_forecast_yield = 0
+    for _, entry in ipairs(data_array) do
+        if entry.hour > current_hour then
+            remaining_forecast_yield = remaining_forecast_yield + entry.power_kw
+        end
+        if entry.hour >= 24.00 then
+            break
+        end
+    end
+    return remaining_forecast_yield
 end
 
 ------------------------------------------------------------
@@ -302,6 +328,7 @@ local function example()
         id = "14336",
         typ = "hourly",
         cachefile = "/tmp/wr1.json",
+   		cachetime = 3, -- in hours
     }
 
     local wr2 = Solar.new{
@@ -312,6 +339,7 @@ local function example()
         id = "14337",
         typ = "hourly",
         cachefile = "/tmp/wr2.json",
+   		cachetime = 3, -- in hours
     }
 
     print("Starte Abruf für WR1 (Dach)...")
@@ -321,8 +349,9 @@ local function example()
         wr1:print_latest()
         -- Beispielzugriff auf das erste Element des Array:
         -- print(string.format("Erster Eintrag (Stunde %.2f): %.3f kW", d1[1].hour, d1[1].power_kw))
+        print("Erwarteter heutiger ertrag:", wr1:get_remaining_daily_forecast_yield(), "kWh")
     else
-        print("Fehler beim Abruf WR1:", err1)
+        print("Fehler beim Abruf WR1:", err1, "kWh")
     end
 
     print("Starte Abruf für WR2 (Balkon)...")
@@ -332,8 +361,9 @@ local function example()
         wr2:print_latest()
         -- Beispielzugriff auf das erste Element des Array:
         -- print(string.format("Erster Eintrag (Stunde %.2f): %.3f kW", d1[1].hour, d1[1].power_kw))
+        print("Erwarteter heutiger ertrag:", wr2:get_remaining_daily_forecast_yield(), "kWh")
     else
-        print("Fehler beim Abruf WR2:", err2)
+        print("Fehler beim Abruf WR2:", err2, "kWh")
     end
 end
 
