@@ -275,7 +275,8 @@ if arg[0]:find("MarstekBattery.lua") then
 ]]
 
 --    VenusE:take(2020)
-    VenusE:take(20)    VenusE2:take(20)
+    VenusE:give(30)
+    VenusE2:give(50)
 
 end
 

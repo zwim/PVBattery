@@ -126,7 +126,7 @@ function ForecastSolarAggregator.new(cfg)
 end
 
 ------------------------------------------------------------
--- Cache-Funktionen (vereinfacht)
+-- Cache-Funktionen
 ------------------------------------------------------------
 
 function ForecastSolarAggregator:_load_cache()

@@ -19,7 +19,7 @@ return function(self, VERSION)
 
     local sources =  self.P_PV
     for _, Inverter in ipairs(self.Inverter) do
-        Inverter.power = Inverter:getPower() or 0
+        Inverter.power = math.abs(Inverter:getPower()) or 0
         table.insert(InverterPowerCache, Inverter.power)
         sources = sources + Inverter.power
     end

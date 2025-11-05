@@ -9,7 +9,7 @@ local position = {
     latitude = 47.5109083,
     longitude = 12.0855866,
     altitude = 520,
-    timezone = nil,
+    timezone = nil, -- will be filled in by SunTimes
 }
 
 
@@ -183,17 +183,17 @@ local configuration = {
                         name = "Dach",
                         latitude = position.latitude,
                         longitude = position.longitude,
-                        declination = 30,
-                        azimuth = -45,
-                        kwp = 4.5
+                        declination = 30, -- Neigung
+                        azimuth = -45,    -- Ausrichtung, Ost=-90, West=90
+                        kwp = 4.5,
                     },
                     {
                         name = "Balkon",
                         latitude = position.latitude,
                         longitude = position.longitude,
-                        declination = 85,
-                        azimuth = 90,
-                        kwp = 6.9
+                        declination = 85, -- Neigung
+                        azimuth = 90,     -- Ausrichtung Ost=-90, West=90
+                        kwp = 6.9,
                     },
                     -- Optional: Mehr Flächen hinzufügen
                 },

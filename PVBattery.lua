@@ -166,6 +166,7 @@ function PVBattery:getValues()
 end
 
 local P_exzess_old = 0
+local doTheMagic_early_return = 0
 function PVBattery:doTheMagic(_second_try)
     local battery_string = ""
     local SOC_string = ""
@@ -201,8 +202,13 @@ function PVBattery:doTheMagic(_second_try)
     local P_exzess = self.P_Grid + self.P_Battery
     self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old: %5.1f", self.P_Grid, P_exzess, P_exzess_old))
 
-    if math.abs(self.P_Grid) < GRID_THRESHOLD then
-        return
+    if doTheMagic_early_return < 10 then
+        doTheMagic_early_return = 0
+        if math.abs(self.P_Grid) < GRID_THRESHOLD then
+            return
+        end
+    else
+        doTheMagic_early_return = doTheMagic_early_return + 1
     end
 
     -- if at least one battery does not, what is expected, turn it of and retrun early
@@ -233,8 +239,13 @@ function PVBattery:doTheMagic(_second_try)
         end
     end
 
-    if math.abs(P_exzess - P_exzess_old) < 10 then
-        return
+    if doTheMagic_early_return < 10 then
+        doTheMagic_early_return = 0
+        if math.abs(P_exzess - P_exzess_old) < 10 then
+            return
+        end
+    else
+        doTheMagic_early_return = doTheMagic_early_return + 1
     end
 
     P_exzess_old = P_exzess
@@ -261,7 +272,7 @@ function PVBattery:doTheMagic(_second_try)
 
         local sum_remaining_SOC = 0
         for _, Battery in ipairs(self.SmartBattery) do
-            sum_remaining_SOC = sum_remaining_SOC + math.max(0, Battery.SOC - Battery.Device.SOC_min)
+            sum_remaining_SOC = sum_remaining_SOC + (math.max(0, Battery.SOC - Battery.Device.SOC_min))^2
             Battery.batt_req_power = 0
         end
         if sum_remaining_SOC > 1 then
@@ -271,7 +282,7 @@ function PVBattery:doTheMagic(_second_try)
             for _, Battery in ipairs(self.SmartBattery) do
                 local p = 0
                 if Battery.SOC >= Battery.Device.SOC_min then
-                    p = P_exzess * (Battery.SOC - Battery.Device.SOC_min) / sum_remaining_SOC -- proportional share
+                    p = P_exzess * (Battery.SOC - Battery.Device.SOC_min)^2 / sum_remaining_SOC -- proportional share
                     if p > Battery.Device.discharge_max_power then
                         p = Battery.Device.discharge_max_power
                         nb_batteries = nb_batteries - 1
@@ -337,7 +348,7 @@ function PVBattery:doTheMagic(_second_try)
 
         local sum_missing_SOC = 0
         for _, Battery in ipairs(self.SmartBattery) do
-            sum_missing_SOC = sum_missing_SOC + math.max(0, Battery:getDesiredMaxSOC() - Battery.SOC)
+            sum_missing_SOC = sum_missing_SOC + (math.max(0, Battery:getDesiredMaxSOC() - Battery.SOC))^2
             Battery.batt_req_power = 0
         end
         if sum_missing_SOC >= 1 then
@@ -347,7 +358,7 @@ function PVBattery:doTheMagic(_second_try)
             for _, Battery in ipairs(self.SmartBattery) do
                 local p = 0
                 if Battery.SOC <= Battery:getDesiredMaxSOC() then
-                    p = (P_exzess * (Battery:getDesiredMaxSOC() - Battery.SOC) / sum_missing_SOC) -- proportional share
+                    p = (P_exzess * (Battery:getDesiredMaxSOC() - Battery.SOC)^2 / sum_missing_SOC) -- proportional share
                     if p < -Battery.Device.charge_max_power then
                         p = -Battery.Device.charge_max_power
                         nb_batteries = nb_batteries - 1
