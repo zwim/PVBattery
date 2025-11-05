@@ -234,8 +234,8 @@ function ForecastSolarAggregator:get_hourly_forecast()
 
     -- Sortiere nach dem lokalen Zeitstempel-String (der jetzt der Schlüssel ist)
     table.sort(sorted_kwh, function(a, b)
-        return a.timestamp < b.timestamp
-    end)
+            return a.timestamp < b.timestamp
+        end)
 
     return sorted_kwh
 end
@@ -278,7 +278,7 @@ function ForecastSolarAggregator:get_remaining_daily_forecast_yield()
 
             -- 3. Prüfe, ob die Stunde begonnen hat.
             if ts_epoch and ts_epoch >= now_epoch then
-                 remaining_kwh = remaining_kwh + kwh
+                remaining_kwh = remaining_kwh + kwh
             end
         end
     end

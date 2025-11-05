@@ -212,8 +212,8 @@ function Solar:_process_data()
 
     -- Sortiere das Array nach der dezimalen Stunde
     table.sort(processed_data, function(a, b)
-        return a.hour < b.hour
-    end)
+            return a.hour < b.hour
+        end)
 
     return processed_data
 end
@@ -229,7 +229,7 @@ function Solar:fetch()
     if self.cache.data then
         -- call at least config.cachetime later and not before the next preferred request time
         if (now - self.cache.timestamp) < self.config.cachetime or
-            now < self.cache.preferredNextApiRequestAt.epochTimeUtc + self.config.cachetime then
+        now < self.cache.preferredNextApiRequestAt.epochTimeUtc + self.config.cachetime then
             is_cached = true
             -- Rückgabe des *verarbeiteten* Caches
             return self:_process_data(), nil, is_cached
@@ -274,7 +274,9 @@ function Solar:fetch()
     self.cache.timestamp = now
     self.cache.error = nil
 
-	self:_clean_cache()
+
+    self:_clean_cache()
+    self:_save_cache()
     -- Rückgabe des *verarbeiteten* neuen Datensatzes
     return self:_process_data(), nil, false
 end
@@ -331,11 +333,11 @@ function Solar:print_latest()
         local timeStamp_local = os.date("%Y-%m-%d %H:%M:%S", t_epoch)
 
         print(string.format("Stunde %.2f (lokal: %s) -> %.3f kW, Kumulativ: %.3f kWh",
-            entry.hour,
-            timeStamp_local,
-            entry.power_kw,
-            entry.cumulative_kwh
-        ))
+                entry.hour,
+                timeStamp_local,
+                entry.power_kw,
+                entry.cumulative_kwh
+            ))
     end
     print("----------------------------------------")
 end
@@ -352,7 +354,7 @@ local function example()
         id = "14336",
         typ = "hourly",
         cachefile = "/tmp/wr1.json",
-   		cachetime = 1 * 3600, -- in hours
+        cachetime = 1 * 3600, -- in hours
     }
 
     local wr2 = Solar.new{
@@ -363,7 +365,7 @@ local function example()
         id = "14337",
         typ = "hourly",
         cachefile = "/tmp/wr2.json",
-   		cachetime = 1*3600,
+        cachetime = 1*3600,
     }
 
     print("Starte Abruf für WR1 (Dach)...")
@@ -391,15 +393,15 @@ local function example()
         print("Fehler beim Abruf WR2:", err2, "kWh")
     end
 
-	local gesamt = {}
-	for i, v in ipairs(d1) do
-		gesamt[i] = {}
-		gesamt[i].hour = v.hour
-		gesamt[i].power_kw = v.power_kw + d2[i].power_kw
-		gesamt[i].cumulative_kwh = v.cumulative_kwh + d2[i].cumulative_kwh
-		print(string.format("Stunde %4.2f -> %6.3f, Kumulativ: %4.3f",
-				v.hour, gesamt[i].power_kw, gesamt[i].cumulative_kwh))
-	end
+    local gesamt = {}
+    for i, v in ipairs(d1) do
+        gesamt[i] = {}
+        gesamt[i].hour = v.hour
+        gesamt[i].power_kw = v.power_kw + d2[i].power_kw
+        gesamt[i].cumulative_kwh = v.cumulative_kwh + d2[i].cumulative_kwh
+        print(string.format("Stunde %4.2f -> %6.3f, Kumulativ: %4.3f",
+                v.hour, gesamt[i].power_kw, gesamt[i].cumulative_kwh))
+    end
 
 end
 

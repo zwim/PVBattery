@@ -357,7 +357,7 @@ function mqtt_reader:processMessages(wait_time)
         -- 2. Keine QoS2-Nachricht mehr in flight
         -- 3. Oder Timeout erreicht
         if (not self.got_message_in_last_iteration and inflight == 0)
-            or (util.getCurrentTime() > end_time)
+        or (util.getCurrentTime() > end_time)
         then
             break
         end

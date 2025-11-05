@@ -78,7 +78,7 @@ local configuration = {
             name = "PV-Dach",
             typ = "inverter",
             brand = "Fronius",
-            inverter_switch = "192.168.0.49",
+            inverter_switch = "fronius.lan",
         },
         { -- Device[3]
             name = "Battery Pack",

@@ -49,8 +49,8 @@ local PVBattery = BaseClass:extend{
     P_Load = 0,
     P_PV = 0,
 
-	expected_yield = math.huge, -- hWh
-	unused_capacity = 0, -- kWh
+    expected_yield = math.huge, -- hWh
+    unused_capacity = 0, -- kWh
 }
 
 -------------------- extend functions from this file
@@ -92,14 +92,14 @@ function PVBattery:init()
 
     mqtt_reader:init(config.mqtt_broker_uri, config.mqtt_client_id)
 
-	local ok, err = mqtt_reader:connect()
+    local ok, err = mqtt_reader:connect()
     if not ok then
         -- Wenn der initiale Connect fehlschlägt, ist das Test-Setup ungültig.
         self:log(0, "Initial connection failed: " .. tostring(err))
         return
     end
 
-	mqtt_reader:processMessages()
+    mqtt_reader:processMessages()
 
     self.Battery = {}      -- all batteries
     self.SmartBattery = {} -- a subset of stupid custom batteries from all batteries
@@ -108,7 +108,7 @@ function PVBattery:init()
     self.Inverter = {}
     self.Smartmeter = {}
 
-	self.SolarprognoseModul = {}
+    self.SolarprognoseModul = {}
     for _, Device in ipairs(config.Device) do
         local typ = Device.typ:lower()
         local brand = Device.brand:lower()
@@ -136,15 +136,15 @@ function PVBattery:init()
             end
         elseif typ == "smartmeter" then
             table.insert(self.Smartmeter, Homewizard:new{Device = Device})
-		elseif typ == "prognose" then
-			if brand == "solarprognose" then
-				table.insert(self.SolarprognoseModul, Solarprognose.new(Device[1]))
-				table.insert(self.SolarprognoseModul, Solarprognose.new(Device[2]))
-				self.SolarprognoseModul[1]:fetch()
-				self.SolarprognoseModul[2]:fetch()
-			elseif brand == "forecast.solar" then
-				self.ForecastsolarModul = Forecastsolar.new(Device.cfg)
-			end
+        elseif typ == "prognose" then
+            if brand == "solarprognose" then
+                table.insert(self.SolarprognoseModul, Solarprognose.new(Device[1]))
+                table.insert(self.SolarprognoseModul, Solarprognose.new(Device[2]))
+                self.SolarprognoseModul[1]:fetch()
+                self.SolarprognoseModul[2]:fetch()
+            elseif brand == "forecast.solar" then
+                self.ForecastsolarModul = Forecastsolar.new(Device.cfg)
+            end
 
         end
     end
@@ -157,10 +157,10 @@ end
 
 function PVBattery:getValues()
     -- Attention, this accesses self.SmartBattery and self.USPBattery as well
-	self.unused_capacity = 0
+    self.unused_capacity = 0
     for _, Battery in ipairs(self.Battery) do
         Battery.SOC = Battery:getSOC(true) or 0 -- force recalculation
-		self.unused_capacity = self.unused_capacity + (1-Battery.SOC/100) * Battery.Device.capacity
+        self.unused_capacity = self.unused_capacity + (1-Battery.SOC/100) * Battery.Device.capacity
         Battery.state = Battery:getState() or {}
     end
 end
@@ -172,8 +172,8 @@ function PVBattery:doTheMagic(_second_try)
 
     self.P_Battery = 0
     for _, Battery in ipairs(self.Battery) do
-		-- use schedule algorithm, if expected yield is more than the unused capacity
-		Battery.use_schedule = self.expected_yield > self.unused_capacity
+        -- use schedule algorithm, if expected yield is more than the unused capacity
+        Battery.use_schedule = self.expected_yield > self.unused_capacity
 
         Battery.power = Battery:getPower() -- negative, if dischargeing
         self.P_Battery = self.P_Battery + Battery.power
@@ -226,11 +226,11 @@ function PVBattery:doTheMagic(_second_try)
     end
     if clear_any_battery then
         self:log(3, clear_any_battery)
-		if _second_try then
-			return
-		else
-			return self:doTheMagic(true) -- call again and leave after that
-		end
+        if _second_try then
+            return
+        else
+            return self:doTheMagic(true) -- call again and leave after that
+        end
     end
 
     if math.abs(P_exzess - P_exzess_old) < 10 then
@@ -473,8 +473,8 @@ function PVBattery:main(profiling_runs)
         util:log("\n#############################################")
 
         local date_string = string.format("%d/%d/%d-%02d:%02d:%02d",
-        last_date.year, last_date.month, last_date.day,
-        last_date.hour, last_date.min, last_date.sec)
+            last_date.year, last_date.month, last_date.day,
+            last_date.hour, last_date.min, last_date.sec)
 
         util:log(date_string)
         -- Do the sun set and rise calculations if necessary
@@ -500,20 +500,20 @@ function PVBattery:main(profiling_runs)
 
         self:getValues()
 
-		self.expected_yield = 0
-		if SunTime:isDayTime() then
-			for _, Prognose in ipairs(self.SolarprognoseModul) do
-				Prognose:fetch()
-				self.expected_yield = self.expected_yield + Prognose:get_remaining_daily_forecast_yield()
-			end
-		end
-		if self.ForecastsolarModul then
-			self.ForecastsolarModul:fetch()
-			local forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
-			self.expected_yield = math.min(self.expected_yield, forecastsolar_expected_yield)
-		end
+        self.expected_yield = 0
+        if SunTime:isDayTime() then
+            for _, Prognose in ipairs(self.SolarprognoseModul) do
+                Prognose:fetch()
+                self.expected_yield = self.expected_yield + Prognose:get_remaining_daily_forecast_yield()
+            end
+        end
+        if self.ForecastsolarModul then
+            self.ForecastsolarModul:fetch()
+            local forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
+            self.expected_yield = math.min(self.expected_yield, forecastsolar_expected_yield)
+        end
 
-		self:log(3, "expected yield", self.expected_yield, "kWh; unused capacity", self.unused_capacity, "kWh")
+        self:log(3, "expected yield", self.expected_yield, "kWh; unused capacity", self.unused_capacity, "kWh")
 
         -- update state, as the battery may have changed or the user could have changed something manually
         self:outputTheLog(date_string)
@@ -525,7 +525,7 @@ function PVBattery:main(profiling_runs)
 
         self:log(2, "generate JSON")
         self:getValues() -- for the json
-		local ok, result
+        local ok, result
         ok, result = pcall(self.generateJSON, self, VERSION)
         if not ok then
             print("Error on generateJSON", result)
@@ -534,7 +534,7 @@ function PVBattery:main(profiling_runs)
         if not ok then
             print("Error on write to database", result)
         end
-		self:log(3, "JSON done ...")
+        self:log(3, "JSON done ...")
 
         self:serverCommands()
 
@@ -586,8 +586,6 @@ while true do
             os.exit(0)
         else
             PVBattery:log(0, "error in main():", result, "restart main() loop in 5 seconds")
-			print("we stop here!!!!!")
-			os.exit()
             util.sleepTime(5)
         end
     end

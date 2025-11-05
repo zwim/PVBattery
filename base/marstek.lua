@@ -35,7 +35,7 @@ function Marstek:init()
     if not self.slave_id then
         self.slave_id = 1 -- the marstek venusE Gen2.0 id
     end
-   self.ModbusInstance = Modbus:new{ip = self.ip, port = self.port, slave_id = self.slave_id}
+    self.ModbusInstance = Modbus:new{ip = self.ip, port = self.port, slave_id = self.slave_id}
 end
 
 local registers = {}
@@ -82,33 +82,33 @@ registers.GridStandards      = {adr = 44100, typ = "u16", gain = 1, unit = ""}
 
 function Marstek:readBatteryVoltage()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryVoltage),
-        "Battery Voltage", registers.readBatteryVoltage.unit
+    "Battery Voltage", registers.readBatteryVoltage.unit
 end
 function Marstek:readBatteryCurrent()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryCurrent),
-        "Battery Current", registers.readBatteryCurrent.unit
+    "Battery Current", registers.readBatteryCurrent.unit
 end
 -- negative meanse that the battery is discharching
 function Marstek:readBatteryPower()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryPower),
-        "Battery Power", registers.readBatteryPower.unit
+    "Battery Power", registers.readBatteryPower.unit
 end
 function Marstek:readBatterySOC()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readBatterySOC),
-        "Battery SOC", registers.readBatterySOC.unit
+    "Battery SOC", registers.readBatterySOC.unit
 end
 function Marstek:readBatteryTotalEnergy()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryTotalEnergy),
-        "Battery TotalEnergy", registers.readBatteryTotalEnergy.unit
+    "Battery TotalEnergy", registers.readBatteryTotalEnergy.unit
 end
 
 function Marstek:readACVoltage()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readACVoltage),
-        "Battery Voltage", registers.readACVoltage.unit
+    "Battery Voltage", registers.readACVoltage.unit
 end
 function Marstek:readACCurrent()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readACCurrent),
-        "Battery Current", registers.readACCurrent.unit
+    "Battery Current", registers.readACCurrent.unit
 end
 -- negative means that the battery is discharching
 function Marstek:readACPower()
@@ -142,7 +142,7 @@ end
 
 function Marstek:readChargingCutoff()
     return self.ModbusInstance:readHoldingRegisters(1, registers.ChargingCutoff),
-        "Charge Cutoff", registers.ChargingCutoff.unit
+    "Charge Cutoff", registers.ChargingCutoff.unit
 end
 
 function Marstek:writeChargingCutoff(value)
@@ -151,7 +151,7 @@ end
 
 function Marstek:readDischargingCutoff()
     return self.ModbusInstance:readHoldingRegisters(1, registers.DischargingCutoff),
-        "Discharge Cutoff", registers.DischargingCutoff.unit
+    "Discharge Cutoff", registers.DischargingCutoff.unit
 end
 
 function Marstek:writeDischargingCutoff(value)
@@ -161,17 +161,17 @@ end
 function Marstek:readGridStandards()
     local gridStd = self.ModbusInstance:readHoldingRegisters(1, registers.GridStandards)
     local country = {
-            [0] = "Auto 50/60",
-            "EN50549",
-            "nl-Netherlands",
-            "de-Germany",
-            "at-Austria",
-            "uk-England",
-            "es-Spain",
-            "pl-Poland",
-            "it-Italy",
-            "cn-China",
-        }
+        [0] = "Auto 50/60",
+        "EN50549",
+        "nl-Netherlands",
+        "de-Germany",
+        "at-Austria",
+        "uk-England",
+        "es-Spain",
+        "pl-Poland",
+        "it-Italy",
+        "cn-China",
+    }
     return gridStd, "Grid Standards: " ..country[gridStd], registers.GridStandards.unit
 end
 
@@ -209,25 +209,24 @@ end
 
 function Marstek:readInternalTemperature()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readInternalTemperature),
-        "Internal Temperature", registers.readInternalTemperature.unit
+    "Internal Temperature", registers.readInternalTemperature.unit
 end
 function Marstek:readMOS1Temperature()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readMOS1Temperature),
-        "MOS1 Temperature", registers.readMOS1Temperature.unit
+    "MOS1 Temperature", registers.readMOS1Temperature.unit
 end
 function Marstek:readMOS2Temperature()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readMOS2Temperature),
-        "MOS2 Temperature", registers.readMOS2Temperature.unit
+    "MOS2 Temperature", registers.readMOS2Temperature.unit
 end
 function Marstek:readMaxCellTemperature()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readMaxCellTemperature),
-        "Max Cell Temperature", registers.readMaxCellTemperature.unit
+    "Max Cell Temperature", registers.readMaxCellTemperature.unit
 end
 function Marstek:readMinCellTemperature()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readMinCellTemperature),
-        "Min Cell Temperature", registers.readMinCellTemperature.unit
+    "Min Cell Temperature", registers.readMinCellTemperature.unit
 end
-
 
 ------------- higher order methods
 
@@ -246,6 +245,9 @@ end
 
 function Marstek:calculateTempFactor()
     local function calcFact(value, min, max)
+        if not value or not min or not max then
+            return 1
+        end
         if value <= min then
             return 1
         elseif value >= max then
