@@ -121,6 +121,7 @@ function ForecastSolarAggregator.new(cfg)
     }
 
     self:_load_cache()
+    self:fetch()
 
     return self
 end
@@ -349,7 +350,7 @@ local function example()
     local pv_aggregator = ForecastSolarAggregator.new(cfg)
 
     -- Erster Abruf (echter Fetch)
-    local hourly_kwh_data, err, cached = pv_aggregator:fetch()
+    local hourly_kwh_data, err = pv_aggregator:fetch()
 
     if not hourly_kwh_data or err then
         print("Kritischer Fehler beim ersten Fetch:", err)

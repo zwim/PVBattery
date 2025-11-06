@@ -80,10 +80,6 @@ function PowerDevice:getCurrent(internal)
 end
 
 -- always AC
-function PowerDevice:getEnergyTotal()
-end
-
--- always AC
 function PowerDevice:setMaxDischargePower(max_power)
 end
 

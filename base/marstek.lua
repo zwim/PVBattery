@@ -80,6 +80,10 @@ registers.maxDischargePower      = {adr = 44003, typ = "u16", gain = 1, unit = "
 registers.GridStandards      = {adr = 44100, typ = "u16", gain = 1, unit = ""}
 
 
+function Marstek:readHoldingRegisters(register)
+    return self.ModbusInstance:readHoldingRegisters(1, register)
+end
+
 function Marstek:readBatteryVoltage()
     return self.ModbusInstance:readHoldingRegisters(1, registers.readBatteryVoltage),
     "Battery Voltage", registers.readBatteryVoltage.unit
@@ -284,7 +288,6 @@ function Marstek:isIdle()
 end
 
 -----------------------------------------------------------------------------------------------------------
-
 
 local function printValue(value, name, unit)
     if value then

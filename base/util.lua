@@ -10,7 +10,7 @@ if not table.unpack then
     table.unpack = unpack
 end
 
-local json_decode_tmp = json.decode
+--local json_decode_tmp = json.decode
 
 --[[
 function json.decode(str)
@@ -372,7 +372,7 @@ function util.crashHandler(err)
     -- Erzeuge Stacktrace ab Aufrufer-Ebene (2 = skip xpcall)
     local trace = debug.traceback(tostring(err), 2)
     print("\n[CRASH] Unerwarteter Fehler erkannt!\n" .. trace)
-    print("\n[Cleanup] Aufräumen wegen:", reason or "unbekannt")
+    print("\n[Cleanup] Aufräumen wegen:", err or "unbekannt")
     return trace
 end
 
