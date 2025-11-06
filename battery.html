@@ -56,6 +56,26 @@
             margin-left: 5px;
         }
 
+        /* --- (1.5) STATUS-TABELLE (BATTERIE-SOC) --- */
+        .status-table {
+            max-width: 300px;
+            margin: 15px auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            background-color: #ffffff;
+            font-size: 1.0em;
+        }
+        /* ... (unverändert) ... */
+        .status-table th, .status-table td {
+            padding: 5px 15px;
+            text-align: center; /* KORRIGIERT: th und td sind jetzt zentriert */
+            border-bottom: 1px solid #f4f7f9;
+        }
+        .status-table td {
+            text-align: center; /* KORRIGIERT: Werte sind jetzt zentriert */
+            font-weight: bold;
+            color: #2ecc71;
+        }
         /* --- (1) ENERGIEFLUSS-ZUSAMMENFASSUNG (OBERE TABELLE) --- */
         .energy-table {
             max-width: 500px;
@@ -111,8 +131,10 @@
             border-bottom: 3px solid;
             margin-bottom: 15px;
         }
-        .left h2 { border-bottom-color: #2ecc71; color: #2ecc71; } /* Grün für Sources */
-        .right h2 { border-bottom-color: #e74c3c; color: #e74c3c; } /* Rot für Sinks */
+        /* KORRIGIERT: Sources (Erzeugung) sind jetzt Rot */
+        .left h2 { border-bottom-color: #e74c3c; color: #e74c3c; }
+        /* KORRIGIERT: Sinks (Ladung) bleiben Grün */
+        .right h2 { border-bottom-color: #2ecc71; color: #2ecc71; }
 
         /* Detail-Tabellen Zellen-Struktur */
         .container td:nth-child(1) { /* Beschriftung */
@@ -143,14 +165,16 @@
         .container tr:last-child td { border-bottom: none; } /* Letzte Zeile ohne Rand */
 
         /* Total Zeilen Hervorhebung */
+        /* KORRIGIERT: Total Source (Links) ist jetzt Light Red/Red */
         .left tr:last-child td {
-            background-color: #e8f5e9;
-            border-top: 2px solid #2ecc71;
+            background-color: #fbecec; /* Light Red */
+            border-top: 2px solid #e74c3c; /* Red */
             font-size: 1.2em;
         }
+        /* KORRIGIERT: Total Sink (Rechts) ist Light Green/Green */
         .right tr:last-child td {
-            background-color: #fbecec;
-            border-top: 2px solid #e74c3c;
+            background-color: #e8f5e9; /* Light Green */
+            border-top: 2px solid #2ecc71; /* Green */
             font-size: 1.2em;
         }
 
@@ -167,26 +191,44 @@
 </head>
 <body>
 
-<h1>Energy Flow <span id="Vx_y_z">_</span></h1>
+<h1>Energy Flow<span id="Vx_y_z">_</span></h1>
 <p>Now <span id="DATE">_</span></p>
 <p>Sun rise at <span id="SUNRISE">_</span></p>
 <p>Sun set at <span id="SUNSET">_</span></p>
 <p>Status: <span id="STATE_OF_OPERATION">_</span></p>
+
+<table class="status-table">
+    <caption>Batteriestatus (SOC)</caption>
+    <tbody>
+        <tr>
+            <th scope="row">Battery</th>
+            <td id="batt_SOC">_</td>
+        </tr>
+        <tr>
+            <th scope="row">Venus1</th>
+            <td id="SOC1">_</td>
+        </tr>
+        <tr>
+            <th scope="row">Venus2</th>
+            <td id="SOC2">_</td>
+        </tr>
+    </tbody>
+</table>
 
 <table class="energy-table">
     <caption>Aktueller Energiefluss (Netz & Verbrauch)</caption>
     <tbody>
         <tr class="buy-row">
             <th scope="row">Bezug aus dem Netz <a id="FRONIUS_ADR" href="#">(Grid)</a></th>
-            <td><span id="P_BUY_GRID">_</span> <span class="energy-unit">W</span></td>
+            <td><span id="P_BUY_GRID">_</span> </td>
         </tr>
         <tr class="sell-row">
             <th scope="row">Einspeisung ins Netz <a id="FRONIUS_ADR2" href="#">(Grid)</a></th>
-            <td><span id="P_SELL_GRID">_</span> <span class="energy-unit">W</span></td>
+            <td><span id="P_SELL_GRID">_</span></td>
         </tr>
         <tr class="consumption-row">
             <th scope="row">Eigenverbrauch</th>
-            <td><span id="POWER_CONSUMED">_</span> <span class="energy-unit">W</span></td>
+            <td><span id="POWER_CONSUMED">_</span></td>
         </tr>
     </tbody>
 </table>
@@ -195,30 +237,30 @@
     <div class="left">
         <h2>Sources <span style="font-size: 0.6em;">(Erzeugung)</span></h2>
         <table>
-            <tr><td><a id="ROOF_LINK" href="#">Roof</a></td><td>=</td><td id="P_ROOF"> <span class="energy-unit">W</span></td></tr>
-            <tr><td><a id="GARAGE_INVERTER_LINK" href="#">Garage Inverter</a></td><td>=</td><td id="GARAGE_INVERTER_POWER"> <span class="energy-unit">W</span></td></tr>
-            <tr><td><a id="BATTERY_INVERTER_LINK" href="#">Battery Inverter</a></td><td>=</td><td id="BATTERY_INVERTER_POWER"> <span class="energy-unit">W</span></td></tr>
-            <tr><td><a id="BALKON_INVERTER_LINK" href="#">Balkon Inverter</a></td><td>=</td><td id="BALKON_INVERTER_POWER"> <span class="energy-unit">W</span></td></tr>
-            <tr><td>Venus1 discharge</td><td>=</td><td id="VENUS1_DISCHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
-            <tr><td>Venus2 discharge</td><td>=</td><td id="VENUS2_DISCHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td><a id="ROOF_LINK" href="#">Roof</a></td><td>=</td><td id="P_ROOF"></td></tr>
+            <tr><td><a id="BALKON_INVERTER_LINK" href="#">Balkon Inverter</a></td><td>=</td><td id="BALKON_INVERTER_POWER"></td></tr>
+            <tr><td><a id="GARAGE_INVERTER_LINK" href="#">Garage Inverter</a></td><td>=</td><td id="GARAGE_INVERTER_POWER"></td></tr>
+            <tr><td><a id="BATTERY_INVERTER_LINK" href="#">Battery Inverter</a></td><td>=</td><td id="BATTERY_INVERTER_POWER"></td></tr>
+            <tr><td>Venus1 discharge</td><td>=</td><td id="VENUS1_DISCHARGE_POWER"></td></tr>
+            <tr><td>Venus2 discharge</td><td>=</td><td id="VENUS2_DISCHARGE_POWER"></td></tr>
 
             <tr><td colspan="3"><hr></td></tr>
 
-            <tr><td>Total Source</td><td>=</td><td id="POWER_SOURCES"> <span class="energy-unit">W</span></td></tr>
+            <tr><td>Total Source</td><td>=</td><td id="POWER_SOURCES"></td></tr>
         </table>
     </div>
 
     <div class="right">
         <h2>Sinks <span style="font-size: 0.6em;">(Ladung)</span></h2>
         <table>
-            <tr><td><a id="BATTERY_CHARGER1_LINK" href="#">Battery Charger1</a></td><td>=</td><td id="BATTERY_CHARGER1_POWER"> <span class="energy-unit">W</span></td></tr>
-            <tr><td><a id="BATTERY_CHARGER2_LINK" href="#">Battery Charger2</a></td><td>=</td><td id="BATTERY_CHARGER2_POWER"> <span class="energy-unit">W</span></td></tr>
-            <tr><td>Venus1 charge</td><td>=</td><td id="VENUS1_CHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
-            <tr><td>Venus2 charge</td><td>=</td><td id="VENUS2_CHARGE_POWER"> <span class="energy-unit">W</span></td></tr>
+            <tr><td><a id="BATTERY_CHARGER1_LINK" href="#">Battery Charger1</a></td><td>=</td><td id="BATTERY_CHARGER1_POWER"></td></tr>
+            <tr><td><a id="BATTERY_CHARGER2_LINK" href="#">Battery Charger2</a></td><td>=</td><td id="BATTERY_CHARGER2_POWER"></td></tr>
+            <tr><td>Venus1 charge</td><td>=</td><td id="VENUS1_CHARGE_POWER"></td></tr>
+            <tr><td>Venus2 charge</td><td>=</td><td id="VENUS2_CHARGE_POWER"></td></tr>
 
             <tr><td colspan="3"><hr></td></tr>
 
-            <tr><td>Total Sink</td><td>=</td><td id="POWER_SINKS">_ <span class="energy-unit">W</span></td></tr>
+            <tr><td>Total Sink</td><td>=</td><td id="POWER_SINKS"></td></tr>
         </table>
     </div>
 </div>
@@ -235,7 +277,7 @@
 
 
 <script>
-// Funktion zur Aktualisierung der Daten (unverändert)
+// Funktion zur Aktualisierung der Daten (KORRIGIERT: Verwendet innerHTML, um die W-Einheit korrekt einzufügen)
 async function update() {
     try {
         const res = await fetch('/PVBattery.json', { cache: 'no-cache' });
@@ -252,17 +294,24 @@ async function update() {
             "POWER_SOURCES",
             "BATTERY_CHARGER1_POWER","BATTERY_CHARGER2_POWER",
             "VENUS1_CHARGE_POWER",
-            "VENUS2_CHARGE_POWER","POWER_SINKS"
+            "VENUS2_CHARGE_POWER","POWER_SINKS",
+            "batt_SOC", "SOC1", "SOC2",
         ];
 
-        // Fügt die W-Einheit nur zu den Power-Werten hinzu
+        // IDs der Power-Werte, die die Einheit 'W' benötigen
         const powerIds = ids.filter(id => id.includes("POWER") || id.includes("GRID") || id === "P_ROOF");
 
+        // KORRIGIERT: Nutzung von innerHTML, um die formatierte Einheit 'W' überall einzufügen
         ids.forEach(id => {
             const e = document.getElementById(id);
             if(e && d[id]!==undefined) {
-                // Fügt die Einheit W bei den Power-Werten hinzu
-                e.textContent = powerIds.includes(id) ? `${d[id]}` : d[id];
+                if (powerIds.includes(id)) {
+                    // Setzt den Wert und fügt die W-Einheit mit dem span-Tag hinzu (wichtig für die Formatierung)
+                    e.innerHTML = `${d[id]} <span class="energy-unit">W</span>`;
+                } else {
+                    // Setzt nur den Text (für Datum/Status etc.)
+                    e.textContent = d[id];
+                }
             }
         });
 
