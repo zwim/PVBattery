@@ -5,11 +5,11 @@
 
 local config = require("configuration")
 local socket = require("socket")
-local util = require("util")
+local util = require("base/util")
 
 local http = require("socket.http")
 
-local ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME = table.unpack((require("antbms-reset")))
+local ESP32_HARD_RESET_COMMAND, ESP32_RESET_SLEEP_TIME = table.unpack((require("base/antbms-reset")))
 
 local BMS_DATA_SIZE = 140
 local READ_DATA_SIZE = 2048

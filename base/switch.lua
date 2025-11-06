@@ -1,8 +1,6 @@
 
--- local config = require("configuration")
--- local json = require("dkjson")
-local mqtt_reader = require("mqtt_reader")
-local util = require("util")
+local mqtt_reader = require("base/mqtt_reader")
+local util = require("base/util")
 
 local http = require("socket.http")
 http.TIMEOUT=5

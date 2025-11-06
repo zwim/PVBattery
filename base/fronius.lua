@@ -1,9 +1,9 @@
 
 local config = require("configuration")
 local json = require("dkjson")
-local util = require("util")
+local modbus = require("base/modbus")
 local http = require("socket.http")
-local modbus = require("modbus")
+local util = require("base/util")
 
 local host = "192.168.0.49"
 local port = "80"

@@ -1,4 +1,5 @@
 
+local dnshelper = require("base/dnshelper")
 local ffi = require("ffi")
 local json = require("dkjson")
 local lfs = require("lfs")
@@ -11,6 +12,7 @@ end
 
 local json_decode_tmp = json.decode
 
+--[[
 function json.decode(str)
     if str then
         str = str:gsub("^%s*(.-)%s*$", "%1")
@@ -24,7 +26,7 @@ function json.decode(str)
         return 0
     end
 end
-
+]]
 local util = {
     log = nil,
     log_file_name = nil,
@@ -72,22 +74,22 @@ end
 util.log = util.logToScreen
 
 function util.exToNum(str)
-  if str then
-    return (str:gsub('..', function (cc)
-        return string.char(tonumber(cc, 16))
-    end))
-  end
-  return 0
+    if str then
+        return (str:gsub('..', function (cc)
+                    return string.char(tonumber(cc, 16))
+                end))
+    end
+    return 0
 end
 
 function util.stringToHex(str)
-  if str then
-    return (str:gsub('.', function (c)
-        if c == 0 then return "00" end
-        return string.format('%02X', string.byte(c))
-    end))
-  end
-  return ""
+    if str then
+        return (str:gsub('.', function (c)
+                    if c == 0 then return "00" end
+                    return string.format('%02X', string.byte(c))
+                end))
+    end
+    return ""
 end
 
 function util.numToBits(num, nb)
@@ -156,7 +158,7 @@ function util:cleanLogs()
     local attributes = lfs.attributes(self.log_file_name, "size")
     if attributes and attributes > 1024*1024 then
         local log_file_name_rotated = self.log_file_name:sub(1, self.log_file_name:find(".log$") - 1) ..
-            os.date("-%Y%m%d-%H%M%S") .. ".log"
+        os.date("-%Y%m%d-%H%M%S") .. ".log"
         if os.execute("mv " .. self.log_file_name .. " " .. log_file_name_rotated) ~= 0 then
             print("Error in rotating log file")
         end
@@ -349,7 +351,6 @@ end
 
 -- url can be URL or hostname
 function util.getIPfromURL(url)
-    local dnshelper = require("dnshelper")
     dnshelper.debug = false
 
     -- Extract hostname if URL includes "http://"
@@ -412,6 +413,16 @@ function util.int32_to_float(value, little_endian)
     local fptr = ffi.cast("float*", bytes)
 
     return fptr[0]
+end
+
+-- Safe JSON decode: prevents crashes on invalid JSON
+function util.safe_json_decode(payload)
+    local ok, result = pcall(json.decode, payload, 1, nil)
+    if not ok then
+        print("JSON decode error:", result)
+        return nil, result
+    end
+    return result
 end
 
 

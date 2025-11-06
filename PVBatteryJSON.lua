@@ -8,35 +8,28 @@ return function(self, VERSION)
     local sinks = 0
     for _, Battery in ipairs(self.USPBattery) do
         for _, Charger in ipairs(Battery.Charger) do
-            local power = Charger:getPower()
-            table.insert(ChargerPowerCache, power)
-            sinks = sinks + power
+            Charger.power = Charger:getPower()
+            table.insert(ChargerPowerCache, Charger.power)
+            sinks = sinks + Charger.power
         end
     end
     for _, Battery in ipairs(self.SmartBattery) do
         sinks = sinks + math.max(-Battery.power, 0)
     end
 
-    local sources =  0
-    for i = 1, #self.Inverter do
-        local pow = self.Inverter[i]:getPower() or 0
-        table.insert(InverterPowerCache, pow)
-        sources = sources + pow
-    end
-    for _, Battery in ipairs(self.USPBattery) do
-        if Battery.power <= 0 then -- negative, if dischargeing
-            local power = -Battery.power
-            table.insert(InverterPowerCache, power)
-            sources = sources + power
-        end
+    local sources =  self.P_PV
+    for _, Inverter in ipairs(self.Inverter) do
+        Inverter.power = math.abs(Inverter:getPower()) or 0
+        table.insert(InverterPowerCache, Inverter.power)
+        sources = sources + Inverter.power
     end
     for _, Battery in ipairs(self.SmartBattery) do
         sources = sources + math.max(Battery.power, 0)
     end
 
-    local SOC_string = ""
+    local SOC_string = "<br>"
     for _, Battery in ipairs(self.Battery) do
-        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."% "
+        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."%<br>"
     end
 
     local data = {

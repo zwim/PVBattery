@@ -1,10 +1,10 @@
 -- Masterclass for Batteries
 
-local util = require("util")
+local util = require("base/util")
 
-local PowerDevice = require("PowerDevice")
+local PowerDevice = require("mid/PowerDevice")
 
-local Fronius = require("fronius")
+local Fronius = require("base/fronius")
 
 local FroniusInverter = PowerDevice:extend{
     __name = "FroniusInverter",

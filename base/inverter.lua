@@ -1,7 +1,7 @@
 
-local Switch = require("switch")
+local Switch = require("base/switch")
 
-local util = require("util")
+local util = require("base/util")
 
 local Inverter = Switch:extend{
     bms_host = "",
