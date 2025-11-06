@@ -27,17 +27,20 @@ return function(self, VERSION)
         sources = sources + math.max(Battery.power, 0)
     end
 
-    local SOC_string = "<br>"
-    for _, Battery in ipairs(self.Battery) do
-        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."%<br>"
-    end
+--    local SOC_string = "<br>"
+--    for _, Battery in ipairs(self.Battery) do
+--        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."%<br>"
+--    end
 
     local data = {
         Vx_y_z = VERSION or "Vx.y.z",
         DATE = os.date(),
         SUNRISE = self.sunrise,
         SUNSET = self.sunset,
-        STATE_OF_OPERATION = (self._state or "") .. " " .. SOC_string,
+        STATE_OF_OPERATION = "",
+        batt_SOC = tostring(math.floor(self.USPBattery[1].SOC)) .. "%",
+        SOC1 = tostring(self.SmartBattery[1].SOC) .. "%",
+        SOC2 = tostring(self.SmartBattery[2].SOC) .. "%",
         FRONIUS_ADR = config.FRONIUS_ADR,
         P_GRID = self.P_Grid or "0.0",
         P_SELL_GRID = self.P_Grid < 0 and string.format("%5.1f", -self.P_Grid or 0) or "0.0",

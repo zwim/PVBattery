@@ -7,6 +7,10 @@ local Battery = PowerDevice:extend{
     __name = "Battery",
     internal_state = "",
     use_schedule = true,
+    OFFSET_TO_HIGH_NOON = -1/4, -- in hours
+    OFFSET_TO_SUNSET = -3, -- in hours
+    FIRST_MAX_SOC_LEVEL = 60, -- Percent
+    SECOND_MAX_SOC_LEVEL = 80, -- Percent
 }
 
 function Battery:new(o)
@@ -48,19 +52,19 @@ end
 -- There you have it. Optimizing your battery's life, one strategic percentage at a time.
 --
 -- ajustable parameters:
-local OFFSET_TO_HIGH_NOON = -1/4 -- in hours
-local OFFSET_TO_SUNSET = -2.5 -- in hours
-local FIRST_MAX_SOC_LEVEL = 60 -- Percent
-local SECOND_MAX_SOC_LEVEL = 80 -- Percent
+--self.OFFSET_TO_HIGH_NOON = -1/4 -- in hours
+--self.OFFSET_TO_SUNSET = -2.5 -- in hours
+--self.FIRST_MAX_SOC_LEVEL = 60 -- Percent
+--self.SECOND_MAX_SOC_LEVEL = 80 -- Percent
 function Battery:getDesiredMaxSOC_scheduled(current_time_h)
     current_time_h = current_time_h or SunTime:getTimeInHours()
 
-    local time_1_h = SunTime.noon + OFFSET_TO_HIGH_NOON
+    local time_1_h = SunTime.noon + self.OFFSET_TO_HIGH_NOON
     if current_time_h < time_1_h then
-        return math.min(FIRST_MAX_SOC_LEVEL, self.Device.SOC_max)
+        return math.min(self.FIRST_MAX_SOC_LEVEL, self.Device.SOC_max)
     end
 
-    local time_2_h = SunTime.set + OFFSET_TO_SUNSET
+    local time_2_h = SunTime.set + self.OFFSET_TO_SUNSET
     if time_2_h < time_1_h then
         time_2_h = time_1_h + 0.5
     end
@@ -68,13 +72,13 @@ function Battery:getDesiredMaxSOC_scheduled(current_time_h)
         return self.Device.SOC_max
     end
 
-    local y = SECOND_MAX_SOC_LEVEL - FIRST_MAX_SOC_LEVEL
+    local y = self.SECOND_MAX_SOC_LEVEL - self.FIRST_MAX_SOC_LEVEL
     local x = time_2_h - time_1_h
     local k = y / x
 
     local t = current_time_h - time_1_h
 
-    local max_SOC = FIRST_MAX_SOC_LEVEL + t * k
+    local max_SOC = self.FIRST_MAX_SOC_LEVEL + t * k
     return max_SOC
 --        return SECOND_MAX_SOC_LEVEL
 end
