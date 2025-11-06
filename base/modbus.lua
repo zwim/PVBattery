@@ -2,6 +2,8 @@ local bit = require("bit")
 local socket = require("socket")
 local util = require("base/util")
 
+--luacheck: globals config
+
 local Modbus = {
     __name = "Modbus",
 
@@ -107,6 +109,7 @@ function Modbus:checkResponse(request, response, err)
 end
 
 -- second_try should be nil for the first call, after an error it is set
+--luacheck: ignore _second_try
 function Modbus:readHoldingRegisters(quantity, reg, _second_try)
     if not self:ensureConnection() then return nil end
 

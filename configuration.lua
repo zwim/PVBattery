@@ -152,28 +152,33 @@ local configuration = {
         { -- Device[8]
             typ = "prognose",
             brand = "solarprognose",
-            {
-                __name = "roof",
-                token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
-                project = "7052",
-                item = "module_filed",
-                id = "14336",
-                typ = "hourly",
-                cachefile = "/tmp/solarprognose_dach.json",
-                cachetime = 1*3600,
-            },
-            { -- Device[9]
-                __name = "roof",
-                token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
-                project = "7052",
-                item = "module_filed",
-                id = "14337",
-                typ = "hourly",
-                cachefile = "/tmp/solarprognose_balkon.json",
-                cachetime = 1*3600,
+            cfg = {
+                planes = {
+                    {
+                        name = "roof",
+                        token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
+                        project = "7052",
+                        item = "module_filed",
+                        id = "14336",
+                        typ = "hourly",
+                        cachefile = "/tmp/solarprognose_dach.json",
+                        cachetime = 1*3600,
+                    },
+                    {
+                        name = "balkon",
+                        token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
+                        project = "7052",
+                        item = "module_filed",
+                        id = "14337",
+                        typ = "hourly",
+                        cachefile = "/tmp/solarprognose_balkon.json",
+                        cachetime = 1*3600,
+                    },
+                },
+                cachefile = "/tmp/solarprognose_agg_total.json",
             },
         },
-        { -- Device[10]
+        { -- Device[9]
             typ = "prognose",
             brand = "forecast.solar",
             cfg = {
@@ -215,7 +220,6 @@ local configuration = {
     db_token  = "Xeq_91oWUcNVCNwE4JsMYJ7-2qT3HybpO5HoqmI40ZEWxZ0Uo6f6GFwg0DamnCPIQBVEXeHcVIy5Or4SbkBkEw==",
     db_org    = "PV",
     db_bucket = "Daten",
-
 }
 
 function configuration:needUpdate()

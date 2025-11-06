@@ -56,13 +56,13 @@ function Switch:getEnergyTotal()
     mqtt_reader:processMessages()
 
     local state = mqtt_reader.states[self.topic_name]
-    if not state or not state.Total then
+    if not state or not state.total then
         mqtt_reader:askHost(self.host, 2)
         mqtt_reader:sleepAndCallMQTT(4, nil)
         state = mqtt_reader.states[self.topic_name]
     end
 
-    local Energy = state and state.Total or (0/0)
+    local Energy = state and state.total or (0/0)
     return Energy
 end
 
@@ -70,13 +70,13 @@ function Switch:getEnergyToday()
     mqtt_reader:processMessages()
 
     local state = mqtt_reader.states[self.topic_name]
-    if not state or not state.Today then
+    if not state or not state.today then
         mqtt_reader:askHost(self.host, 2)
         mqtt_reader:sleepAndCallMQTT(4, nil)
         state = mqtt_reader.states[self.topic_name]
     end
 
-    local Energy = state and state.Today or (0/0)
+    local Energy = state and state.today or (0/0)
     return Energy
 end
 
@@ -84,13 +84,13 @@ function Switch:getEnergyYesterday()
     mqtt_reader:processMessages()
 
     local state = mqtt_reader.states[self.topic_name]
-    if not state or not state.Yesterday then
+    if not state or not state.yesterday then
         mqtt_reader:askHost(self.host, 2)
         mqtt_reader:sleepAndCallMQTT(4, nil)
         state = mqtt_reader.states[self.topic_name]
     end
 
-    local Energy = state and state.Yesterday or (0/0)
+    local Energy = state and state.yesterday or (0/0)
     return Energy
 end
 

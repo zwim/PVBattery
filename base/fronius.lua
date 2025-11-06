@@ -188,7 +188,7 @@ end
 local function example()
     local SmartMeter = Fronius:new{ip = "192.168.0.49"}
 
-    for i = 1, 100 do
+    for _ = 1, 100 do
         local power = SmartMeter:getPowerModbus()
         print("power", power)
     end

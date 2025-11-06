@@ -230,8 +230,16 @@ if arg[0]:find("MarstekBattery.lua") then
 
     local VenusE = MarstekBattery:new{Device = {host = host, port = port, slaveId = slaveId}}
 
-    local VenusE2 = MarstekBattery:new{Device = {host = "192.168.0.208", port = port, slaveId = slaveId}}
+    local register     = {adr = 35000, typ = "u16", gain = 1, unit = ""}
 
+--[[    for i=1, 100 do
+        print(register.adr, VenusE.VenusE:readHoldingRegisters(register))
+        register.adr = register.adr + 1
+        os.execute("sleep 1")
+    end
+
+    os.exit(1)
+]]
 
     VenusE.Device.SOC_max = 100
 
@@ -247,7 +255,6 @@ if arg[0]:find("MarstekBattery.lua") then
     printValue(VenusE:getPower())
     printValue(VenusE:setMode({auto = true}))
 
-    printValue(VenusE2:setMode({auto = true}))
 
     local n=1
     print(n) n=n+1
@@ -275,8 +282,13 @@ if arg[0]:find("MarstekBattery.lua") then
 ]]
 
 --    VenusE:take(2020)
-    VenusE:give(30)
-    VenusE2:give(50)
+--    VenusE:give(30)
+
+
+   local VenusE2 = MarstekBattery:new{Device = {host = "192.168.0.208", port = port, slaveId = slaveId}}
+    printValue(VenusE2:setMode({auto = true}))
+
+--    VenusE2:give(50)
 
 end
 
