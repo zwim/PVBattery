@@ -13,6 +13,8 @@ local EnvertechInverter = PowerDevice:extend{
 }
 
 function EnvertechInverter:init()
+    if PowerDevice.init then PowerDevice.init(self) end
+
     local Device = self.Device
     if Device.inverter_switch then
         self.Inverter = InverterClass:new{

@@ -11,7 +11,7 @@ if Profiler then
     Profiler.start()
 end
 
-local GRID_THRESHOLD = 5
+--local GRID_THRESHOLD = 5
 local MIN_CHARGE_POWER = 15
 local MIN_DISCHARGE_POWER = 15
 
@@ -66,6 +66,8 @@ local function formatSunEvent(label, hourVal)
 end
 
 function PVBattery:init()
+    BaseClass.init(self)
+
 --    config:read()
     util:setLog(config.log_file_name or "PVBattery.log")
     util:setCompressor(config.compressor)
@@ -161,255 +163,315 @@ function PVBattery:getValues()
     end
 end
 
-local P_exzess_old = 0
-local doTheMagic_early_return = 0
+local P_excess_old = 0
+-- Ersetze die ganze doTheMagic-Funktion mit dieser Version
 function PVBattery:doTheMagic(_second_try)
     local battery_string = ""
     local SOC_string = ""
 
+    -- Recalculate battery powers and SOCs
     self.P_Battery = 0
     for _, Battery in ipairs(self.Battery) do
         -- use schedule algorithm, if expected yield is more than the unused capacity
-        Battery.use_schedule = self.expected_yield > self.free_capacity
+        Battery.use_schedule = (self.expected_yield or 0) > (self.free_capacity or 0)
 
-        Battery.power = Battery:getPower() -- negative, if dischargeing
+        -- defensive getPower
+        local ok, p = pcall(function() return Battery:getPower() end)
+        Battery.power = (ok and type(p) == "number") and p or 0 -- negative if discharging in original API
         self.P_Battery = self.P_Battery + Battery.power
-        battery_string = battery_string .. string.format("%s: %5.0f   ", Battery.Device.name, Battery.power)
-        SOC_string = SOC_string .. string.format("%s: %5.1f%%   ", Battery.Device.name, Battery.SOC)
 
+        battery_string = battery_string .. string.format("%s: %5.0f   ", Battery.Device and Battery.Device.name or "unknown", Battery.power)
+        SOC_string = SOC_string .. string.format("%s: %5.1f%%   ", Battery.Device and Battery.Device.name or "unknown", Battery.SOC or 0)
     end
     self:log(3, "Battery ... ", battery_string)
     self:log(3, "Battery ... ", SOC_string)
 
-    -- Workaround, as the TINETZ SmartMeter delivres data only every 5-10 sec.
---    local value, is_data_old = self.Smartmeter[1]:getPower()
---    if is_data_old then
---        self:log(1, "P1Meter: no new data")
---        return
---    end
---    self.P_Grid = value
-
-    self.P_Grid_slow, self.P_Load, self.P_PV, self.P_AC  = self.Fronius:getAllPower()
-    self.P_Grid = self.Fronius:getPower() -- this a fast modbus call
-
-    -- P_exzess is the power we could
-    --     store in our batteries if negative
-    --     reclaim from our batteries if positive
-    local P_exzess = self.P_Grid + self.P_Battery
-    self:log(1, string.format("P_Grid: %5.1f, P_exzess: %5.1f, P_exzess_old: %5.1f", self.P_Grid, P_exzess, P_exzess_old))
-
-    if doTheMagic_early_return < 10 then
-        doTheMagic_early_return = 0
-        if math.abs(self.P_Grid) < GRID_THRESHOLD then
-            return
-        end
+    -- get grid / pv / load readings (defensive)
+    local ok_all, v1, v2, v3, v4 = pcall(function() return self.Fronius:getAllPower() end)
+    if ok_all and type(v1) == "number" then
+        self.P_Grid_slow, self.P_Load, self.P_PV, self.P_AC = v1, v2, v3, v4
     else
-        doTheMagic_early_return = doTheMagic_early_return + 1
+        -- fallback to keep previous or zero
+        self:log(1, "Warning: Fronius:getAllPower failed")
+    end
+    local ok_pgrid, pg = pcall(function() return self.Fronius:getPower() end)
+    if ok_pgrid and type(pg) == "number" then
+        self.P_Grid = pg
+    else
+        self:log(1, "Warning: Fronius:getPower failed")
     end
 
-    -- if at least one battery does not, what is expected, turn it of and retrun early
-    -- we get here soon again ;)
+    -- P_excess interpretation: positive -> we can discharge to grid (need to supply), negative -> we can charge batteries
+    local P_excess = (self.P_Grid or 0) + (self.P_Battery or 0)
+    self:log(1, string.format("P_Grid: %5.1f, P_excess: %5.1f", self.P_Grid or 0, P_excess))
+
+    -- quick sanity: if device lists missing, bail safely
+    local smart_count = #self.SmartBattery
+    if smart_count == 0 then
+        self:log(2, "No SmartBattery configured")
+    end
+
+    -- Check for manual overrides: if some battery reports state that needs clearing, do it and retry once
     local clear_any_battery
-    if P_exzess > MIN_DISCHARGE_POWER then -- discharge batteries
+    if P_excess > MIN_DISCHARGE_POWER then
         for _, Battery in ipairs(self.Battery) do
-            if Battery.state.take then
-                Battery:take(0)
-                P_exzess = P_exzess - Battery.power
+            if Battery.state and Battery.state.take then
+                pcall(function() Battery:take(0) end)
+                P_excess = P_excess - (Battery.power or 0)
                 clear_any_battery = "taken"
             end
         end
-    elseif P_exzess < -MIN_CHARGE_POWER then -- charge batteries
+    elseif P_excess < -MIN_CHARGE_POWER then
         for _, Battery in ipairs(self.Battery) do
-            if Battery.state.give then
-                Battery:give(0)
+            if Battery.state and Battery.state.give then
+                pcall(function() Battery:give(0) end)
                 clear_any_battery = "given"
             end
         end
     end
     if clear_any_battery then
-        self:log(3, clear_any_battery)
+        self:log(3, "cleared:", clear_any_battery)
         if _second_try then
             return
         else
-            return self:doTheMagic(true) -- call again and leave after that
+            return self:doTheMagic(true)
         end
     end
 
-    if doTheMagic_early_return < 10 then
-        doTheMagic_early_return = 0
-        if math.abs(P_exzess - P_exzess_old) < 10 then
-            return
-        end
-    else
-        doTheMagic_early_return = doTheMagic_early_return + 1
-    end
+    -- store for history/debug
+    P_excess_old = P_excess
 
-    P_exzess_old = P_exzess
-
-    if P_exzess > MIN_DISCHARGE_POWER then -- discharge batteries
+    -------------------------------------------------------
+    -- DISCHARGE PATH (P_excess > 0)  -- positive numbers
+    -------------------------------------------------------
+    if P_excess > MIN_DISCHARGE_POWER and smart_count > 0 then
+        -- First: try to use UPS batteries (USPBattery) to supply bulk if available
         for _, Battery in ipairs(self.USPBattery) do
-            local max_discharge_power_power = -Battery.Inverter:getMaxPower() -- negative, maximal discharge of the USP
-            if P_exzess + max_discharge_power_power > 0 then
-                local state = Battery.state
+            -- defensive max power read
+            local ok, maxp = pcall(function() return Battery.Inverter:getMaxPower() end)
+            local max_discharge = ok and type(maxp) == "number" and -maxp or 0 -- note original Inverter:getMaxPower seemed negated in code, preserve safe behavior
+            if max_discharge == 0 then max_discharge = -math.huge end
+
+            if P_excess + max_discharge > 0 then
+                local state = Battery.state or {}
                 if state.idle or state.can_give then
-                    Battery:give(math.abs(P_exzess))
+                    pcall(function() Battery:give(math.abs(P_excess)) end)
                     mqtt_reader:sleepAndCallMQTT(2)
-                    Battery.power = Battery:getPower() -- negative, if dischargeing
-                    self:log(2, "GIVE", Battery.Device.name, Battery.power)
-                    P_exzess = P_exzess - Battery.power
+                    local ok2, newp = pcall(function() return Battery:getPower() end)
+                    Battery.power = (ok2 and type(newp) == "number") and newp or 0
+                    self:log(2, "GIVE", Battery.Device and Battery.Device.name or "usp", math.floor(Battery.power*10)/10)
+                    P_excess = P_excess - Battery.power
                 end
             else
-                P_exzess = P_exzess + Battery.power -- because we stop battery soon
-                Battery:give(0)
+                -- stop battery providing if insufficient
+                P_excess = P_excess + (Battery.power or 0)
+                pcall(function() Battery:give(0) end)
                 Battery.power = 0
-                self:log(2, "GIVE", Battery.Device.name, 0)
+                self:log(2, "GIVE", Battery.Device and Battery.Device.name or "usp", 0)
             end
         end
 
+        -- Compute demand metric: how much each smart battery *can* still discharge (based on SOC)
         local sum_remaining_SOC = 0
         for _, Battery in ipairs(self.SmartBattery) do
-            sum_remaining_SOC = sum_remaining_SOC + (math.max(0, Battery.SOC - Battery.Device.SOC_min))^2
+            local delta = math.max(0, (Battery.SOC or 0) - (Battery.Device and Battery.Device.SOC_min or 0))
+            sum_remaining_SOC = sum_remaining_SOC + (delta * delta)
             Battery.batt_req_power = 0
         end
-        if sum_remaining_SOC > 1 then
-            local nb_batteries = #self.SmartBattery
-            local not_distributed_power = P_exzess -- positive
-            -- first distribute power depending on SOC
+
+        if sum_remaining_SOC > 0 then
+            -- proportional initial allocation
+            local nb_avail = smart_count
+            local not_distributed = P_excess -- positive
             for _, Battery in ipairs(self.SmartBattery) do
                 local p = 0
-                if Battery.SOC >= Battery.Device.SOC_min then
-                    p = P_exzess * (Battery.SOC - Battery.Device.SOC_min)^2 / sum_remaining_SOC -- proportional share
-                    if p > Battery.Device.discharge_max_power then
-                        p = Battery.Device.discharge_max_power
-                        nb_batteries = nb_batteries - 1
+                local soc_min = Battery.Device and Battery.Device.SOC_min or 0
+                if (Battery.SOC or 0) > soc_min then
+                    p = P_excess * (math.max(0, (Battery.SOC or 0) - soc_min)^2) / sum_remaining_SOC
+                    local maxd = Battery.Device and Battery.Device.discharge_max_power or math.huge
+                    if p > maxd then
+                        p = maxd
+                        nb_avail = nb_avail - 1
                     end
-                    if p < MIN_CHARGE_POWER then
-                        p = 0 -- no power for now
+                    if p < MIN_DISCHARGE_POWER then
+                        p = 0
                     end
                 end
-                Battery.batt_req_power = p -- is positive or zero
-                not_distributed_power = not_distributed_power - p -- should be and stay positive
+                Battery.batt_req_power = p
+                not_distributed = not_distributed - p
             end
 
-            -- if there is not_distributed_power and
-            while not_distributed_power > MIN_DISCHARGE_POWER and nb_batteries > 0 do
-                local remaining_power = not_distributed_power / nb_batteries
-                if remaining_power < MIN_DISCHARGE_POWER then
-                    remaining_power = not_distributed_power -- give it all to one
-                end
+            -- distribute remainder while respecting per-battery discharge_max_power
+            while not_distributed > MIN_DISCHARGE_POWER and nb_avail > 0 do
+                local remaining_share = not_distributed / nb_avail
+                if remaining_share < MIN_DISCHARGE_POWER then remaining_share = not_distributed end
+
                 for _, Battery in ipairs(self.SmartBattery) do
-                    if Battery.Device.charge_max_power > Battery.batt_req_power then -- may get some power too
-                        local power_to_add = remaining_power
-                        if Battery.Device.discharge_max_power < Battery.batt_req_power + power_to_add   then
-                            power_to_add = Battery.batt_req_power + power_to_add - Battery.Device.discharge_max_power
+                    local maxd = Battery.Device and Battery.Device.discharge_max_power or math.huge
+                    if Battery.batt_req_power < maxd then
+                        local add = remaining_share
+                        -- if battery at or below min SOC, skip
+                        if (Battery.SOC or 0) <= (Battery.Device and Battery.Device.SOC_min or 0) then
+                            add = 0
+                        else
+                            local allowed = maxd - Battery.batt_req_power
+                            if add > allowed then add = allowed end
                         end
-                        Battery.batt_req_power = Battery.batt_req_power + power_to_add
-                        not_distributed_power = not_distributed_power - power_to_add
-                        nb_batteries = nb_batteries - 1
-                        if not_distributed_power <= 0 or nb_batteries < 1 then
-                            break
-                        end
+                        Battery.batt_req_power = Battery.batt_req_power + add
+                        not_distributed = not_distributed - add
+                        nb_avail = nb_avail - 1
+                        if not_distributed <= 0 or nb_avail < 1 then break end
                     end
                 end
             end
-        end -- sum_remaining_SOC
-
-        for _, Battery in ipairs(self.SmartBattery) do
-            Battery.batt_req_power = math.min(Battery.batt_req_power, Battery.Device.discharge_max_power)
-            Battery:give(math.floor(Battery.batt_req_power))
-            self:log(2, "GIVE", Battery.Device.name, Battery.batt_req_power)
-            Battery.power = Battery.batt_req_power
+            self:log(3, "Not distributed discharge power", not_distributed)
         end
 
-    elseif P_exzess < -MIN_CHARGE_POWER then -- charge batteries
+        -- final clamp & apply: ensure we don't exceed per-battery limits and call give()
+        for _, Battery in ipairs(self.SmartBattery) do
+            local maxd = Battery.Device and Battery.Device.discharge_max_power or math.huge
+            if Battery.batt_req_power > maxd then Battery.batt_req_power = maxd end
 
+            local give_watts = math.floor(math.max(0, Battery.batt_req_power))
+            if give_watts > 0 then
+                local ok, err = pcall(function() Battery:give(give_watts) end)
+                if not ok then util:log(0, "Error on Battery:give for "..tostring(Battery.Device and Battery.Device.name)..": "..tostring(err)) end
+            else
+                pcall(function() Battery:give(0) end)
+            end
+            self:log(2, "GIVE", Battery.Device and Battery.Device.name or "unknown", math.floor(Battery.batt_req_power*10/10))
+            Battery.power = Battery.batt_req_power -- positive = discharging
+        end
+    end -- end discharge path
+
+    -------------------------------------------------------
+    -- CHARGE PATH (P_excess < 0)  -- negative numbers
+    -------------------------------------------------------
+    if P_excess < -MIN_CHARGE_POWER and smart_count > 0 then
+        -- First: try to use UPS chargers to absorb bulk if available
         for _, Battery in ipairs(self.USPBattery) do
-            local max_charger_power = math.min(Battery.Charger[1]:getMaxPower(),Battery.Charger[2]:getMaxPower())
-            if   P_exzess + max_charger_power < 0 then
-                local state = Battery.state
+            local max_charger = math.huge
+            local ok1, m1 = pcall(function() return Battery.Charger[1]:getMaxPower() end)
+            local ok2, m2 = pcall(function() return Battery.Charger[2]:getMaxPower() end)
+            if ok1 and ok2 and type(m1) == "number" and type(m2) == "number" then
+                max_charger = math.min(m1, m2)
+            end
+
+            if P_excess + max_charger < 0 then
+                local state = Battery.state or {}
                 if state.idle or state.can_take then
-                    Battery:take(math.abs(P_exzess))
+                    pcall(function() Battery:take(math.abs(P_excess)) end)
                     mqtt_reader:sleepAndCallMQTT(2)
-                    Battery.power = Battery:getPower() -- negative if dischargeing
-                    self:log(2, "TAKE", Battery.Device.name, Battery.power)
-                    P_exzess = P_exzess - Battery.power
+                    local okp, newp = pcall(function() return Battery:getPower() end)
+                    Battery.power = (okp and type(newp) == "number") and newp or 0
+                    self:log(2, "TAKE", Battery.Device and Battery.Device.name or "usp", math.floor(Battery.power*10)/10)
+                    P_excess = P_excess - Battery.power
                 end
             else
-                P_exzess = P_exzess + Battery.power
-                Battery:take(0)
+                P_excess = P_excess + (Battery.power or 0)
+                pcall(function() Battery:take(0) end)
                 Battery.power = 0
-                self:log(2, "TAKE", Battery.Device.name, 0)
+                self:log(2, "TAKE", Battery.Device and Battery.Device.name or "usp", 0)
             end
         end
 
+        -- compute how much each smart battery wants to charge (desiredMax - SOC)
         local sum_missing_SOC = 0
         for _, Battery in ipairs(self.SmartBattery) do
-            sum_missing_SOC = sum_missing_SOC + (math.max(0, Battery:getDesiredMaxSOC() - Battery.SOC))^2
+            local desired = 0
+            local okd, d = pcall(function() return Battery:getDesiredMaxSOC() end)
+            if okd and type(d) == "number" then desired = d end
+            local delta = math.max(0, desired - (Battery.SOC or 0))
+            sum_missing_SOC = sum_missing_SOC + (delta * delta)
             Battery.batt_req_power = 0
         end
-        if sum_missing_SOC >= 1 then
-            local nb_batteries = #self.SmartBattery
-            local not_distributed_power = P_exzess --negative
-            -- first distribute power depending on SOC
+
+        if sum_missing_SOC > 0 then
+            local nb_avail = smart_count
+            local not_distributed = P_excess -- negative
+
+            -- proportional initial allocation (negative values)
             for _, Battery in ipairs(self.SmartBattery) do
                 local p = 0
-                if Battery.SOC <= Battery:getDesiredMaxSOC() then
-                    p = (P_exzess * (Battery:getDesiredMaxSOC() - Battery.SOC)^2 / sum_missing_SOC) -- proportional share
-                    if p < -Battery.Device.charge_max_power then
-                        p = -Battery.Device.charge_max_power
-                        nb_batteries = nb_batteries - 1
+                local okd, desired = pcall(function() return Battery:getDesiredMaxSOC() end)
+                desired = (okd and type(desired) == "number") and desired or (Battery.Device and Battery.Device.SOC_max or 100)
+                if (Battery.SOC or 0) < desired then
+                    p = (P_excess * (math.max(0, desired - (Battery.SOC or 0))^2)) / sum_missing_SOC
+                    -- clamp to negative charge_max
+                    local maxc = -(Battery.Device and Battery.Device.charge_max_power or math.huge)
+                    if p < maxc then
+                        p = maxc
+                        nb_avail = nb_avail - 1
                     end
                     if p > -MIN_CHARGE_POWER then
-                        p = 0 -- no power for now
+                        p = 0
                     end
                 end
-                Battery.batt_req_power = p -- is negative
-                not_distributed_power = not_distributed_power - p -- should be and stay negative
+                Battery.batt_req_power = p
+                not_distributed = not_distributed - p
             end
 
-            -- if there is not_distributed_power and
-            while not_distributed_power < -MIN_CHARGE_POWER and nb_batteries > 0 do
-                self:log(3, "distributing Power: " .. not_distributed_power)
-                local remaining_power = not_distributed_power / nb_batteries
-                if remaining_power > -MIN_CHARGE_POWER then
-                    remaining_power = not_distributed_power
-                end
+            -- distribute remainder (still negative) respecting per-battery charge_max (negative)
+            while not_distributed < -MIN_CHARGE_POWER and nb_avail > 0 do
+                self:log(3, "distributing Charge: remaining", not_distributed, "batteries", nb_avail)
+                local remaining_share = not_distributed / nb_avail
+                if remaining_share > -MIN_CHARGE_POWER then remaining_share = not_distributed end
+
                 for _, Battery in ipairs(self.SmartBattery) do
-                    if -Battery.Device.charge_max_power < Battery.batt_req_power then -- may get some power too
-                        local power_to_add = remaining_power
-                        if Battery:getDesiredMaxSOC() <= Battery.SOC then
-                            power_to_add = 0
-                        elseif -Battery.Device.charge_max_power > Battery.batt_req_power + power_to_add then
-                            power_to_add = Battery.batt_req_power + power_to_add - Battery.Device.charge_max_power
+                    local maxc = -(Battery.Device and Battery.Device.charge_max_power or math.huge) -- negative
+                    if Battery.batt_req_power > maxc then
+                        local add = remaining_share -- negative
+                        local okd, desired = pcall(function() return Battery:getDesiredMaxSOC() end)
+                        desired = (okd and type(desired) == "number") and desired or (Battery.Device and Battery.Device.SOC_max or 100)
+
+                        if desired <= (Battery.SOC or 0) then
+                            add = 0
+                        else
+                            local allowed = maxc - Battery.batt_req_power -- negative or zero
+                            if add < allowed then add = allowed end
                         end
-                        Battery.batt_req_power = Battery.batt_req_power + power_to_add
-                        not_distributed_power = not_distributed_power - power_to_add
-                        nb_batteries = nb_batteries - 1
-                        if not_distributed_power >= 0 or nb_batteries < 1 then
-                            break
-                        end
+
+                        Battery.batt_req_power = Battery.batt_req_power + add
+                        not_distributed = not_distributed - add
+                        nb_avail = nb_avail - 1
+                        if not_distributed >= 0 or nb_avail < 1 then break end
                     end
                 end
             end
-            self:log(3, "Not distributed power", not_distributed_power)
-        end -- sum_missing_SOC
 
-        for _, Battery in ipairs(self.SmartBattery) do
-            Battery.batt_req_power = math.min(Battery.batt_req_power, Battery.Device.discharge_max_power)
-            Battery:take(math.floor(math.max(0, -Battery.batt_req_power)))
-            self:log(2, "TAKE", Battery.Device.name, Battery.batt_req_power)
-            Battery.power = Battery.batt_req_power
+            self:log(3, "Not distributed charge power", math.floor(not_distributed*10)/10)
         end
-    end
+
+        -- final clamp & apply: ensure we don't exceed charger capabilities and call take()
+        for _, Battery in ipairs(self.SmartBattery) do
+            local maxc_pos = Battery.Device and Battery.Device.charge_max_power or math.huge
+            local maxc = -maxc_pos
+            if Battery.batt_req_power < maxc then Battery.batt_req_power = maxc end
+
+            local take_watts = math.floor(math.max(0, -Battery.batt_req_power)) -- pass positive watts to take()
+            if take_watts > 0 then
+                local ok, err = pcall(function() Battery:take(take_watts) end)
+                if not ok then
+                    util:log(0, "Error on Battery:take for "..tostring(Battery.Device and Battery.Device.name)
+                        ..": "..tostring(err))
+                end
+            else
+                pcall(function() Battery:take(0) end)
+            end
+
+            self:log(2, "TAKE", Battery.Device and Battery.Device.name or "unknown", math.floor(Battery.batt_req_power*10/10))
+            Battery.power = Battery.batt_req_power -- negative = charging
+        end
+    end -- end charge path
 end
 
 function PVBattery:outputTheLog(date_string)
     local log_string
-    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, Battery=%5.0fW, P_VenusE1=%5.0fW, P_VenusE1=%5.0fW",
+    log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, Battery=%5.0fW, P_VenusE1=%5.0fW, P_VenusE2=%5.0fW",
         date_string, self.P_Grid or 0, self.P_Load or 0,
-        self.Battery[1].power or 0,
-        self.Battery[2].power or 0,
-        self.Battery[2].power or 0) --xxxxxxxxxx
+        (self.USPBattery[1] and self.USPBattery[1].power) or 0,
+        (self.SmartBattery[1] and self.SmartBattery[1].power) or 0,
+        (self.SmartBattery[2] and self.SmartBattery[2].power) or 0)
 
     util:log(log_string)
 end
