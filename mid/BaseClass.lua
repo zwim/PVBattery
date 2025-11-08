@@ -47,6 +47,13 @@ function BaseClass:log(level, ...)
     end
 end
 
+function BaseClass:setLogLevel(new_level)
+    if     new_level < 0 then new_level = 0
+    elseif new_level > #__log_signature then new_level = #_log_signature
+    end
+    self.__logleve = new_level
+end
+
 function BaseClass.listValues(obj)
     if obj == nil then return "nil" end
     local result = {}

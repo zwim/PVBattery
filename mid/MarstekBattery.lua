@@ -29,6 +29,11 @@ function MarstekBattery:new(o)
 end
 
 function MarstekBattery:init()
+    -- 🚨 WICHTIG: Rufe zuerst die Init-Methode der Elternklasse (Battery) auf.
+    -- Dies lädt self.last_full_timestamp aus /tmp/last_full_timestamp
+    -- und setzt den Default-Wert, falls die Datei nicht existiert.
+    if Battery.init then Battery.init(self) end
+
     local Device = self.Device
     Device.ip = util.getIPfromURL(Device.host)
     self.VenusE = Marstek:new{ip = Device.ip or Device.host, port = Device.port, slaveId = Device.slaveId}

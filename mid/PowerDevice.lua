@@ -40,6 +40,7 @@ function PowerDevice:new(o)
 end
 
 function PowerDevice:init()
+    if BaseClass.init then BaseClass.init(self) end
     return self
 end
 

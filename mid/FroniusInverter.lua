@@ -24,6 +24,8 @@ function FroniusInverter:new(o)
 end
 
 function FroniusInverter:init()
+    if PowerDevice.init then PowerDevice.init(self) end
+
     local Device = self.Device
     if Device.inverter_switch then
         self.ip = util.getIPfromURL(Device.inverter_switch)

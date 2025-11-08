@@ -36,6 +36,11 @@ local CustomBattery = Battery:extend{
 }
 
 function CustomBattery:init()
+    -- 🚨 WICHTIG: Rufe zuerst die Init-Methode der Elternklasse (Battery) auf.
+    -- Dies lädt self.last_full_timestamp aus /tmp/last_full_timestamp
+    -- und setzt den Default-Wert, falls die Datei nicht existiert.
+    if Battery.init then Battery.init(self) end
+
     local Device = self.Device
     self.min_SOC = self.Device.SOC_min or config.bat_SOC_min or 12
     self.max_SOC = self.Device.SOC_max or config.bat_SOC_max or 100
@@ -200,19 +205,19 @@ function CustomBattery:take(req_power)
         self.Charger[2]:safeStartCharge()
     elseif p1 >= p2 then
         if p1 <= req_power then
-            self.Charger[1]:safeStopCharge()
             self.Charger[1]:safeStartCharge()
-        else
             self.Charger[2]:safeStopCharge()
+        else
             self.Charger[2]:safeStartCharge()
+            self.Charger[1]:safeStopCharge()
         end
     elseif p2 > p1 then
         if p2 <= req_power then
-            self.Charger[2]:safeStopCharge()
             self.Charger[2]:safeStartCharge()
-        else
             self.Charger[1]:safeStopCharge()
+        else
             self.Charger[1]:safeStartCharge()
+            self.Charger[2]:safeStopCharge()
         end
     end
 end
@@ -256,8 +261,8 @@ function CustomBattery:getPower(internal)
         local discharging_power = self.Inverter:getPower()
         local power1 = self.Charger[1]:getPower()
         local power2 = self.Charger[2]:getPower()
-        return discharging_power - power1 - power2
---        return - (discharging_power - power1 - power2)
+        local power = discharging_power - power1 - power2
+        return power
     end
 end
 

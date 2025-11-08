@@ -3,14 +3,48 @@
 local PowerDevice = require("mid/PowerDevice")
 local SunTime = require("suntime/suntime")
 
+local FILENAME = "/tmp/last_full_timestamp"
+
+-- Hilfsfunktion zum Lesen des letzten Zeitstempels aus der Datei
+local function read_timestamp()
+    local f = io.open(FILENAME, "r")
+    if f then
+        local content = f:read("*a")
+        f:close()
+        -- Konvertiere den gelesenen String in eine Zahl (Timestamp)
+        return tonumber(content)
+    end
+    return nil
+end
+
+-- Hilfsfunktion zum Schreiben des aktuellen Zeitstempels in die Datei
+local function write_timestamp(timestamp)
+    local f = io.open(FILENAME, "w")
+    if f then
+        f:write(tostring(timestamp))
+        f:close()
+        return true
+    end
+    -- Hier könnte man eine Fehlerprotokollierung hinzufügen, falls die Datei nicht geschrieben werden kann
+    print("Error: could not write timestamp to" .. FILENAME)
+    os.execute("date")
+    return false
+end
+
 local Battery = PowerDevice:extend{
     __name = "Battery",
     internal_state = "",
+
     use_schedule = true,
     OFFSET_TO_HIGH_NOON = -1/4, -- in hours
     OFFSET_TO_SUNSET = -3, -- in hours
     FIRST_MAX_SOC_LEVEL = 60, -- Percent
     SECOND_MAX_SOC_LEVEL = 80, -- Percent
+
+    full_charge_interval_d = 10, -- charge full at least every 10 days (for balancing)
+    full_charge_duration_s = 120, -- at least 2 minutes
+    last_full_timestamp = nil,
+    last_full_start_timestamp = nil,
 }
 
 function Battery:new(o)
@@ -25,10 +59,22 @@ function Battery:new(o)
 end
 
 function Battery:init()
+    if PowerDevice.init then PowerDevice.init(self) end
     if not self.max_power then
         self.max_power = 0
     end
     self.use_scheduled = true
+
+    -- Lade den letzten Zeitstempel aus der Datei
+    local saved_timestamp = read_timestamp()
+    if saved_timestamp then
+        self.last_full_timestamp = saved_timestamp
+    end
+
+    -- Initialisierung/Default, falls die Datei leer oder nicht vorhanden ist
+    if not self.last_full_timestamp then
+        self.last_full_timestamp = os.time() - (self.full_charge_interval_d * (24*3600) + 1)
+    end
 end
 
 --------------------------------------------------------------------------
@@ -49,7 +95,7 @@ end
 --    is linearly increased to 80%.
 -- 3. From that point on, change the maximum SOC to 100%.
 --
--- There you have it. Optimizing your battery's life, one strategic percentage at a time.
+-- There you have it. Optimizing your battery's life, with strategic percentage at a time.
 --
 -- ajustable parameters:
 --self.OFFSET_TO_HIGH_NOON = -1/4 -- in hours
@@ -57,6 +103,7 @@ end
 --self.FIRST_MAX_SOC_LEVEL = 60 -- Percent
 --self.SECOND_MAX_SOC_LEVEL = 80 -- Percent
 function Battery:getDesiredMaxSOC_scheduled(current_time_h)
+
     current_time_h = current_time_h or SunTime:getTimeInHours()
 
     local time_1_h = SunTime.noon + self.OFFSET_TO_HIGH_NOON
@@ -84,6 +131,47 @@ function Battery:getDesiredMaxSOC_scheduled(current_time_h)
 end
 
 function Battery:getDesiredMaxSOC(current_time_h)
+    local current_timestamp = os.time()
+    local interval_s = self.full_charge_interval_d * (24 * 3600) -- Intervall in Sekunden
+
+    -- *** Start der Balancing-Logik ***
+    local should_start_full_charge = false
+    local is_full_charge_active = false
+    local full_charge_needed_duration_s = self.full_charge_duration_s
+
+    -- 1. Prüfen, ob eine Vollladung ausgelöst werden muss
+    if self.last_full_timestamp and current_timestamp - self.last_full_timestamp >= interval_s then
+        -- Wenn seit dem letzten Mal mehr als das Intervall vergangen ist
+        should_start_full_charge = true
+    end
+
+    -- 2. Prüfen, ob eine Vollladung aktuell aktiv ist und ob die Dauer erreicht ist
+    if self.last_full_start_timestamp then
+        local active_duration = current_timestamp - self.last_full_start_timestamp
+        if active_duration < full_charge_needed_duration_s then
+            -- Vollladung ist aktiv, aber die Mindestdauer ist noch nicht erreicht
+            is_full_charge_active = true
+        else
+            -- Mindestdauer erreicht: Vollladung abschließen und Zeitstempel aktualisieren
+            self.last_full_timestamp = current_timestamp
+            write_timestamp(current_timestamp)
+            self.last_full_start_timestamp = nil -- Beende den aktiven Zeitraum
+        end
+    end
+
+    -- 3. Max_SOC setzen
+    if should_start_full_charge and not is_full_charge_active then
+        -- Beginne Vollladung: Max_SOC auf 100 setzen und Start-Zeitstempel speichern
+        self.last_full_start_timestamp = current_timestamp
+        is_full_charge_active = true -- Setze auf aktiv für den aktuellen Durchlauf
+    end
+
+    if is_full_charge_active then
+        -- Vollladung läuft
+        return 100
+    end
+    -- *** Ende der Balancing-Logik ***
+
     if self.use_schedule then
         return self:getDesiredMaxSOC_scheduled(current_time_h)
     else
@@ -179,7 +267,7 @@ local function example()
 end
 
 if arg[0]:find("Battery.lua") then
-    example()
+--    example()
 end
 
 
