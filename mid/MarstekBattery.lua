@@ -94,8 +94,9 @@ function MarstekBattery:take(req_power)
         self.VenusE:writeRs485ControlMode(true)
         self.VenusE:writeForcibleChargeDischarge(1) -- charge
         self.VenusE:writeForcibleChargePower(req_power)
-        return req_power
     end
+    -- no elseif here, as req_power might be clamped to 0
+    self.power = req_power
 end
 
 -- dischargeBattery
@@ -108,8 +109,9 @@ function MarstekBattery:give(req_power)
         self.VenusE:writeRs485ControlMode(true)
         self.VenusE:writeForcibleChargeDischarge(2) -- discharge
         self.VenusE:writeForcibleDischargePower(req_power)
-        return req_power
     end
+    -- no elseif here, as req_power might be clamped to 0
+    self.power = req_power
 end
 
 function MarstekBattery:getSOC()
@@ -235,7 +237,8 @@ if arg[0]:find("MarstekBattery.lua") then
     local port = 502 -- Modbus TCP Port
     local slaveId = 1 -- Slave ID
 
-    local VenusE = MarstekBattery:new{Device = {host = host, port = port, slaveId = slaveId}}
+    local VenusE = MarstekBattery:new{Device = {host = "192.168.0.208", port = port, slaveId = slaveId}}
+    local VenusE2 = MarstekBattery:new{Device = {host = "192.168.0.161", port = port, slaveId = slaveId}}
 
     local register     = {adr = 35000, typ = "u16", gain = 1, unit = ""}
 
@@ -262,40 +265,17 @@ if arg[0]:find("MarstekBattery.lua") then
     printValue(VenusE:getPower())
     printValue(VenusE:setMode({auto = true}))
 
-
-    local n=1
-    print(n) n=n+1
-
---[[
-    local power = 50
-    print("power=" .. power)
-    VenusE:take(power)
-    VenusE2:take(power)
-    os.execute("sleep 4")
-    print("take")
-    printValue(VenusE:getPower())
+    print(VenusE2:getMaxChargePower())
+    print(VenusE2:getMaxDischargePower())
+    printValue(VenusE2:getSOC())
     printValue(VenusE2:getPower())
-
-
-    os.execute("sleep 4")
-    power = power
-    print("power=" .. power)
-    VenusE:give(power)
-    VenusE2:give(power)
-    os.execute("sleep 4")
-    print("give")
-    printValue(VenusE:getPower())
-    printValue(VenusE2:getPower())
-]]
-
---    VenusE:take(2020)
---    VenusE:give(30)
-
-
-   local VenusE2 = MarstekBattery:new{Device = {host = "192.168.0.208", port = port, slaveId = slaveId}}
     printValue(VenusE2:setMode({auto = true}))
 
---    VenusE2:give(50)
+
+    VenusE:give(100)
+    VenusE2:give(200)
+
+
 
 end
 

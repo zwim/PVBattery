@@ -2,7 +2,7 @@
 -- ###############################################################
 -- CONFIGURATION
 -- ###############################################################
-local VERSION = "V5.1.1"
+local VERSION = "V5.1.2"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -89,8 +89,6 @@ function PVBattery:init()
     -- IMPORTANT: Our authorative power meter, which shows if we produce or consume energy
 --    self.P1meter = P1meter:new{host = "HW-p1meter.lan"}
 
-    -- Init all device configurations
-
     mqtt_reader:init(config.mqtt_broker_uri, config.mqtt_client_id)
 
     local ok, err = mqtt_reader:connect()
@@ -175,7 +173,6 @@ function PVBattery:doTheMagic(_second_try)
         -- use schedule algorithm, if expected yield is more than the unused capacity
         Battery.use_schedule = (self.expected_yield or 0) > (self.free_capacity or 0)
 
-        -- defensive getPower
         pcall(function() return Battery:getPower() end)
         self.P_Battery = self.P_Battery + Battery.power
 
@@ -256,7 +253,7 @@ function PVBattery:doTheMagic(_second_try)
                 if state.idle or state.can_give then
                     pcall(function() Battery:give(math.abs(P_excess)) end)
                     mqtt_reader:sleepAndCallMQTT(2)
-                    pcall(function() return Battery:getPower() end)
+                    pcall(function() Battery:getPower() end)
                     self:log(2, "GIVE", Battery.Device and Battery.Device.name or "usp", math.floor(Battery.power*10)/10)
                     P_excess = P_excess - Battery.power
                 end
@@ -322,7 +319,7 @@ function PVBattery:doTheMagic(_second_try)
                     end
                 end
             end
-            self:log(3, "Not distributed discharge power", not_distributed)
+            self:log(3, "Not distributed discharge power", math.floor(not_distributed*10)/10)
         end
 
         -- final clamp & apply: ensure we don't exceed per-battery limits and call give()
@@ -360,7 +357,7 @@ function PVBattery:doTheMagic(_second_try)
                 if state.idle or state.can_take then
                     pcall(function() Battery:take(math.abs(P_excess)) end)
                     mqtt_reader:sleepAndCallMQTT(2)
-                    pcall(function() return Battery:getPower() end)
+                    pcall(function() Battery:getPower() end)
                     self:log(2, "TAKE", Battery.Device and Battery.Device.name or "usp", math.floor(Battery.power*10)/10)
                     P_excess = P_excess - Battery.power
                 end
