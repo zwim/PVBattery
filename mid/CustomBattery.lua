@@ -258,11 +258,12 @@ function CustomBattery:getPower(internal)
         local internal_power = self.BMS.v and self.BMS.v.CurrentPower
         return -internal_power
     else
-        local discharging_power = self.Inverter:getPower()
-        local power1 = self.Charger[1]:getPower()
-        local power2 = self.Charger[2]:getPower()
-        local power = discharging_power - power1 - power2
-        return power
+        self.Inverter.power = self.Inverter:getPower()
+        self.Charger[1].power = self.Charger[1]:getPower()
+        self.Charger[2].power = self.Charger[2]:getPower()
+        self.power = self.Inverter.power - self.Charger[1].power - self.Charger[2].power
+        -- local poewr discharging_power - power1 - power2
+        return self.power
     end
 end
 

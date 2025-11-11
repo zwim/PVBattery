@@ -104,7 +104,7 @@ function PVBattery:init()
 
     self.Battery = {}      -- all batteries
     self.SmartBattery = {} -- a subset of stupid custom batteries from all batteries
-    self.USPBattery = {}   -- a subset of smart batteries from all batteries
+    self.UPSBattery = {}   -- a subset of smart batteries from all batteries
 
     self.Inverter = {}
     self.Smartmeter = {}
@@ -116,7 +116,7 @@ function PVBattery:init()
             if  brand == "custom" then
                 local cBatt = CustomBattery:new{Device = Device}
                 table.insert(self.Battery, cBatt)
-                table.insert(self.USPBattery, cBatt)
+                table.insert(self.UPSBattery, cBatt)
             elseif brand == "marstek" then
                 local mBatt = MarstekBattery:new{Device = Device}
                 table.insert(self.Battery, mBatt)
@@ -152,7 +152,7 @@ function PVBattery:init()
 end
 
 function PVBattery:getValues()
-    -- Attention, this accesses self.SmartBattery and self.USPBattery as well
+    -- Attention, this accesses self.SmartBattery and self.UPSBattery as well
     self.free_capacity = 0
     for _, Battery in ipairs(self.Battery) do
         Battery.SOC = Battery:getSOC(true) or 0 -- force recalculation
@@ -176,8 +176,7 @@ function PVBattery:doTheMagic(_second_try)
         Battery.use_schedule = (self.expected_yield or 0) > (self.free_capacity or 0)
 
         -- defensive getPower
-        local ok, p = pcall(function() return Battery:getPower() end)
-        Battery.power = (ok and type(p) == "number") and p or 0 -- negative if discharging in original API
+        pcall(function() return Battery:getPower() end)
         self.P_Battery = self.P_Battery + Battery.power
 
         battery_string = battery_string .. string.format("%s: %5.0f   ", Battery.Device and Battery.Device.name or "unknown", Battery.power)
@@ -245,11 +244,11 @@ function PVBattery:doTheMagic(_second_try)
     -- DISCHARGE PATH (P_excess > 0)  -- positive numbers
     -------------------------------------------------------
     if P_excess > MIN_DISCHARGE_POWER and smart_count > 0 then
-        -- First: try to use UPS batteries (USPBattery) to supply bulk if available
-        for _, Battery in ipairs(self.USPBattery) do
+        -- First: try to use UPS batteries (UPSBattery) to supply bulk if available
+        for _, Battery in ipairs(self.UPSBattery) do
             -- defensive max power read
             local ok, maxp = pcall(function() return Battery.Inverter:getMaxPower() end)
-            local max_discharge = ok and type(maxp) == "number" and -maxp or 0 -- note original Inverter:getMaxPower seemed negated in code, preserve safe behavior
+            local max_discharge = ok and type(maxp) == "number" and -maxp or 0
             if max_discharge == 0 then max_discharge = -math.huge end
 
             if P_excess + max_discharge > 0 then
@@ -257,8 +256,7 @@ function PVBattery:doTheMagic(_second_try)
                 if state.idle or state.can_give then
                     pcall(function() Battery:give(math.abs(P_excess)) end)
                     mqtt_reader:sleepAndCallMQTT(2)
-                    local ok2, newp = pcall(function() return Battery:getPower() end)
-                    Battery.power = (ok2 and type(newp) == "number") and newp or 0
+                    pcall(function() return Battery:getPower() end)
                     self:log(2, "GIVE", Battery.Device and Battery.Device.name or "usp", math.floor(Battery.power*10)/10)
                     P_excess = P_excess - Battery.power
                 end
@@ -349,7 +347,7 @@ function PVBattery:doTheMagic(_second_try)
     -------------------------------------------------------
     if P_excess < -MIN_CHARGE_POWER and smart_count > 0 then
         -- First: try to use UPS chargers to absorb bulk if available
-        for _, Battery in ipairs(self.USPBattery) do
+        for _, Battery in ipairs(self.UPSBattery) do
             local max_charger = math.huge
             local ok1, m1 = pcall(function() return Battery.Charger[1]:getMaxPower() end)
             local ok2, m2 = pcall(function() return Battery.Charger[2]:getMaxPower() end)
@@ -362,8 +360,7 @@ function PVBattery:doTheMagic(_second_try)
                 if state.idle or state.can_take then
                     pcall(function() Battery:take(math.abs(P_excess)) end)
                     mqtt_reader:sleepAndCallMQTT(2)
-                    local okp, newp = pcall(function() return Battery:getPower() end)
-                    Battery.power = (okp and type(newp) == "number") and newp or 0
+                    pcall(function() return Battery:getPower() end)
                     self:log(2, "TAKE", Battery.Device and Battery.Device.name or "usp", math.floor(Battery.power*10)/10)
                     P_excess = P_excess - Battery.power
                 end
@@ -469,7 +466,7 @@ function PVBattery:outputTheLog(date_string)
     local log_string
     log_string = string.format("%s  P_Grid=%5.0fW, P_Load=%5.0fW, Battery=%5.0fW, P_VenusE1=%5.0fW, P_VenusE2=%5.0fW",
         date_string, self.P_Grid or 0, self.P_Load or 0,
-        (self.USPBattery[1] and self.USPBattery[1].power) or 0,
+        (self.UPSBattery[1] and self.UPSBattery[1].power) or 0,
         (self.SmartBattery[1] and self.SmartBattery[1].power) or 0,
         (self.SmartBattery[2] and self.SmartBattery[2].power) or 0)
 
@@ -483,10 +480,10 @@ function PVBattery:writeToDatabase()
     local datum = "Leistung"
     Influx:writeLine("garage-inverter", datum, self.Inverter[3].power)
     Influx:writeLine("balkon-inverter", datum, self.Inverter[2].power)
-    Influx:writeLine("battery-inverter", datum, self.USPBattery[1].Inverter.power)
+    Influx:writeLine("battery-inverter", datum, self.UPSBattery[1].Inverter.power)
 
-    Influx:writeLine("battery-charger",  datum, self.USPBattery[1].Charger[1].power)
-    Influx:writeLine("battery-charger2", datum, self.USPBattery[1].Charger[2].power)
+    Influx:writeLine("battery-charger",  datum, self.UPSBattery[1].Charger[1].power)
+    Influx:writeLine("battery-charger2", datum, self.UPSBattery[1].Charger[2].power)
 
     Influx:writeLine("P_PV", datum, self.P_PV)
     Influx:writeLine("P_Grid", datum, self.P_Grid)
@@ -499,17 +496,17 @@ function PVBattery:writeToDatabase()
     Influx:writeLine("garage-inverter", datum, self.Inverter[2]:getEnergyTotal())
     Influx:writeLine("balkon-inverter", datum, self.Inverter[3]:getEnergyTotal())
 
-    Influx:writeLine("battery-inverter", datum, self.USPBattery[1].Inverter:getEnergyTotal())
-    Influx:writeLine("battery-charger", datum, self.USPBattery[1].Charger[1]:getEnergyTotal())
-    Influx:writeLine("battery-charger2", datum, self.USPBattery[1].Charger[2]:getEnergyTotal())
+    Influx:writeLine("battery-inverter", datum, self.UPSBattery[1].Inverter:getEnergyTotal())
+    Influx:writeLine("battery-charger", datum, self.UPSBattery[1].Charger[1]:getEnergyTotal())
+    Influx:writeLine("battery-charger2", datum, self.UPSBattery[1].Charger[2]:getEnergyTotal())
 
     datum = "Storage"
 
-    Influx:writeLine("SOC_battery", datum, self.USPBattery[1].SOC)
+    Influx:writeLine("SOC_battery", datum, self.UPSBattery[1].SOC)
     Influx:writeLine("SOC_VenusE", datum, self.SmartBattery[1].SOC)
     Influx:writeLine("SOC_VenusE2", datum, self.SmartBattery[2].SOC)
 
-    Influx:writeLine("battery_used_capacity", datum, self.USPBattery[1].used_capacity)
+    Influx:writeLine("battery_used_capacity", datum, self.UPSBattery[1].used_capacity)
     Influx:writeLine("VenusE_used_capacity", datum, self.SmartBattery[1].used_capacity)
     Influx:writeLine("VenusE2_used_capacity", datum, self.SmartBattery[2].used_capacity)
 
@@ -595,7 +592,7 @@ function PVBattery:main(profiling_runs)
         self:log(3, "desired SOC", self.SmartBattery[1]:getDesiredMaxSOC())
 
         self:log(2, "generate JSON")
-        self:getValues() -- for the json
+
         local ok, result
         ok, result = pcall(self.generateJSON, self, VERSION)
         if not ok then

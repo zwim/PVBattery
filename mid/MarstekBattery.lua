@@ -150,9 +150,11 @@ end
 -- if internal is set, get internal power, else AC-power
 function MarstekBattery:getPower(internal)
     if internal then
-        return self.VenusE:readBatteryPower() or 0
+        self.power = self.VenusE:readBatteryPower() or 0
+        return self.power
     else
-        return self.VenusE:readACPower()  or 0
+        self.power = self.VenusE:readACPower()  or 0
+        return self.power
     end
 end
 
