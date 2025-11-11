@@ -8,6 +8,7 @@ local ChargerClass = require("base/charger")
 local InverterClass = require("base/inverter")
 
 local mqtt_reader = require("base/mqtt_reader")
+local util = require("base/util")
 
 local internal_state = {
     fail = "fail", -- unknown state
@@ -191,33 +192,37 @@ function CustomBattery:take(req_power)
     if req_power == "rescue" or self:updateInternalState() == internal_state["rescue_charge"] then
         self.Charger[1]:safeStartCharge()
         self.Charger[2]:safeStartCharge()
-        return
+        util:sleepTime(5)
+        return self:getPower()
     end
 
     if req_power == 0 or math.min(p1, p2) > req_power then
         self.Charger[1]:safeStopCharge()
         self.Charger[2]:safeStopCharge()
-        return
-    end
-
-    if p1 + p2 <= req_power then
+        self.power = 0
+    elseif p1 + p2 <= req_power then
         self.Charger[1]:safeStartCharge()
         self.Charger[2]:safeStartCharge()
+        self.power = p1 + p2
     elseif p1 >= p2 then
         if p1 <= req_power then
             self.Charger[1]:safeStartCharge()
             self.Charger[2]:safeStopCharge()
+            self.power = p1
         else
             self.Charger[2]:safeStartCharge()
             self.Charger[1]:safeStopCharge()
+            self.power = p2
         end
     elseif p2 > p1 then
         if p2 <= req_power then
             self.Charger[2]:safeStartCharge()
             self.Charger[1]:safeStopCharge()
+            self.power = p2
         else
             self.Charger[1]:safeStartCharge()
             self.Charger[2]:safeStopCharge()
+            self.power = p2
         end
     end
 end

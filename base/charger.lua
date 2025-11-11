@@ -28,6 +28,7 @@ end
 -- Stop charging
 function Charger:stopCharge()
     self:toggle("off")
+    self.power = 0
 end
 
 -- Stop charging only if not already off

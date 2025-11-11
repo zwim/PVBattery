@@ -46,6 +46,7 @@ function Inverter:stopDischarge()
     end
     self:toggle("off")
     util.sleepTime(0.5)
+    self.power = 0
 end
 
 function Inverter:safeStopDischarge()
