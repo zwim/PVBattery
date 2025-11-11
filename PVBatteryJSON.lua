@@ -2,14 +2,10 @@
 local json = require("dkjson")
 
 return function(self, VERSION)
-    local ChargerPowerCache = {}
-    local InverterPowerCache = {}
-
     local sinks = 0
-    for _, Battery in ipairs(self.USPBattery) do
+    for _, Battery in ipairs(self.UPSBattery) do
         for _, Charger in ipairs(Battery.Charger) do
             Charger.power = Charger:getPower()
-            table.insert(ChargerPowerCache, Charger.power)
             sinks = sinks + Charger.power
         end
     end
@@ -20,7 +16,6 @@ return function(self, VERSION)
     local sources =  self.P_PV
     for _, Inverter in ipairs(self.Inverter) do
         Inverter.power = math.abs(Inverter:getPower()) or 0
-        table.insert(InverterPowerCache, Inverter.power)
         sources = sources + Inverter.power
     end
     for _, Battery in ipairs(self.SmartBattery) do
@@ -32,12 +27,23 @@ return function(self, VERSION)
 --        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."%<br>"
 --    end
 
+    local state = ""
+    if sources > 0 and sinks == 0 then
+        state = "discharge"
+    elseif sinks > 0 and sources == 0 then
+        state = "charge"
+    elseif sinks ~= 0 and sources ~= 0 then
+        state = "intermediate"
+    else
+        state = "idle"
+    end
+
     local data = {
         Vx_y_z = VERSION or "Vx.y.z",
-        DATE = os.date(),
+        DATE = "live at" .. os.date(),
         SUNRISE = self.sunrise,
         SUNSET = self.sunset,
-        STATE_OF_OPERATION = "",
+        STATE_OF_OPERATION = state,
         batt_SOC = tostring(math.floor(self.Battery[1].SOC)) .. "%",
         SOC1 = tostring(self.Battery[2].SOC) .. "%",
         SOC2 = tostring(self.Battery[3].SOC) .. "%",
@@ -51,15 +57,15 @@ return function(self, VERSION)
         BMS1_BALANCE_OFF = "http://" .. self.Battery[1].BMS.host .. "/balance.off",
         BMS1_BALANCE_ON = "http://" .. self.Battery[1].BMS.host .. "/balance.on",
         BMS1_BALANCE_TOGGLE = "http://" .. self.Battery[1].BMS.host .. "/balance.toggle",
-        BATTERY_CHARGER1_POWER = string.format("%5.1f", ChargerPowerCache[1]),
-        BATTERY_CHARGER1 = self.Battery[1].Charger[1].host,
-        BATTERY_CHARGER2_POWER = string.format("%5.1f", ChargerPowerCache[2]),
-        BATTERY_CHARGER2 = self.Battery[1].Charger[2].host,
-        BATTERY_INVERTER_POWER = string.format("%5.1f", self.Battery[1].Inverter:getPower() or 0),
-        BATTERY_INVERTER = self.Battery[1].Inverter.host,
-        GARAGE_INVERTER_POWER = string.format("%5.1f", InverterPowerCache[3]),
+        BATTERY_CHARGER1_POWER = string.format("%5.1f", self.UPSBattery[1].Charger[1].power),
+        BATTERY_CHARGER1 = self.UPSBattery[1].Charger[1].host,
+        BATTERY_CHARGER2_POWER = string.format("%5.1f", self.UPSBattery[1].Charger[2].power),
+        BATTERY_CHARGER2 = self.UPSBattery[1].Charger[2].host,
+        BATTERY_INVERTER_POWER = string.format("%5.1f", self.UPSBattery[1].Inverter.power or 0),
+        BATTERY_INVERTER = self.UPSBattery[1].Inverter.host,
+        GARAGE_INVERTER_POWER = string.format("%5.1f", self.Inverter[3].power),
         GARAGE_INVERTER = self.Inverter[3].Inverter.host,
-        BALKON_INVERTER_POWER = string.format("%5.1f", InverterPowerCache[2]),
+        BALKON_INVERTER_POWER = string.format("%5.1f", self.Inverter[2].power),
         BALKON_INVERTER = self.Inverter[2].Inverter.host,
         VENUS1_DISCHARGE_POWER = string.format("%5.1f", math.max(self.SmartBattery[1].power, 0)),
         VENUS1_CHARGE_POWER = string.format("%5.1f", math.max(-self.SmartBattery[1].power, 0)),
