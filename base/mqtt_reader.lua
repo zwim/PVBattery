@@ -80,7 +80,7 @@ function mqtt_reader:disconnect()
     local ok, err = self.client:disconnect()
     if not ok then
         log(0, "Warning: Error during MQTT disconnect:", err)
-        os.exit(12, true)
+        util.restart("Error during MQTT disconnect:", 12)
     end
 
     -- 3. Interne Referenzen aufräumen
@@ -114,14 +114,13 @@ function mqtt_reader:_reinitialize_and_connect(reason)
         local ok, err = self:connect()
         if not ok then
             log(0, "Warning: New connection attempt failed:", err)
-            os.exit(12, true)
+            util.restart("MQTT: New connection attempt failed:", 12)
         end
     else
         log(0, "Cannot re-initialize: URI or Base ID missing. Exiting.")
-        os.exit(13, true)
+        util.restart("MQTT: Cannot re-initialize: URI or Base ID missing. Exiting.", 12)
     end
 end
-
 
 -- ##############################################################
 -- INITIALIZATION (SETUP)
@@ -134,7 +133,7 @@ function mqtt_reader:init(uri, base_id, _retry_count) -- base_id verwenden
     if _retry_count > 10 then
         util.sleepTime(2)
         print("[mqtt_reader] retried to init itself more than " .. _retry_count .. " times")
-        os.exit(12, true)
+        util.restart("[mqtt_reader] retried to init itself more than " .. _retry_count .. " times", 12)
     end
 
     -- Basis-ID und URI speichern
@@ -269,7 +268,7 @@ function mqtt_reader:connect()
 
     if not ok then
         log(0, "Initial/Immediate start_connecting attempt failed:", err)
-        os.exit(12, true)
+        util.restart("Initial/Immediate start_connecting attempt failed:" .. tostring(err), 12)
     end
 
     return ok, err

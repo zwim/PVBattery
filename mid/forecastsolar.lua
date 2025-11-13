@@ -9,6 +9,7 @@
 local http   = require("socket.http")
 local ltn12  = require("ltn12")
 local json   = require("dkjson")
+local util   = require("base/util")
 
 ------------------------------------------------------------
 -- Prototyp / Basistabelle (Hauptklasse für die Aggregation)
@@ -145,20 +146,59 @@ function ForecastSolarAggregator:_save_cache()
     write_file(self.config.cachefile, content)
 end
 
-
 ------------------------------------------------------------
 -- Hauptlogik: Abruf & Aggregation
 ------------------------------------------------------------
 
-function ForecastSolarAggregator:fetch()
-    local now = os.time()
+function ForecastSolarAggregator:_process_data()
+    local processed_data = {}
+
+    for local_timestamp, v in pairs(self.cache.hourly_kwh) do
+        local _, _, _, hour, min, sec = local_timestamp:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+        local hour_decimal = hour + min/60 + sec/3600
+
+        local entry = {
+            -- Gewünschte Stundenangabe (z.B. 10.0, 10.5, 11.0)
+            hour = hour_decimal,
+            -- Leistung für diese Stunde (v[2])
+            power_kw = v,
+            -- Kumulierter Ertrag bis zu dieser Stunde (v[3])
+            cumulative_kwh = nil,
+        }
+
+       table.insert(processed_data, entry)
+    end
+
+    table.sort(processed_data, function(a, b)
+        return a.hour < b.hour
+    end)
+
+    for i = #processed_data, 2, -1 do
+        if processed_data[i].hour == processed_data[i-1].hour then
+            processed_data[i-1].power_kw = processed_data[i-1].power_kw + processed_data[i].power_kw
+            table.remove(processed_data, i)
+        end
+    end
+
+    local cumulative_kwh = 0
+    for _, v in ipairs(processed_data) do
+        cumulative_kwh = cumulative_kwh + v.power_kw
+        v.cumulative_kwh = cumulative_kwh
+    end
+
+    return processed_data
+end
+
+
+function ForecastSolarAggregator:fetch(now)
+    now = now or os.time()
     local is_cached = false
 
     -- 1. Cache-Prüfung (Einfache Zeitprüfung)
     if self.cache.hourly_kwh and (now - self.cache.timestamp) < self.config.cachetime then
         is_cached = true
         -- WICHTIG: Rückgabe der LOKAL-KEY-Aggregation
-        return self.cache.hourly_kwh, nil, is_cached
+        return nil, is_cached
     end
 
     print("TRUE FETCH: Starte Abruf und Aggregation von " .. #self.planes .. " Flächen.")
@@ -196,7 +236,7 @@ function ForecastSolarAggregator:fetch()
             self.cache.timestamp = now
             self.cache.error = last_error
             self:_save_cache()
-            return self.cache.hourly_kwh, last_error, false
+            return last_error, false
         end
 
         -- Aggregation der stündlichen Watt-Werte
@@ -223,78 +263,36 @@ function ForecastSolarAggregator:fetch()
     return total_hourly_kwh, nil, false
 end
 
--- Gibt die verarbeiteten Daten zurück (die Aggregationstabelle)
-function ForecastSolarAggregator:get_hourly_forecast()
-    local hourly_kwh_table = self.cache.hourly_kwh or {}
-    local sorted_kwh = {}
-
-    -- Konvertierung der Tabelle in ein Array für die Sortierung
-    for ts, kwh in pairs(hourly_kwh_table) do
-        table.insert(sorted_kwh, { timestamp = ts, kwh = kwh })
-    end
-
-    -- Sortiere nach dem lokalen Zeitstempel-String (der jetzt der Schlüssel ist)
-    table.sort(sorted_kwh, function(a, b)
-            return a.timestamp < b.timestamp
-        end)
-
-    return sorted_kwh
-end
-
-
 -- Hilfsfunktion für die Berechnung des restlichen Ertrags
-function ForecastSolarAggregator:get_remaining_daily_forecast_yield()
-    local now_epoch = os.time()
+function ForecastSolarAggregator:get_remaining_daily_forecast_yield(current_hour)
+    current_hour = current_hour or tonumber(os.date("%H"))
+    local data_array = self:_process_data()
 
-    -- Der Tag wird jetzt basierend auf der LOKALEN Zeit bestimmt
-    local today_date_local = os.date("%Y-%m-%d", now_epoch)
-    local remaining_kwh = 0
+    if #data_array == 0 then
+        print("[Solarprognose] Fehler: Keine gültigen Daten.")
+        if self.cache.error then print("Letzter Fehler:", self.cache.error) end
 
-    local hourly_kwh_table = self.cache.hourly_kwh or {}
-
-    if #hourly_kwh_table == 0 then
-        print("[Forecastsolar] Fehler: Keine gültigen Daten.")
         return math.huge
     end
 
-    for local_timestamp_str, kwh in pairs(hourly_kwh_table) do
-        -- 1. Prüfe, ob der Eintrag von heute ist (lokal vs. lokal)
-        if local_timestamp_str:sub(1, 10) == today_date_local then
-
-            -- 2. Konvertiere den lokalen Zeitstempel-String in Epoch
-            -- Hier nutzen wir die String-zu-Epoch-Umwandlung, da der Schlüssel jetzt LOKAL ist.
-            local year, month, day, hour, min, sec = local_timestamp_str:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
-
-            -- Erstelle eine Zeittabelle (Lokale Zeit)
-            local ts_table_local = {
-                year = tonumber(year),
-                month = tonumber(month),
-                day = tonumber(day),
-                hour = tonumber(hour),
-                min = tonumber(min),
-                sec = tonumber(sec)
-            }
-            -- os.time() konvertiert die LOKALE Zeittabelle in eine Epoch-Zahl
-            local ts_epoch = os.time(ts_table_local)
-
-            -- 3. Prüfe, ob die Stunde begonnen hat.
-            if ts_epoch and ts_epoch >= now_epoch then
-                remaining_kwh = remaining_kwh + kwh
-            end
+    local remaining_forecast_yield = 0
+    for _, entry in ipairs(data_array) do
+        if entry.hour > current_hour and entry.hour < 24 then
+            remaining_forecast_yield = remaining_forecast_yield + entry.power_kw
+        end
+        if entry.hour >= 24 then
+            break
         end
     end
-
-    return remaining_kwh > 0 and remaining_kwh or 0
+    return remaining_forecast_yield
 end
 
 ------------------------------------------------------------
 -- Debug-Funktion
 ------------------------------------------------------------
 function ForecastSolarAggregator:print_latest()
-    local data_array = self:get_hourly_forecast()
-    local now = os.time()
-    local is_cached = (self.cache.timestamp > 0 and (now - self.cache.timestamp) < self.config.cachetime)
-    local source_status = is_cached and "(Cache)" or "(Neu)"
+    local data_array = self:_process_data()
+    local source_status = (self.cache.timestamp > 0 and (os.time() - self.cache.timestamp) < self.config.cachetime) and "(Cache)" or "(Neu)"
 
     if #data_array == 0 then
         print("Fehler: Keine gültigen Daten.")
@@ -302,13 +300,22 @@ function ForecastSolarAggregator:print_latest()
         return
     end
 
-    print("\n--- Aggregierter Forecast.Solar Ertrag ---")
-    print(string.format("Status: %s. Zuletzt aktualisiert (Lokal): %s", source_status, os.date("%Y-%m-%d %H:%M:%S", self.cache.timestamp)))
+    print(source_status, self.config.item, " (Ort: " .. (self.cache.datalinename or "Unbekannt") .. ")")
+    print(string.format("Startzeitpunkt für Stundenberechnung: %s", os.date("%Y-%m-%d 00:00:00", util.get_midnight_epoch())))
     print("----------------------------------------")
 
     for _, entry in ipairs(data_array) do
-        -- Der Schlüssel entry.timestamp ist jetzt der LOKALE Zeitstempel-String
-        print(string.format("%s (Lokal): %.3f kWh (Aggregiert)", entry.timestamp, entry.kwh))
+        -- Umrechnung der dezimalen Stunde zurück in eine lesbare UTC-Zeit für die Ausgabe (optional)
+        local total_seconds = entry.hour * 3600
+        local t_epoch = util.get_midnight_epoch() + total_seconds
+        local timeStamp_local = os.date("%Y-%m-%d %H:%M:%S", t_epoch)
+
+        print(string.format("Stunde %.2f (lokal: %s) -> %.3f kW, Kumulativ: %.3f kWh",
+                entry.hour,
+                timeStamp_local,
+                entry.power_kw,
+                entry.cumulative_kwh
+            ))
     end
     print("----------------------------------------")
 end
@@ -350,9 +357,9 @@ local function example()
     local pv_aggregator = ForecastSolarAggregator.new(cfg)
 
     -- Erster Abruf (echter Fetch)
-    local hourly_kwh_data, err = pv_aggregator:fetch()
+    local err = pv_aggregator:fetch()
 
-    if not hourly_kwh_data or err then
+    if err then
         print("Kritischer Fehler beim ersten Fetch:", err)
         return
     end
@@ -360,12 +367,13 @@ local function example()
     pv_aggregator:print_latest()
 
     print("\n--- Zusammenfassende Werte ---")
-    print(string.format("Heutiger Rest-Ertrag (ab jetzt): %.2f kWh", pv_aggregator:get_remaining_daily_forecast_yield()))
+    print(string.format("Heutiger Rest-Ertrag (ab jetzt): %.2f kWh",
+            pv_aggregator:get_remaining_daily_forecast_yield()))
 
     -- Zweiter Abruf (sollte aus dem Cache kommen)
-    local d2, err2, cached2 = pv_aggregator:fetch()
+    local _, cached2 = pv_aggregator:fetch()
     print("\nZweiter fetch (erwartet Cache): cached=" .. tostring(cached2))
-    pv_aggregator:print_latest()
+--    pv_aggregator:print_latest()
 end
 
 -- Führe die Beispiel-Funktion aus, wenn das Skript direkt gestartet wird
