@@ -149,6 +149,15 @@ function PVBattery:init()
     self:log(0, "Initialisation completed")
 end
 
+function PVBattery:close()
+    util.log(0, "Closing everything")
+    for _, Battery in ipairs(self.Battery) do
+        Battery:setPower(0)
+    end
+    self.SmartBattery[1]:setMode({auto = true})
+    mqtt_reader:close()
+end
+
 function PVBattery:getValues()
     -- Attention, this accesses self.SmartBattery and self.UPSBattery as well
     self.free_capacity = 0
@@ -161,8 +170,8 @@ function PVBattery:getValues()
     end
 end
 
-local P_excess_old = 0
 -- Ersetze die ganze doTheMagic-Funktion mit dieser Version
+-- luacheck: ignore _second_try
 function PVBattery:doTheMagic(_second_try)
     local battery_string = ""
     local SOC_string = ""
@@ -233,9 +242,6 @@ function PVBattery:doTheMagic(_second_try)
             return self:doTheMagic(true)
         end
     end
-
-    -- store for history/debug
-    P_excess_old = P_excess
 
     -------------------------------------------------------
     -- DISCHARGE PATH (P_excess > 0)  -- positive numbers
@@ -330,7 +336,9 @@ function PVBattery:doTheMagic(_second_try)
             local give_watts = math.floor(math.max(0, Battery.batt_req_power))
             if give_watts > 0 then
                 local ok, err = pcall(function() Battery:give(give_watts) end)
-                if not ok then util:log(0, "Error on Battery:give for "..tostring(Battery.Device and Battery.Device.name)..": "..tostring(err)) end
+                if not ok then
+                    util:log(0, "Error on Battery:give for "..tostring(Battery.Device and Battery.Device.name)..": "..tostring(err))
+                end
             else
                 pcall(function() Battery:give(0) end)
             end
@@ -561,24 +569,24 @@ function PVBattery:main(profiling_runs)
         util:log(string.format("VenusE1 %8f W", self.SmartBattery[1].power))
         util:log(string.format("VenusE2 %8f W", self.SmartBattery[2].power))
 
-
-        self:getValues()
-
         self.expected_yield = 0
         if SunTime:isDayTime() then
+            local now = os.time()
             if self.SolarprognoseModul then
-                self.SolarprognoseModul:fetch()
+                self.SolarprognoseModul:fetch(now)
                 local solarprognose_expecte_yield = self.SolarprognoseModul:get_remaining_daily_forecast_yield()
                 self.expected_yield = solarprognose_expecte_yield
             end
             if self.ForecastsolarModul then
-                self.ForecastsolarModul:fetch()
+                self.ForecastsolarModul:fetch(now)
                 local forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
                 self.expected_yield = math.min(self.expected_yield, forecastsolar_expected_yield)
             end
         end
 
         self:log(3, "expected yield", self.expected_yield, "kWh; unused capacity", self.free_capacity, "kWh")
+
+        self:getValues()
 
         -- update state, as the battery may have changed or the user could have changed something manually
         self:outputTheLog(date_string)
@@ -621,10 +629,16 @@ if #arg > 2 then
     end
 end
 
+local MyBatteries = nil
+
 local function protected_start()
     util.deleteRunningInstances("PVBattery") -- only necessary on first start
 
-    local MyBatteries = PVBattery:new{}
+    if MyBatteries then
+        MyBatteries:close()
+    end
+
+    MyBatteries = PVBattery:new{}
     MyBatteries:log(0, "Instantiation done")
 
     if not Profiler then
@@ -641,6 +655,9 @@ local function protected_start()
 end
 
 while true do
+
+    os.execute("cp battery.html /tmp/index.html")
+
     local ok, result = xpcall(protected_start, util.crashHandler)
 
     if ok then
@@ -648,7 +665,8 @@ while true do
     else
         if tostring(result):match("interrupted") then
             PVBattery:log(0, "Ctrl+C (SIGINT)")
-            -- todo: set mode to auto
+            MyBatteries:close() -- set everything to a safe state
+
             os.exit(0)
         else
             PVBattery:log(0, "error in main():", result, "restart main() loop in 5 seconds")

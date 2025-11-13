@@ -37,7 +37,7 @@ local Battery = PowerDevice:extend{
 
     use_schedule = true,
     OFFSET_TO_HIGH_NOON = -1/4, -- in hours
-    OFFSET_TO_SUNSET = -3, -- in hours
+    OFFSET_TO_SUNSET = -3.25, -- in hours
     FIRST_MAX_SOC_LEVEL = 60, -- Percent
     SECOND_MAX_SOC_LEVEL = 80, -- Percent
 
@@ -82,6 +82,14 @@ end
 -- req_power > 0 get power from the battery
 -- req_power = 0 set battery to idle
 function Battery:setPower(req_power)
+end
+
+function Battery:setMode(modus)
+    if modus.auto then
+        print("Auto Mode enabled, not implemented yet")
+    elseif modus.manual then
+        print("Manual Mode enabled, not implemented yet")
+    end
 end
 
 function Battery:take(req_power)

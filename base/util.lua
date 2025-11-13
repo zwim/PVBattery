@@ -425,5 +425,23 @@ function util.safe_json_decode(payload)
     return result
 end
 
+function util.restart(reason, exit_code)
+    print("----------------------------------------------------")
+    print("PVBattery wird neu gestartet:", reason or "unbekannt")
+    print("----------------------------------------------------")
+    os.execute("sleep 5")
+    os.execute("lua " .. arg[0] .. " &")
+    os.exit(exit_code or 12)
+end
+
+-- Hilfsfunktion zur Ermittlung des Midnight-TimeStamps für den aktuellen Tag
+function util.get_midnight_epoch()
+    local t_now = os.date("*t", os.time())
+    -- Setze Stunde, Minute, Sekunde auf Null (Mitternacht)
+    t_now.hour = 0
+    t_now.min = 0
+    t_now.sec = 0
+    return os.time(t_now)
+end
 
 return util

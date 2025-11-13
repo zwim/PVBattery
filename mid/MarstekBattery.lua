@@ -271,11 +271,8 @@ if arg[0]:find("MarstekBattery.lua") then
     printValue(VenusE2:getPower())
     printValue(VenusE2:setMode({auto = true}))
 
-
     VenusE:give(100)
     VenusE2:give(200)
-
-
 
 end
 

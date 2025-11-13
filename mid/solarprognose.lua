@@ -7,6 +7,7 @@
 local http   = require("socket.http")
 local ltn12  = require("ltn12")
 local json   = require("dkjson")
+local util   = require("base/util")
 
 ------------------------------------------------------------
 -- Prototyp / Basistabelle
@@ -149,16 +150,6 @@ end
 -- Datenverarbeitung: Erzeugt Array mit dezimalen Stunden
 ------------------------------------------------------------
 
--- Hilfsfunktion zur Ermittlung des Midnight-TimeStamps für den aktuellen Tag
-function Solar:_get_midnight_epoch()
-    local t_now = os.date("*t", os.time())
-    -- Setze Stunde, Minute, Sekunde auf Null (Mitternacht)
-    t_now.hour = 0
-    t_now.min = 0
-    t_now.sec = 0
-    return os.time(t_now)
-end
-
 local old_clean_timestamp = 0
 function Solar:_clean_cache()
     local current_timestamp = os.time()
@@ -183,7 +174,7 @@ function Solar:_process_data()
         return {}
     end
 
-    local midnight_epoch = self:_get_midnight_epoch()
+    local midnight_epoch = util.get_midnight_epoch()
     local processed_data = {}
 
     for t_str, values in pairs(self.cache.data) do
@@ -204,7 +195,8 @@ function Solar:_process_data()
                 -- Leistung für diese Stunde (v[2])
                 power_kw = values[2],
                 -- Kumulierter Ertrag bis zu dieser Stunde (v[3])
-                cumulative_kwh = values[3]
+                cumulative_kwh = values[3],
+                local_timestamp = t_str
             }
             table.insert(processed_data, entry)
         end
@@ -221,8 +213,8 @@ end
 ------------------------------------------------------------
 -- Hauptfunktion: fetch()
 ------------------------------------------------------------
-function Solar:fetch()
-    local now = os.time()
+function Solar:fetch(now)
+    now = now or os.time()
     local is_cached = false
 
     -- Cache noch gültig?
@@ -232,7 +224,7 @@ function Solar:fetch()
         now < self.cache.preferredNextApiRequestAt.epochTimeUtc + self.config.cachetime then
             is_cached = true
             -- Rückgabe des *verarbeiteten* Caches
-            return self:_process_data(), nil, is_cached
+            return nil, is_cached
         end
     end
 
@@ -256,7 +248,7 @@ function Solar:fetch()
         self.cache.timestamp = now
         self:_save_cache()
 
-        return self:_process_data(), err, is_cached
+        return err, is_cached
     end
 
     -- Safe JSON decode
@@ -266,7 +258,7 @@ function Solar:fetch()
         print("JSON decode error:", error_msg)
         self.cache.error = error_msg
         -- Rückgabe des *verarbeiteten* alten Caches
-        return self:_process_data(), error_msg, is_cached
+        return error_msg, is_cached
     end
 
     -- Cache aktualisieren
@@ -274,15 +266,15 @@ function Solar:fetch()
     self.cache.timestamp = now
     self.cache.error = nil
 
-
     self:_clean_cache()
     self:_save_cache()
-    -- Rückgabe des *verarbeiteten* neuen Datensatzes
-    return self:_process_data(), nil, false
+
+    return nil, false
 end
 
 -- no forecast, returns math.huge
-function Solar:get_remaining_daily_forecast_yield()
+function Solar:get_remaining_daily_forecast_yield(current_hour)
+    current_hour = current_hour or tonumber(os.date("%H"))
     local data_array = self:_process_data()
 
     if #data_array == 0 then
@@ -292,13 +284,12 @@ function Solar:get_remaining_daily_forecast_yield()
         return math.huge
     end
 
-    local current_hour = tonumber(os.date("%H"))
     local remaining_forecast_yield = 0
     for _, entry in ipairs(data_array) do
-        if entry.hour > current_hour then
+        if entry.hour > current_hour and entry.hour < 24 then
             remaining_forecast_yield = remaining_forecast_yield + entry.power_kw
         end
-        if entry.hour >= 24.00 then
+        if entry.hour >= 24 then
             break
         end
     end
@@ -323,13 +314,13 @@ function Solar:print_latest()
     local preferred_sec = self.cache.preferredNextApiRequestAt.secondOfHour
     print("Nächster fetch um " .. os.date("%Y-%m-%d %H:%M:%S", timestamp))
     print("Gewünschte Zeitpunkt des Refreshs " .. math.floor(preferred_sec/60) .. ":" .. math.floor(preferred_sec%60))
-    print(string.format("Startzeitpunkt für Stundenberechnung: %s", os.date("%Y-%m-%d 00:00:00", self:_get_midnight_epoch())))
+    print(string.format("Startzeitpunkt für Stundenberechnung: %s", os.date("%Y-%m-%d 00:00:00", util.get_midnight_epoch())))
     print("----------------------------------------")
 
     for _, entry in ipairs(data_array) do
         -- Umrechnung der dezimalen Stunde zurück in eine lesbare UTC-Zeit für die Ausgabe (optional)
         local total_seconds = entry.hour * 3600
-        local t_epoch = self:_get_midnight_epoch() + total_seconds
+        local t_epoch = util.get_midnight_epoch() + total_seconds
         local timeStamp_local = os.date("%Y-%m-%d %H:%M:%S", t_epoch)
 
         print(string.format("Stunde %.2f (lokal: %s) -> %.3f kW, Kumulativ: %.3f kWh",
@@ -406,8 +397,8 @@ end
 ------------------------------------------------------------
 
 -- Führt fetch() für jede Plane durch und aggregiert die Ergebnisse
-function SolarAggregator:fetch()
-    local now = os.time()
+function SolarAggregator:fetch(now)
+    now = now or os.time()
 
     -- Aggregierten Cache prüfen (optional, hier deaktiviert, um immer aktuelle Daten zu liefern)
     -- Da jede Plane ihren eigenen Cache verwaltet, holen wir die aktuellsten Daten (entweder Cache oder API)
@@ -420,7 +411,7 @@ function SolarAggregator:fetch()
     -- 1. Hole Daten für jede einzelne Plane (nutzt Cache oder API)
     for _, plane in ipairs(self.planes) do
         -- Jeder Aufruf nutzt den spezifischen Cache oder triggert einen API-Fetch
-        local data_array, err = plane:fetch()
+        local err = plane:fetch(now)
 
         if err then
             last_error = "Fehler bei Plane " .. (plane.__name or plane.config.id) .. ": " .. err
@@ -429,7 +420,7 @@ function SolarAggregator:fetch()
         end
 
         -- Wir speichern die Daten, auch wenn sie leer sind (leeres Array wird korrekt aggregiert)
-        table.insert(all_plane_data, data_array or {})
+        table.insert(all_plane_data, plane:_process_data() or {})
     end
 
     -- 2. Aggregation der Daten
@@ -443,7 +434,7 @@ function SolarAggregator:fetch()
         self.cache.timestamp = now
         self.cache.error = last_error or "Keine Daten von irgendeiner Plane verfügbar."
         self:_save_agg_cache()
-        return aggregated_data, self.cache.error, false
+        return self.cache.error, false
     end
 
     for i, entry_ref in ipairs(reference_data) do
@@ -475,7 +466,7 @@ function SolarAggregator:fetch()
     self.cache.error = last_error
     self:_save_agg_cache()
 
-    return aggregated_data, last_error, false
+    return last_error, false
 end
 
 -- Gibt die aggregierten Daten zurück
@@ -484,28 +475,13 @@ function SolarAggregator:get_aggregated_forecast()
 end
 
 -- Berechnet den Rest-Ertrag basierend auf den aggregierten Daten
-function SolarAggregator:get_remaining_daily_forecast_yield()
-    local data_array = self.cache.aggregated_data
-
-    if not data_array or #data_array == 0 then
-        print("[SolarAggregator] Fehler: Keine gültigen aggregierten Daten.")
-        return math.huge
-    end
-
-    local midnight_epoch = self.planes[1]:_get_midnight_epoch()
-
-    -- Konvertiere die aktuelle Zeit in die dezimale Stunde des Tages
-    local current_hour_decimal = (os.time() - midnight_epoch) / 3600
+function SolarAggregator:get_remaining_daily_forecast_yield(current_hour)
+    current_hour = current_hour or tonumber(os.date("%H"))
 
     local remaining_forecast_yield = 0
-    for _, entry in ipairs(data_array) do
-        -- Prüfe, ob die Prognosestunde noch nicht begonnen hat
-        if entry.hour >= current_hour_decimal then
-            remaining_forecast_yield = remaining_forecast_yield + entry.power_kw
-        end
-        if entry.hour >= 24.00 then
-            break
-        end
+    for _, plane in pairs(self.planes) do
+        remaining_forecast_yield = remaining_forecast_yield
+            + plane:get_remaining_daily_forecast_yield(current_hour)
     end
     return remaining_forecast_yield
 end
@@ -527,14 +503,14 @@ function SolarAggregator:print_latest()
     print("----------------------------------------")
 
     -- Für die Debug-Ausgabe brauchen wir den Midnight-Epoch-Wert von einer Plane
-    local midnight_epoch = self.planes[1]:_get_midnight_epoch()
+    local midnight_epoch = util.get_midnight_epoch()
 
     for _, entry in ipairs(data_array) do
         local total_seconds = entry.hour * 3600
         local t_epoch = midnight_epoch + total_seconds
         local timeStamp_local = os.date("%Y-%m-%d %H:%M:%S", t_epoch)
 
-        print(string.format("Stunde %.2f (lokal: %s) -> %.3f kW (Gesamt), Kumulativ: %.3f kWh (Gesamt)",
+        print(string.format("Stunde %.2f (lokal: %s) -> %.3f kW, Kumulativ: %.3f kWh",
                 entry.hour,
                 timeStamp_local,
                 entry.power_kw,
@@ -579,15 +555,14 @@ local function example()
     print("Starte Aggregator Fetch (holt Daten für beide Planes)...")
 
     -- Fetch-Aufruf, der BEIDE API-Abrufe (oder Cache-Lesungen) ausführt und aggregiert
-    local aggregated_data, err = pv_aggregator:fetch()
+    local err = pv_aggregator:fetch()
 
-    if not aggregated_data or err then
+    if err then
         print("Kritischer Fehler bei Aggregation:", err)
         return
     end
 
     pv_aggregator:print_latest()
-
 end
 
 -- Führe die Beispiel-Funktion aus, wenn das Skript direkt gestartet wird
