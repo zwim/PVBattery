@@ -79,11 +79,8 @@ return function(self, VERSION)
     local json_string = json.encode(data)
 
     -- Datei zum Schreiben öffnen ("w" = write, überschreibt bestehende Datei)
-    local file, res = io.open(config.html_json, "w")
-    if file then
-        file:write(json_string)  -- String in die Datei schreiben
-        file:close()      -- Datei schließen
-    else
+
+    if not util.write_file(config.html_json, json_string) then
         self:log(0, "Fehler: JSON Datei '" .. config.html_json .."# konnte nicht geöffnet werden.", res)
     end
 
