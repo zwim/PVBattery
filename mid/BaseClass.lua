@@ -31,7 +31,6 @@ function BaseClass:new(o)
 end
 
 function BaseClass:init()
-    return self
 end
 
 function BaseClass:log(level, ...)
@@ -49,7 +48,7 @@ end
 
 function BaseClass:setLogLevel(new_level)
     if     new_level < 0 then new_level = 0
-    elseif new_level > #__log_signature then new_level = #_log_signature
+    elseif new_level > #__log_signature then new_level = #__log_signature
     end
     self.__logleve = new_level
 end
