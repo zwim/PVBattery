@@ -111,43 +111,6 @@ function Fronius:getMeterRealtimeData()
     return true
 end
 
-function Fronius:_get_RealtimeData_coroutine(cmd)
-    if not self.host or self.host == "" then
-        return false
-    end
-
-    local path = self.urlPath .. cmd
-    local body, err = util.http_get_coroutine(self, path, nil)
-    if not body then
-        util:log("[Fronius:_get_RealtimeData_coroutine] Error getting data from", self.host, ":", err)
-        return false
-    end
-    return json.decode(body) or {}
-end
-
-function Fronius:getPowerFlowRealtimeData_coroutine()
-    if self:getDataAge(GetPowerFlowRealtimeData_cmd) < config.update_interval then
-        return true
-    end
-    self.Data.GetPowerFlowRealtimeData = self:_get_RealtimeData_coroutine(GetPowerFlowRealtimeData_cmd)
-    self:setDataAge(GetPowerFlowRealtimeData_cmd)
-    return true
-end
-
-function Fronius:getInverterRealtimeData_coroutine()
-    if self:getDataAge(GetInverterRealtimeData_cmd) < config.update_interval then return true end
-    self.Data.GetInverterRealtimeData = self:_get_RealtimeData_coroutine(GetInverterRealtimeData_cmd)
-    self:setDataAge(GetInverterRealtimeData_cmd)
-    return true
-end
-
-function Fronius:getMeterRealtimeData_coroutine()
-    if self:getDataAge(GetMeterRealtimeData_cmd) < config.update_interval then return true end
-    self.Data.GetMeterRealtimeData = self:_get_RealtimeData_coroutine(GetMeterRealtimeData_cmd)
-    self:setDataAge(GetMeterRealtimeData_cmd)
-    return true
-end
-
 function Fronius:gotValidPowerFlowRealtimeData()
     return self.Data and self.Data.GetPowerFlowRealtimeData and self.Data.GetPowerFlowRealtimeData.Body
         and self.Data.GetPowerFlowRealtimeData.Body.Data and self.Data.GetPowerFlowRealtimeData.Body.Data.Site

@@ -86,24 +86,6 @@ function P1meter:getData()
     self:setDataAge()
 end
 
-function P1meter:_get_data_coroutine(cmd)
-    local path = self.urlPath .. cmd
-    local body, err = util.http_get_coroutine(self, path, nil)
-    if not body then
-        util:log("[P1meter:_get_data_coroutine] Error getting data from", self.host, ":", err)
-        return false
-    end
-    return json.decode(body) or {}
-end
-
-
-function P1meter:getData_coroutine()
-    if self:getDataAge() < config.update_interval then return true end
-    self.Data = self:_get_data_coroutine(GetP1meterData_cmd)
-    self:setDataAge()
-    return true
-end
-
 function P1meter:gotValidP1meterData()
     return self.Data.active_power_w ~= nil
 end
