@@ -193,7 +193,8 @@ function CustomBattery:take(req_power)
         self.Charger[1]:safeStartCharge()
         self.Charger[2]:safeStartCharge()
         util:sleepTime(5)
-        return self:getPower()
+        self:getPower()
+        return
     end
 
     if req_power == 0 or math.min(p1, p2) > req_power then
@@ -230,9 +231,8 @@ end
 function CustomBattery:give(req_power)
     if req_power == 0 then
         self.Inverter:safeStopDischarge()
-        return
     elseif req_power > self.Inverter.min_power then
-        return self.Inverter:safeStartDischarge()
+        self.Inverter:safeStartDischarge()
     end
 end
 
@@ -277,6 +277,7 @@ function CustomBattery:balance()
     print("Todo: balancing not impl")
 end
 
+--[[
 -- if internal is set, get internal Voltage, else AC-Voltage
 function CustomBattery:getVoltage(internal)
     if internal then
@@ -284,9 +285,12 @@ function CustomBattery:getVoltage(internal)
         return self.BMS.v and self.BMS.v.VoltageSum
     else
         print("Todo: voltage not impl. yet. 123!")
+        return 666
     end
 end
+]]
 
+--[[
 -- returns positive if chargeing, negative if dischargeing
 -- if internal is set, get internal current, else AC-current
 function CustomBattery:getCurrent(internal)
@@ -297,6 +301,7 @@ function CustomBattery:getCurrent(internal)
         print("Todo: current not impl. yet. 123!")
     end
 end
+]]
 
 -- always AC
 function CustomBattery:getEnergyStored()

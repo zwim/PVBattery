@@ -46,7 +46,7 @@ local function example()
 
     local dev = Homewizard:new{Device = Device}
     dev:log(0, "Now do some reading, to show how values change")
-    for i = _, tonumber(arg[1] or 40) do
+    for i = 1, tonumber(arg[1] or 40) do
         local power= dev:getPower()
         dev:log(0, string.format("Power: %5.1f", power))
         os.execute("sleep 1")

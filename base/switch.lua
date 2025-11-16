@@ -13,8 +13,8 @@ local Switch = {
     topic_name = nil,
 }
 
-function Switch:extend(subclass_prototype)
-    local o = subclass_prototype or {}
+function Switch:extend(o)
+    o = o or {}
     setmetatable(o, self)
     self.__index = self
     return o
@@ -41,8 +41,8 @@ function Switch:init()
 end
 
 function Switch:updateState(timeout)
-    if not self.host or self.host == ""then
-        return false
+    if not self.host or self.host == "" then
+        return
     end
 
     mqtt_reader:askHost(self.host, 2)

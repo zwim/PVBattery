@@ -11,7 +11,7 @@ local MarstekBattery = Battery:extend{
 }
 
 function MarstekBattery:extend(o)
-    local o = o or {}
+    o = o or {}
     setmetatable(o, self)
     self.__index = self
     return o
