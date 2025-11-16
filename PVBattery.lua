@@ -583,6 +583,7 @@ function PVBattery:main(profiling_runs)
                 self.ForecastsolarModul:fetch(now)
                 forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
             end
+            self:log(2, "SOLARERTRAG",  solarprognose_expected_yield, forecastsolar_expected_yield)
             self.expected_yield = math.min(solarprognose_expected_yield, forecastsolar_expected_yield)
         end
 

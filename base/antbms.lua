@@ -561,7 +561,6 @@ function AntBMS:getParameters()
             --os.execute(ESP32_HARD_RESET_COMMAND)
             os.execute(ESP32_HARD_RESET_COMMAND)
             util:log("BMS hard reset")
-            os.execute("date")
             print("sleeping " .. ESP32_RESET_SLEEP_TIME)
             util.sleepTime(ESP32_RESET_SLEEP_TIME + 1)
             return false

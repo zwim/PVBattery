@@ -40,6 +40,28 @@ function SolarPrognose:normalize_data(raw)
     return normalized
 end
 
+function SolarPrognose:calculateNextFetchTime(raw, now)
+    now = now or os.time()
+    local preferred_second = raw.preferrerdNextApiRequestAt and raw.preferrerdNextApiRequestAt.secondOfHour or 666
+    self.cache.preferred_next_time = math.floor(now / 3600) + preferred_second
+    if self.cache.preffered_next_time >= 3600 then -- should not happen
+        self.cache.preffered_next_time = math.random(3600)
+    end
+end
+
+function SolarPrognose:shouldFetch(now)
+    if Forecast.shouldFetch(self, now) then
+        if self.cache.preferred_next_time then
+            if (now % 3600) >= self.cache.preferred_next_time then
+                return true
+            end
+        else
+            return true
+        end
+    end
+    return false
+end
+
 ------------------------------------------------------------
 -- Beispielverwendung
 ------------------------------------------------------------
@@ -67,13 +89,9 @@ local function example()
     -- Erstelle den Aggregator und seine internen Solar-Instanzen
     local Prognose = SolarPrognose:new{config = cfg}
 
-    print("Starte Aggregator Fetch (holt Daten für beide Planes)...")
-
-    -- Fetch-Aufruf, der BEIDE API-Abrufe (oder Cache-Lesungen) ausführt und aggregiert
-    local err = Prognose:fetch()
-
-    if err then
-        print("Kritischer Fehler bei Aggregation:", err)
+    local ok, err = Prognose:fetch()
+    if not ok then
+        print("Kritischer Fehler beim zweiten Fetch:", err)
         return
     end
 
