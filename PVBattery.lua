@@ -239,7 +239,8 @@ function PVBattery:doTheMagic(_second_try)
         if _second_try then
             return
         else
-            return self:doTheMagic(true)
+            self:doTheMagic(true)
+            return
         end
     end
 

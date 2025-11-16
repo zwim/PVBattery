@@ -253,25 +253,7 @@ function Battery:getDischargeCutOff()
 end
 
 local function example()
-    local Device = {
-        name = "VenusE 1",
-        typ = "battery",
-        brand = "marstek",
-        host = "Venus-E1-modbus",
-        -- ip = "192.168.0.208",
-        port = 502,
-        slaveId = 1,
-        charge_max_power = 2492,
-        discharge_max_power = 2492,
-        SOC_min = 15,
-        SOC_max = 100,
-        leave_mode = "auto",
-    }
-    SunTime.noon = 11.6666
-    SunTime.set = 17.9333
-
-    local M = Battery:new{Device = Device}
-    print("check getDesiredMaxSOC:", M:getDesiredMaxSOC( SunTime:getTimeInHours() ))
+    print("No example yet")
 end
 
 if arg[0]:find("Battery.lua") then

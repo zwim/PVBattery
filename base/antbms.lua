@@ -671,7 +671,7 @@ function AntBMS:getParameters()
     self.answer = {} -- clear old received bytes
 
     for n = 1, 256 do
-        print(string:format("%3d: 0x%X", n, self.Parameter[n]))
+        print(string.format("%3d: 0x%X", n, self.Parameter[n]))
     end
     return true
 end
