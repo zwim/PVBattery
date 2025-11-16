@@ -47,6 +47,9 @@ function FroniusInverter:getState()
     return result
 end
 
+function FroniusInverter:getPower()
+    return self.Inverter:getPowerModbus()
+end
 -- returns positive if chargeing, negative if dischargeing
 -- poor update rate; ca. every 10 secs
 function FroniusInverter:getAllPower()

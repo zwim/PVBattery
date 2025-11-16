@@ -1,5 +1,6 @@
 -- luacheck: globals config
 local json = require("dkjson")
+local util = require("base/util")
 
 return function(self, VERSION)
     local sinks = 0
