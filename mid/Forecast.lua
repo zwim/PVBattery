@@ -89,12 +89,15 @@ end
 -- Cache laden/speichern
 ------------------------------------------------------------
 function Forecast:_load_cache()
-    local f = util.read_file(self.config.cachefile)
-    if not f then return end
+    local content = util.read_file(self.config.cachefile)
+    if not content then return end
 
-    local r = util.safe_json_decode(f)
+    local r = util.safe_json_decode(content)
     if r and r.data then
         self.cache = r
+    else
+        self.cache = {}
+        self.cache.timestamp = 0
     end
 end
 
@@ -147,12 +150,27 @@ function Forecast:get_remaining_daily_forecast_yield(current_hour)
     return sum
 end
 
+function Forecast:shouldFetch(now)
+    now = now or os.time()
+    return now - self.cache.timestamp > self.config.cachetime
+end
+
+--luacheck: ignore raw
+function Forecast:calculateNextFetchTime(raw)
+    -- do nothing here, but maybe somwhere else
+    return
+end
+
 function Forecast:fetch(now)
     now = now or os.time()
 
-    if now - self.cache.timestamp < self.config.cachetime then
+    if not self:shouldFetch(now) then
         return true
     end
+
+    -- try at earliest in self.config.cachetime again, no matter if it fails
+    self.cache.timestamp = now
+    self:_save_cache()
 
     local plane_forecast = {}
     for i, plane in ipairs(self.config.planes) do
@@ -173,6 +191,8 @@ function Forecast:fetch(now)
         if not raw then
             return nil, "Invalid API data"
         end
+        self:calculateNextFetchTime(raw, now)
+
         local data, e = self:normalize_data(raw)
         if not e then
             data = self:_process_data(data)
@@ -201,6 +221,7 @@ end
 -- Debug
 ------------------------------------------------------------
 function Forecast:print_latest()
+    if not self.cache.data then return end
     for _,e in ipairs(self.cache.data) do
         print(string.format("Stunde %.2f -> %.3f kW, kum %.3f",
             e.hour, e.power_kw, e.cumulative_kwh))

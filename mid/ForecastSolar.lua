@@ -84,16 +84,12 @@ local function example()
         cachetime = 1 * 3600, -- 1 Stunde
     }
 
+    -- Erster Abruf (echter Fetch)
     local Prognose = ForecastSolar:new{config = cfg}
 
-print(string.format("Heutiger Rest-Ertrag (ab jetzt): %.2f kWh",
-            Prognose:get_remaining_daily_forecast_yield()))
-
-    -- Erster Abruf (echter Fetch)
-    local err = Prognose:fetch()
-
-    if err then
-        print("Kritischer Fehler beim ersten Fetch:", err)
+    local ok, err = Prognose:fetch()
+    if not ok then
+        print("Kritischer Fehler beim zweiten Fetch:", err)
         return
     end
 
