@@ -208,7 +208,7 @@ function PVBattery:doTheMagic(_second_try)
 
     -- P_excess interpretation: positive -> we can discharge to grid (need to supply), negative -> we can charge batteries
     local P_excess = (self.P_Grid or 0) + (self.P_Battery or 0)
-    self:log(1, string.format("P_Grid: %5.1f, P_excess: %5.1f", self.P_Grid or 0, P_excess))
+    self:log(0, string.format("P_Grid: %5.1f, P_excess: %5.1f", self.P_Grid or 0, P_excess))
 
     -- quick sanity: if device lists missing, bail safely
     local smart_count = #self.SmartBattery
