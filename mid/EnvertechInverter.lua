@@ -53,35 +53,14 @@ function EnvertechInverter:getState()
     return result
 end
 
--- turns on balancing
-function EnvertechInverter:balance()
-end
-
--- if internal is set, get internal Voltage, else AC-Voltage
-function EnvertechInverter:getVoltage(internal)
-end
-
--- returns positive if chargeing, negative if dischargeing
--- if internal is set, get internal current, else AC-current
-function EnvertechInverter:getCurrent(internal)
-end
-
 -- always AC
 function EnvertechInverter:getEnergyTotal()
     return self.Inverter:getEnergyTotal()
 end
 
--- always AC
-function EnvertechInverter:setMaxDischargePower(max_power)
-end
-
--- always AC
-function EnvertechInverter:getMaxDischargePower()
-end
-
 -- returns positive if giving
 -- if internal is set, get internal power, else AC-power
-function EnvertechInverter:getPower(internal)
+function EnvertechInverter:getPower()
     local discharging_power = self.Inverter:getPower()
     return discharging_power
 end

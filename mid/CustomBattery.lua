@@ -305,20 +305,8 @@ function CustomBattery:getEnergyStored()
 end
 
 -- always AC
--- returns true on success
-function CustomBattery:setMaxDischargePower(max_power)
-    return false
-end
-
--- always AC
 function CustomBattery:getMaxDischargePower()
     return self.Inverter:getMaxPower()
-end
-
--- always AC
--- returns true on success
-function CustomBattery:setMaxChargePower(max_power)
-    return false
 end
 
 -- always AC

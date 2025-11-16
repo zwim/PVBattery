@@ -1,7 +1,6 @@
 -- Masterclass for Batteries
 
 local PowerDevice = require("mid/PowerDevice")
-local mqtt_reader = require("base/mqtt_reader")
 local P1meter = require("base/p1meter")
 local util = require("base/util")
 
@@ -26,26 +25,9 @@ function Homewizard:getState()
     return ""
 end
 
--- if internal is set, get internal Voltage, else AC-Voltage
-function Homewizard:getVoltage(internal)
-end
-
--- returns positive if chargeing, negative if dischargeing
--- if internal is set, get internal current, else AC-current
-function Homewizard:getCurrent(internal)
-end
-
--- always AC
-function Homewizard:setMaxDischargePower(max_power)
-end
-
--- always AC
-function Homewizard:getMaxDischargePower()
-end
-
 -- returns positive if buying, negative if selling energy
 -- second argument is true if old data
-function Homewizard:getPower(internal)
+function Homewizard:getPower()
     return self.P1meter:getCurrentPower(), not self.P1meter:is_data_new()
 end
 
@@ -64,7 +46,7 @@ local function example()
 
     local dev = Homewizard:new{Device = Device}
     dev:log(0, "Now do some reading, to show how values change")
-    for i = 1, tonumber(arg[1] or 40) do
+    for i = _, tonumber(arg[1] or 40) do
         local power= dev:getPower()
         dev:log(0, string.format("Power: %5.1f", power))
         os.execute("sleep 1")

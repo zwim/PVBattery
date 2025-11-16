@@ -33,8 +33,8 @@ local MarstekBattery = require("mid/MarstekBattery")
 local EnvertechInverter = require("mid/EnvertechInverter")
 local FroniusInverter = require("mid/FroniusInverter")
 local Homewizard = require("mid/Homewizard")
-local Solarprognose = require("mid/solarprognose")
-local Forecastsolar = require("mid/forecastsolar")
+local SolarPrognose = require("mid/SolarPrognose")
+local ForecastSolar = require("mid/ForecastSolar")
 
 local PVBattery = BaseClass:extend{
     __name = "PVBattery",
@@ -136,9 +136,9 @@ function PVBattery:init()
             table.insert(self.Smartmeter, Homewizard:new{Device = Device})
         elseif typ == "prognose" then
             if brand == "solarprognose" then
-                self.SolarprognoseModul = Solarprognose.new(Device.cfg)
+                self.SolarprognoseModul = SolarPrognose:new{config = Device.cfg}
             elseif brand == "forecast.solar" then
-                self.ForecastsolarModul = Forecastsolar.new(Device.cfg)
+                self.ForecastsolarModul = ForecastSolar:new{config = Device.cfg}
             end
         end
     end
@@ -582,7 +582,7 @@ function PVBattery:main(profiling_runs)
                 self.ForecastsolarModul:fetch(now)
                 forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
             end
-            self.expected_yield = math.min(self.expected_yield, forecastsolar_expected_yield)
+            self.expected_yield = math.min(solarprognose_expected_yield, forecastsolar_expected_yield)
         end
 
         self:log(3, "expected yield", self.expected_yield, "kWh; unused capacity", self.free_capacity, "kWh")
@@ -675,4 +675,3 @@ while true do
         end
     end
 end
-

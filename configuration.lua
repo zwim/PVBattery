@@ -161,7 +161,6 @@ local configuration = {
                         item = "module_filed",
                         id = "14336",
                         typ = "hourly",
-                        cachefile = "/tmp/solarprognose_dach.json",
                         cachetime = 1*3600,
                     },
                     {
@@ -171,7 +170,6 @@ local configuration = {
                         item = "module_filed",
                         id = "14337",
                         typ = "hourly",
-                        cachefile = "/tmp/solarprognose_balkon.json",
                         cachetime = 1*3600,
                     },
                 },
@@ -190,7 +188,7 @@ local configuration = {
                         longitude = position.longitude,
                         declination = 30, -- Neigung
                         azimuth = -45,    -- Ausrichtung, Ost=-90, West=90
-                        kwp = 4.5,
+                        kwp = 7.5,
                     },
                     {
                         name = "Balkon",
@@ -198,11 +196,11 @@ local configuration = {
                         longitude = position.longitude,
                         declination = 85, -- Neigung
                         azimuth = 90,     -- Ausrichtung Ost=-90, West=90
-                        kwp = 6.9,
+                        kwp = 1.6,
                     },
                     -- Optional: Mehr Flächen hinzufügen
                 },
-                cachefile = "/tmp/forecast_solar_agg.json",
+                cachefile = "/tmp/forecast_solar_agg_total.json",
                 cachetime = 1 * 3600, -- 1 Stunde
             },
         },

@@ -4,7 +4,6 @@ local ffi = require("ffi")
 local json = require("dkjson")
 local lfs = require("lfs")
 local posix = require("posix")
-local socket = require("socket")
 
 if not table.unpack then
     table.unpack = unpack
