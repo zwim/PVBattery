@@ -247,7 +247,7 @@ function AntBMS:isChecksumOk()
             break
         end
 
-        expected = 0;
+        expected = 0
         for i = 4, 137 do
             expected = expected + getInt8(self.answer, i)
         end
@@ -329,7 +329,6 @@ function AntBMS:getData(force)
                     body = body:sub(header_end + 4)
                 end
 
-
                 if status == "closed" then
                     self.socket:close()
                     self.socket = nil
@@ -343,7 +342,6 @@ function AntBMS:getData(force)
                 if #body >= BMS_DATA_SIZE then
                     break
                 end
-
             end
 
             if #body >= BMS_DATA_SIZE then
@@ -359,7 +357,6 @@ function AntBMS:getData(force)
             end
 
             util.sleepTime(5) -- wait
-
         end --for
 
         if self.socket then
@@ -406,85 +403,6 @@ function AntBMS:getData(force)
     -- Now we store the new aquisition time.
     self:setDataAge()
 
-    return true
-end
-
--- This is the usual way of reading new parameters
-function AntBMS:getData_coroutine(force)
-    if not self.host or self.host == "" then
-        return false
-    end
-
-    -- Require Data only, if the last require was at least update_interval seconds ago.
-    if not force and self:getDataAge() < config.update_interval then
-        -- and the last value was read correct
-        if self.v and self.v.Current then
-            return true
-        end
-    end
-
-    local ok, err
-    if not self.socket then
-        self.socket = socket.tcp()
-        self.socket:settimeout(5) -- timeout for opening the connection
-        self.socket:setoption("keepalive", true)
-        ok, err = self.socket:connect(self.host, 80)
-        if not ok then
-            util:log("[getData_coroutine] Error opening connection to", self.host, ":", err)
-            self.socket = nil
-            return false
-        end
-    end
-
-    -- If we get here, invalidate the last data aquisition date.
-    -- Will be updated when new correct data are read.
-    self:clearDataAge()
-
-    self.socket:send("GET /live.data HTTP/1.0\r\n\r\n")
-
-    local body = ""
-    for _ = 1, 20 do
-        self.socket:settimeout(1)
-        local s, status, partial = self.socket:receive(READ_DATA_SIZE)
-        if s and s ~= "" then
-            body = body .. s
-        end
-        if partial and partial ~= "" then
-            body = body .. partial
-        end
-
-        local header_end = body:find("\r\n\r\n", 1, true)
-        if header_end then
-            body = body:sub(header_end + 4)
-        end
-
-        if #body >= BMS_DATA_SIZE then
-            break
-        elseif status == "closed" then
-            self.socket:close()
-            self.socket = nil
-            break
-        elseif status == "timeout" then
-            coroutine.yield(self.socket)
-        end
-    end
-
-    if self.socket then
-        self.socket:close()
-        self.socket = nil
-    end
-
-    self.answer = {}
-    for n = 1, #body do
-        table.insert(self.answer, body:byte(n))
-    end
-
-    if not self:isChecksumOk() then
-        self:enableBluetooth()
-        return false
-    end
-
-    self:evaluateData()
     return true
 end
 
