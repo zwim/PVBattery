@@ -1,5 +1,4 @@
 local Forecast = require("mid/Forecast")
-local util = require("base/util")
 
 -- Basis-URL der solarprognose.de Public API (kostenlos, mit Registrierung)
 local API = "https://www.solarprognose.de/web/solarprediction/api"

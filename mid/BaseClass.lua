@@ -48,7 +48,7 @@ end
 
 function BaseClass:setLogLevel(new_level)
     if     new_level < 0 then new_level = 0
-    elseif new_level > #__log_signature then new_level = #__log_signature
+    elseif new_level > #BaseClass.__log_signature then new_level = #BaseClass.__log_signature
     end
     self.__logleve = new_level
 end

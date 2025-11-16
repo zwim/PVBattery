@@ -160,23 +160,6 @@ function MarstekBattery:getPower(internal)
     end
 end
 
--- turns on balancing
-function MarstekBattery:balance()
-end
-
--- if internal is set, get internal Voltage, else AC-Voltage
-function MarstekBattery:getVoltage(internal)
-end
-
--- returns positive if chargeing, negative if dischargeing
--- if internal is set, get internal current, else AC-current
-function MarstekBattery:getCurrent(internal)
-end
-
--- always AC
-function MarstekBattery:getEnergyStored()
-end
-
 -- always AC
 function MarstekBattery:setMaxDischargePower(max_power)
     max_power = math.clamp(max_power, 100, 2500)
@@ -232,8 +215,6 @@ end
 
 if arg[0]:find("MarstekBattery.lua") then
     -- Beispielaufruf
-    local ip = "192.168.0.161" -- IP-Adresse des ELFIN WL11A
-    local host = "192.168.0.161" -- IP-Adresse des ELFIN WL11A
     local port = 502 -- Modbus TCP Port
     local slaveId = 1 -- Slave ID
 

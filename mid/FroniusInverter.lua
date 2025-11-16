@@ -47,19 +47,6 @@ function FroniusInverter:getState()
     return result
 end
 
--- if internal is set, get internal Voltage, else AC-Voltage
-function FroniusInverter:getVoltage(internal)
-end
-
--- returns positive if chargeing, negative if dischargeing
--- if internal is set, get internal current, else AC-current
-function FroniusInverter:getCurrent(internal)
-end
-
-function FroniusInverter:getPower()
-    return self.Inverter:getPowerModbus()
-end
-
 -- returns positive if chargeing, negative if dischargeing
 -- poor update rate; ca. every 10 secs
 function FroniusInverter:getAllPower()
@@ -76,7 +63,7 @@ local function example()
 
     local Inverter = FroniusInverter:new{Device = Device}
     Inverter:log(0, "Now do some reading, to show how values change")
-    for i = 1, tonumber(arg[1] or 40) do
+    for _ = 1, tonumber(arg[1] or 40) do
         local power_modbus = Inverter:getPower()
         local P_Grid_slow, P_Load, P_PV, P_AC = Inverter:getAllPower()
         Inverter:log(0, string.format("fast Power: %5.1f, slow Power: %5.1f; %d %d",
