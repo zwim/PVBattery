@@ -41,11 +41,8 @@ function Forecast:init()
         self.config.cachetime = math.min(t1, t2)
     end
 
-
     self:_load_cache()
     self:fetch()
-
-    return self
 end
 
 function Forecast:log(level, ...)
@@ -199,7 +196,6 @@ function Forecast:fetch(now)
     self:_save_cache()
     return true
 end
-
 
 ------------------------------------------------------------
 -- Debug

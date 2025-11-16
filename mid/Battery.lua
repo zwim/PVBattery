@@ -1,34 +1,29 @@
 -- Masterclass for Batteries
 
 local PowerDevice = require("mid/PowerDevice")
-local SunTime = require("suntime/suntime")
+local SunTime     = require("suntime/suntime")
+local util        = require("base/util")
 
 local FILENAME = "/tmp/last_full_timestamp"
 
 -- Hilfsfunktion zum Lesen des letzten Zeitstempels aus der Datei
 local function read_timestamp()
-    local f = io.open(FILENAME, "r")
-    if f then
-        local content = f:read("*a")
-        f:close()
-        -- Konvertiere den gelesenen String in eine Zahl (Timestamp)
-        return tonumber(content)
+    local content, err = util.read_file(FILENAME)
+    if not content then
+        print("Error: could not read timestamp from" .. FILENAME)
+        return nil, err
     end
-    return nil
+    return tonumber(content)
 end
 
 -- Hilfsfunktion zum Schreiben des aktuellen Zeitstempels in die Datei
 local function write_timestamp(timestamp)
-    local f = io.open(FILENAME, "w")
-    if f then
-        f:write(tostring(timestamp))
-        f:close()
-        return true
+    if not util.write_file(FILENAME, tostring(timestamp)) then
+        print("Error: could not write timestamp to" .. FILENAME)
+        os.execute("date")
+        return false
     end
-    -- Hier könnte man eine Fehlerprotokollierung hinzufügen, falls die Datei nicht geschrieben werden kann
-    print("Error: could not write timestamp to" .. FILENAME)
-    os.execute("date")
-    return false
+    return true
 end
 
 local Battery = PowerDevice:extend{

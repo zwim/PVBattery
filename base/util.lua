@@ -384,25 +384,33 @@ function util.utc_to_local_string(utc_str)
 end
 
 function util.file_exists(path)
-    local f = io.open(path, "r")
-    if not f then return false end
-    f:close()
+    local file = io.open(path, "r")
+    if not file then
+        return false
+    end
+    file:close()
     return true
 end
 
 function util.read_file(path)
-    local f = io.open(path, "r")
-    if not f then return nil end
-    local content = f:read("*a")
-    f:close()
+    local file, res = io.open(path, "r")
+    if not file then
+        print("Fehler: '" .. path .. "' can not be opened", res)
+        return nil, res
+    end
+    local content = file:read("*a")
+    file:close()
     return content
 end
 
 function util.write_file(path, content)
-    local f = io.open(path, "w")
-    if not f then return false end
-    f:write(content)
-    f:close()
+    local file, res = io.open(path, "w")
+    if not file then
+        print("Fehler: '" .. path .."' konnte nicht geöffnet werden.", res)
+        return false
+    end
+    file:write(content)
+    file:close()
     return true
 end
 
