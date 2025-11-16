@@ -2,7 +2,7 @@
 -- ###############################################################
 -- CONFIGURATION
 -- ###############################################################
-local VERSION = "V5.1.2"
+local VERSION = "V5.2.0"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -572,16 +572,17 @@ function PVBattery:main(profiling_runs)
         self.expected_yield = 0
         if SunTime:isDayTime() then
             local now = os.time()
+            local solarprognose_expected_yield = math.huge
+            local forecastsolar_expected_yield = math.huge
             if self.SolarprognoseModul then
                 self.SolarprognoseModul:fetch(now)
-                local solarprognose_expecte_yield = self.SolarprognoseModul:get_remaining_daily_forecast_yield()
-                self.expected_yield = solarprognose_expecte_yield
+                solarprognose_expected_yield = self.SolarprognoseModul:get_remaining_daily_forecast_yield()
             end
             if self.ForecastsolarModul then
                 self.ForecastsolarModul:fetch(now)
-                local forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
-                self.expected_yield = math.min(self.expected_yield, forecastsolar_expected_yield)
+                forecastsolar_expected_yield = self.ForecastsolarModul:get_remaining_daily_forecast_yield()
             end
+            self.expected_yield = math.min(self.expected_yield, forecastsolar_expected_yield)
         end
 
         self:log(3, "expected yield", self.expected_yield, "kWh; unused capacity", self.free_capacity, "kWh")

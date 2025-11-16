@@ -42,7 +42,6 @@ function util:setCompressor(compressor)
     self.compressor = compressor
 end
 
-
 function util:setLog(log_file_name)
     if self.log_file and self.log_file_name ~= log_file_name then
         self.log_file:close()
@@ -197,52 +196,6 @@ function math.roundToZero(x)
     end
 end
 
-function util.httpRequest(url)
-    local command = string.format("wget -nv --timeout=2 --server-response '%s'  -o /tmp/code -O /tmp/body", url)
-
--- "curl  url --tcp-nodelay --connect-timeout 2 -o /tmp/body --dump-header /tmp/code --silent --tcp-fastopen
-
-    os.execute("rm -f /tmp/code /tmp/body")
-
-    -- depending on what lua version there are two possibilities
-    -- luajit and lua 5.1: retval = os.execute( ... )
-    --           retval is the return value
-    -- lua >= 5.2: success, reason, code = os.execute( ... )
-    --           if reason == "exit" then code = retval
-    local success, reason, retval = os.execute(command)
-
-    if not reason and not retval then
-        retval = success
-    end
-
-    if retval ~= 0 then
-        return "", -retval
-    end
-
-    local body, code
-    local f
-
-    f = io.open("/tmp/body", "r")
-    if f then
-        body = f:read("*all")
-        f:close()
-    else
-        body = ""
-    end
-
-    f = io.open("/tmp/code", "r")
-    if f then
-        code = f:read("*all")
-        f:close()
-        code = code:gsub("^ *HTTP[^ ]* +", "")
-        code = code:gsub(" +.*", "")
-    else
-        code = 999
-    end
-
-    return body, code
-end
-
 function util.deleteRunningInstances(name)
     if not name or name == "" then
         name = "ThisProgramDoesNotRunForShure123"
@@ -285,58 +238,6 @@ function util.deleteRunningInstances(name)
     end
 
     return nb_deleted
-end
-
-function util.http_get_coroutine(connection, path, size)
-    size = size or 2^15
-    local ok, err
-    if not connection.socket then
-        connection.socket, err = socket.tcp()
-        if not connection.socket then
-            return nil, err .. " socket creation failed"
-        end
-    end
-
-    connection.socket:settimeout(2)
-    connection.socket:setoption("keepalive", true)
-    ok, err = connection.socket:connect(connection.host, connection.port or 80)
-    if not ok then
-        connection.socket:close()
-        connection.socket = nil
-        return nil, err
-    end
-
-    connection.socket:send("GET " .. path .. " HTTP/1.0\r\n\r\n")
-    connection.socket:settimeout(0)
-
-    local content = {}
-    while true do
-        local s, status, partial = connection.socket:receive(size)
-        if s and s ~= "" then
-            table.insert(content, s)
-        end
-        if partial and partial ~= "" then
-            table.insert(content, partial)
-        end
-
-        if status == "timeout" then
-            coroutine.yield(connection.socket)
-        elseif status == "closed" then
-            connection.socket:close()
-            connection.socket = nil
-            break
-        end
-    end
---    sock:close() -- todo test to remove this
---    connection.socket = nil
-
-    local body = table.concat(content)
-    local header_end = body:find("\r\n\r\n", 1, true)
-    if header_end then
-        body = body:sub(header_end + 4)
-    end
-
-    return body
 end
 
 function math.clamp(x, l, u)
@@ -442,6 +343,101 @@ function util.get_midnight_epoch()
     t_now.min = 0
     t_now.sec = 0
     return os.time(t_now)
+end
+
+------------------------------------------------------------
+-- Zeit: UTC -> Lokal
+------------------------------------------------------------
+function util:utc_to_local(ts)
+    local y,M,d,h,m,s = ts:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    local t = os.time({
+        year=y,month=M,day=d,hour=h,min=m,sec=s
+    })
+    return os.date("%Y-%m-%d %H:%M:%S", t), t
+end
+
+function util.utc_to_local_string(utc_str)
+    -- Muster: "YYYY-MM-DD HH:MM:SS"
+    local year, month, day, hour, min, sec = utc_str:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+
+    if not year then return nil end
+
+    -- 1. Erstelle eine UTC-Zeittabelle
+    local utc_table = {
+        year = tonumber(year),
+        month = tonumber(month),
+        day = tonumber(day),
+        hour = tonumber(hour),
+        min = tonumber(min),
+        sec = tonumber(sec)
+    }
+
+    -- 2. Konvertiere UTC-Tabelle in UTC-Epoch-Zeitstempel
+    -- Das '!' in os.time erzeugt den Epoch-Wert basierend auf der Annahme,
+    -- dass die Tabelle eine UTC-Zeit repräsentiert.
+    local utc_epoch = os.time(utc_table)
+
+    -- 3. Formatiere den UTC-Epoch-Zeitstempel in die lokale Zeit des Systems.
+    -- Wenn das Format-String kein '!' enthält, verwendet os.date die lokale Zeitzone (CET/CEST).
+    local local_str = os.date("%Y-%m-%d %H:%M:%S", utc_epoch)
+
+    return local_str, utc_epoch
+end
+
+function util.file_exists(path)
+    local f = io.open(path, "r")
+    if not f then return false end
+    f:close()
+    return true
+end
+
+function util.read_file(path)
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local content = f:read("*a")
+    f:close()
+    return content
+end
+
+function util.write_file(path, content)
+    local f = io.open(path, "w")
+    if not f then return false end
+    f:write(content)
+    f:close()
+    return true
+end
+
+function util.merge_sort(a, b)
+    local ia, ib = 1, 1
+    local na, nb = #a, #b
+    local r = {}
+    local ir = 1
+
+    while ia <= na and ib <= nb do
+        if a[ia].hour <= b[ib].hour then
+            r[ir] = a[ia]
+            ia = ia + 1
+        else
+            r[ir] = b[ib]
+            ib = ib + 1
+        end
+        ir = ir + 1
+    end
+
+    -- Rest anhängen
+    while ia <= na do
+        r[ir] = a[ia]
+        ia = ia + 1
+        ir = ir + 1
+    end
+
+    while ib <= nb do
+        r[ir] = b[ib]
+        ib = ib + 1
+        ir = ir + 1
+    end
+
+    return r
 end
 
 return util
