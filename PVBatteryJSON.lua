@@ -28,7 +28,7 @@ return function(self, VERSION)
 --        SOC_string = SOC_string .. Battery.Device.name .. " " .. Battery.SOC .."%<br>"
 --    end
 
-    local state = ""
+    local state
     if sources > 0 and sinks == 0 then
         state = "discharge"
     elseif sinks > 0 and sources == 0 then
@@ -44,7 +44,7 @@ return function(self, VERSION)
         DATE = "live at" .. os.date(),
         SUNRISE = self.sunrise,
         SUNSET = self.sunset,
-        STATE_OF_OPERATION = state,
+        STATE_OF_OPERATION = state or "",
         batt_SOC = tostring(math.floor(self.Battery[1].SOC)) .. "%",
         SOC1 = tostring(self.Battery[2].SOC) .. "%",
         SOC2 = tostring(self.Battery[3].SOC) .. "%",
@@ -81,7 +81,8 @@ return function(self, VERSION)
 
     -- Datei zum Schreiben öffnen ("w" = write, überschreibt bestehende Datei)
 
-    if not util.write_file(config.html_json, json_string) then
+    local ok, res = util.write_file(config.html_json, json_string)
+    if not ok then
         self:log(0, "Fehler: JSON Datei '" .. config.html_json .."# konnte nicht geöffnet werden.", res)
     end
 
