@@ -2,7 +2,7 @@
 -- ###############################################################
 -- CONFIGURATION
 -- ###############################################################
-local VERSION = "V5.2.0"
+local VERSION = "V5.2.1"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
