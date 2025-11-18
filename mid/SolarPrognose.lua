@@ -42,17 +42,14 @@ end
 
 function SolarPrognose:calculateNextFetchTime(raw, now)
     now = now or os.time()
-    local preferred_second = raw.preferrerdNextApiRequestAt and raw.preferrerdNextApiRequestAt.secondOfHour or 666
-    self.cache.preferred_next_time = math.floor(now / 3600) + preferred_second
-    if self.cache.preffered_next_time >= 3600 then -- should not happen
-        self.cache.preffered_next_time = math.random(3600)
-    end
+    local preferred_second = raw.preferredNextApiRequestAt and raw.preferredNextApiRequestAt.secondOfHour or 666
+    self.cache.preferred_next_time = math.floor(now / 3600) * 3600 + preferred_second
 end
 
 function SolarPrognose:shouldFetch(now)
     if Forecast.shouldFetch(self, now) then
         if self.cache.preferred_next_time then
-            if (now % 3600) >= self.cache.preferred_next_time then
+            if now >= self.cache.preferred_next_time then
                 return true
             end
         else
