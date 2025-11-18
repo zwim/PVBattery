@@ -331,6 +331,7 @@ function util.restart(reason, exit_code)
     print("----------------------------------------------------")
     os.execute("sleep 5")
     os.execute("lua " .. arg[0] .. " &")
+    -- os.exit can not be catched by xpcall and friends.
     os.exit(exit_code or 12)
 end
 

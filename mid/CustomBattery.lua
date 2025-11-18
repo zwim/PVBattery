@@ -185,6 +185,10 @@ function CustomBattery:setPower(req_power)
     end
 end
 
+function CustomBattery:setMode()
+    error("CustomBattery:setMode() not implemntend")
+end
+
 function CustomBattery:take(req_power)
     local p1 = self.Charger[1]:getMaxPower()
     local p2 = self.Charger[2]:getMaxPower()
