@@ -159,9 +159,9 @@ local configuration = {
                         token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
                         project = "7052",
                         item = "module_filed",
-                        id = "14336",
+                        id = "14443",
                         typ = "hourly",
-                        cachetime = 1*3600,
+                        kwp = 7.6,
                     },
                     {
                         name = "balkon",
@@ -170,10 +170,11 @@ local configuration = {
                         item = "module_filed",
                         id = "14337",
                         typ = "hourly",
-                        cachetime = 1*3600,
+                        kwp = 1.6
                     },
                 },
                 cachefile = "/tmp/solarprognose_agg_total.json",
+                cachetime = 1*3600,
             },
         },
         { -- Device[9]

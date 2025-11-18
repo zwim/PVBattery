@@ -35,7 +35,6 @@ function ForecastSolar:normalize_data(raw)
         local lt = util:utc_to_local(utc_ts)
         out[lt] = {
             power_kw = watts / 1000,
-            cumulative_kwh = 0,   -- Basisklasse berechnet kum später
         }
     end
 
@@ -46,11 +45,6 @@ function ForecastSolar:normalize_data(raw)
     end
     table.sort(arr, function(a,b) return a.ts < b.ts end)
 
-    local cum = 0
-    for _,x in ipairs(arr) do
-        cum = cum + x.pw
-        out[x.ts].cumulative_kwh = cum
-    end
     return out
 end
 

@@ -34,7 +34,6 @@ function SolarPrognose:normalize_data(raw)
         local lt = os.date("%Y-%m-%d %H:%M:%S", tonumber(epoch))
         normalized[lt] = {
             power_kw = v[2],
-            cumulative_kwh = v[3]
         }
     end
     return normalized
@@ -68,9 +67,10 @@ local function example()
             {
                 __name = "Dach (WR1)",
                 token = "c2a2da7b09c3c2e2a20651a2223e7fa7",
-                id = "14336",
+                id = "14443",
                 typ = "hourly",
                 cachetime = 1 * 3600,
+                kwp = 7.6,
             },
             {
                 __name = "Balkon (WR2)",
@@ -78,9 +78,11 @@ local function example()
                 id = "14337",
                 typ = "hourly",
                 cachetime = 1*3600,
+                kwp = 1.6,
             },
         },
         cachefile = "/tmp/solarprognose_agg_total.json",
+        cachetime = 3600,
     }
 
     -- Erstelle den Aggregator und seine internen Solar-Instanzen

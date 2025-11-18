@@ -34,12 +34,7 @@ end
 function Forecast:init()
     self.config = self.config or {}
     self.cache = {timestamp=0, data=nil, error=nil}
-
-    if not self.config.cachetime  and self.config.planes then
-        local t1 = self.config.planes[1] and self.config.planes[1].cachetime or 1800
-        local t2 = self.config.planes[2] and self.config.planes[2].cachetime or 1800
-        self.config.cachetime = math.min(t1, t2)
-    end
+    self.cachetime = self.cachetime or 3600
 
     self:_load_cache()
     self:fetch()
@@ -109,20 +104,28 @@ end
 ------------------------------------------------------------
 -- Standard-Zeitverarbeitung für ALLE Quellen
 ------------------------------------------------------------
-function Forecast:_process_data(data)
+function Forecast:_process_data(data, kwp)
     data = data or self.cache.data
+
+    -- these values are strings
+    local current_day = os.date("%d")
+    local current_month = os.date("%m")
+    local current_year = os.date("%Y")
 
     local result = {}
     for t_local, v in pairs(data or {}) do
-        local y, M, d, h, m, s = t_local:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
-        local hour = tonumber(h) + tonumber(m)/60 + tonumber(s)/3600
+        local y, m, d, H, M, S = t_local:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
 
-        result[#result+1] = {
-            hour = hour,
-            power_kw = v.power_kw,
-            cumulative_kwh = v.cumulative_kwh,
-            local_timestamp = t_local
-        }
+        -- use only data of the current day
+        if d == current_day and m == current_month and y == current_year then
+            local hour = tonumber(H) + tonumber(M)/60 + tonumber(S)/3600
+
+            result[#result+1] = {
+                hour = hour,
+                power_kw = math.min(v.power_kw, kwp),
+                local_timestamp = t_local
+            }
+        end
     end
 
     table.sort(result, function(a,b) return a.hour < b.hour end)
@@ -195,7 +198,7 @@ function Forecast:fetch(now)
 
         local data, e = self:normalize_data(raw)
         if not e then
-            data = self:_process_data(data)
+            data = self:_process_data(data, plane.kwp) -- and limit to the maximum kwp
             table.insert(plane_forecast, data)
         end
         err = err or e
@@ -222,9 +225,11 @@ end
 ------------------------------------------------------------
 function Forecast:print_latest()
     if not self.cache.data then return end
+    local cumulative_kwh = 0
     for _,e in ipairs(self.cache.data) do
+        cumulative_kwh = cumulative_kwh + e.power_kw
         print(string.format("Stunde %.2f -> %.3f kW, kum %.3f",
-            e.hour, e.power_kw, e.cumulative_kwh))
+            e.hour, e.power_kw, cumulative_kwh))
     end
 end
 
