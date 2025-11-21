@@ -42,7 +42,7 @@ end
 function SolarPrognose:calculateNextFetchTime(raw, now)
     now = now or os.time()
     local preferred_second = raw.preferredNextApiRequestAt and raw.preferredNextApiRequestAt.secondOfHour or 666
-    self.cache.preferred_next_time = math.floor(now / 3600) * 3600 + preferred_second
+    self.cache.preferred_next_time = math.floor(now / 3600 + 1) * 3600 + preferred_second
 end
 
 function SolarPrognose:shouldFetch(now)
