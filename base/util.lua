@@ -345,17 +345,6 @@ function util.get_midnight_epoch()
     return os.time(t_now)
 end
 
-------------------------------------------------------------
--- Zeit: UTC -> Lokal
-------------------------------------------------------------
-function util:utc_to_local(ts)
-    local y,M,d,h,m,s = ts:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
-    local t = os.time({
-        year=y,month=M,day=d,hour=h,min=m,sec=s
-    })
-    return os.date("%Y-%m-%d %H:%M:%S", t), t
-end
-
 function util.utc_to_local_string(utc_str)
     -- Muster: "YYYY-MM-DD HH:MM:SS"
     local year, month, day, hour, min, sec = utc_str:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")

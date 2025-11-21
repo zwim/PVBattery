@@ -18,11 +18,11 @@ function SolarPrognose:init()
 end
 
 function SolarPrognose:generateURL(plane)
-    local url = string.format(
-    "%s/v1?access-token=%s&item=module_field&id=%s&type=%s",
-        API, plane.token, plane.id, plane.typ
-    )
-    return url
+    if not plane.url then
+        plane.url = string.format("%s/v1?access-token=%s&item=module_field&id=%s&type=%s",
+            API, plane.token, plane.id, plane.typ)
+    end
+    return plane.url
 end
 
 function SolarPrognose:normalize_data(raw)
