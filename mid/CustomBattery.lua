@@ -161,6 +161,10 @@ function CustomBattery:getState()
         result.take = true
     end
 
+    if result.can_give and not result.give then
+        self.BMS:disableDischarge()
+    end
+
     return result
 end
 
@@ -235,8 +239,10 @@ end
 function CustomBattery:give(req_power)
     if req_power == 0 then
         self.Inverter:safeStopDischarge()
+        self.BMS:disableDischarge()
     elseif req_power > self.Inverter.min_power then
         self.Inverter:safeStartDischarge()
+        self.BMS:enableDischarge()
     end
 end
 
