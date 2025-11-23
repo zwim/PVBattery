@@ -2,7 +2,7 @@
 -- ###############################################################
 -- CONFIGURATION
 -- ###############################################################
-local VERSION = "V5.2.1"
+local VERSION = "V5.2.2"
 
 local Profiler = nil
 -- profiler from https://github.com/charlesmallah/lua-profiler
@@ -152,9 +152,12 @@ end
 function PVBattery:close()
     util.log(0, "Closing everything")
     for _, Battery in ipairs(self.Battery) do
-        Battery:setPower(0)
+        if Battery.Device.leave_mode == "auto" then
+            Battery:setMode({auto = true})
+        else
+            Battery:setPower(0)
+        end
     end
-    self.SmartBattery[1]:setMode({auto = true})
     mqtt_reader:close()
 end
 
@@ -657,19 +660,19 @@ local function protected_start()
     end
 end
 
-while true do
+os.execute("cp battery.html /tmp/index.html")
 
-    os.execute("cp battery.html /tmp/index.html")
+while true do
 
     local ok, result = xpcall(protected_start, util.crashHandler)
 
     if ok then
         PVBattery:log(0, "main() returned true. This should never happen .......")
     else
+        -- here almost everyting except os.exit and a library crash can be catched
         if tostring(result):match("interrupted") then
             PVBattery:log(0, "Ctrl+C (SIGINT)")
             MyBatteries:close() -- set everything to a safe state
-
             os.exit(0)
         else
             PVBattery:log(0, "error in main():", result, "restart main() loop in 5 seconds")

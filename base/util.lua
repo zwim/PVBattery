@@ -331,6 +331,7 @@ function util.restart(reason, exit_code)
     print("----------------------------------------------------")
     os.execute("sleep 5")
     os.execute("lua " .. arg[0] .. " &")
+    -- os.exit can not be catched by xpcall and friends.
     os.exit(exit_code or 12)
 end
 
@@ -342,17 +343,6 @@ function util.get_midnight_epoch()
     t_now.min = 0
     t_now.sec = 0
     return os.time(t_now)
-end
-
-------------------------------------------------------------
--- Zeit: UTC -> Lokal
-------------------------------------------------------------
-function util:utc_to_local(ts)
-    local y,M,d,h,m,s = ts:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
-    local t = os.time({
-        year=y,month=M,day=d,hour=h,min=m,sec=s
-    })
-    return os.date("%Y-%m-%d %H:%M:%S", t), t
 end
 
 function util.utc_to_local_string(utc_str)

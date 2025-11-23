@@ -19,11 +19,32 @@ function ForecastSolar:init()
 end
 
 function ForecastSolar:generateURL(plane)
-    local url = string.format("%s%f/%f/%d/%d/%f",
-        API, plane.latitude, plane.longitude, plane.declination, plane.azimuth, plane.kwp
-    )
-    return url
+    if not plane.url then
+        plane.url = string.format("%s%f/%f/%d/%d/%f",
+            API, plane.latitude, plane.longitude, plane.declination, plane.azimuth, plane.kwp)
+    end
+    return plane.url
 end
+
+------------------------------------------------------------
+-- Zeit: UTC -> Lokal
+------------------------------------------------------------
+function ForecastSolar:utc_to_local(ts)
+    local y,M,d,h,m,s = ts:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    local t = os.time({
+        year=y,month=M,day=d,hour=h,min=m,sec=s
+    })
+    return os.date("%Y-%m-%d %H:%M:%S", t), t
+end
+
+function ForecastSolar:utc_to_local(ts)
+    local y,M,d,h,m,s = ts:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    local t = os.time({
+        year=y,month=M,day=d,hour=h,min=m,sec=s
+    })
+    return os.date("%Y-%m-%d %H:%M:%S", t), t
+end
+
 
 function ForecastSolar:normalize_data(raw)
     if not raw.result or not raw.result.watts then
@@ -32,10 +53,9 @@ function ForecastSolar:normalize_data(raw)
 
     local out = {}
     for utc_ts, watts in pairs(raw.result.watts) do
-        local lt = util:utc_to_local(utc_ts)
+        local lt = self:utc_to_local(utc_ts)
         out[lt] = {
             power_kw = watts / 1000,
-            cumulative_kwh = 0,   -- Basisklasse berechnet kum später
         }
     end
 
@@ -46,11 +66,6 @@ function ForecastSolar:normalize_data(raw)
     end
     table.sort(arr, function(a,b) return a.ts < b.ts end)
 
-    local cum = 0
-    for _,x in ipairs(arr) do
-        cum = cum + x.pw
-        out[x.ts].cumulative_kwh = cum
-    end
     return out
 end
 
